@@ -1,0 +1,157 @@
+/* Inventory page specific styles */
+
+.inventory-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.inventory-toolbar .left-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Product Form - 3 column layout */
+.product-form {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.form-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .form-row-3 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .form-row-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Product Details Modal */
+.product-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.detail-field {
+  margin-bottom: 4px;
+}
+
+.detail-field .detail-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.detail-field .detail-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.detail-section {
+  grid-column: 1 / -1;
+  margin-top: 12px;
+}
+
+.detail-section h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Inspection Notes */
+.inspection-notes-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.inspection-note-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.inspection-note-item:last-child {
+  border-bottom: none;
+}
+
+.inspection-note-item .note-text {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.inspection-note-item .note-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.inspection-note-item .note-delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.inspection-note-item .note-delete:hover {
+  color: var(--danger);
+}
+
+.add-note-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.add-note-form input {
+  flex: 1;
+}
+
+/* Quick Actions for Table */
+.quick-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.quick-action-btn {
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 11px;
+  transition: all var(--transition);
+}
+
+.quick-action-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}

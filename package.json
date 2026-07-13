@@ -1,0 +1,70 @@
+{
+  "name": "laptop-inventory-manager",
+  "version": "1.0.0",
+  "description": "Professional Laptop & Computer Wholesale Inventory Management System",
+  "main": "src/main/main.js",
+  "author": "LaptopInventoryManager",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "build:portable": "electron-builder --win portable",
+    "build:installer": "electron-builder --win nsis",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "build": {
+    "appId": "com.laptopinventory.manager",
+    "productName": "Laptop Inventory Manager",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "src/assets/icon.ico",
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Laptop Inventory Manager",
+      "installerIcon": "src/assets/icon.ico",
+      "uninstallerIcon": "src/assets/icon.ico",
+      "installerHeaderIcon": "src/assets/icon.ico"
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}.exe",
+      "requestExecutionLevel": "user"
+    }
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "pngjs": "^7.0.0"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  }
+}

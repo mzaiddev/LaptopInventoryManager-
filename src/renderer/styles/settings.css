@@ -1,0 +1,144 @@
+/* Settings Page Styles */
+
+.settings-section {
+  margin-bottom: 32px;
+}
+
+.settings-section:last-child {
+  margin-bottom: 0;
+}
+
+.settings-section h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.settings-row:last-child {
+  border-bottom: none;
+}
+
+.settings-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.settings-description {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.settings-control {
+  min-width: 250px;
+}
+
+.settings-control select,
+.settings-control input {
+  width: 100%;
+}
+
+/* Theme preview */
+.theme-preview {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.theme-option {
+  flex: 1;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 16px;
+  cursor: pointer;
+  text-align: center;
+  transition: all var(--transition);
+}
+
+.theme-option:hover {
+  border-color: var(--primary);
+}
+
+.theme-option.active {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+body.dark-mode .theme-option.active {
+  background: #1e3a5f;
+}
+
+.theme-option svg {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+}
+
+.theme-option span {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+/* Currency selector */
+.currency-select {
+  max-width: 200px;
+}
+
+/* Backup folder input */
+.backup-folder-input {
+  display: flex;
+  gap: 8px;
+}
+
+.backup-folder-input input {
+  flex: 1;
+  background: var(--bg-tertiary);
+  cursor: default;
+}
+
+.backup-folder-input input:focus {
+  border-color: var(--border-color);
+  box-shadow: none;
+}
+
+/* Settings save button area */
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
+  margin-top: 24px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .settings-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .settings-control {
+    min-width: 100%;
+  }
+
+  .theme-preview {
+    flex-direction: column;
+  }
+}

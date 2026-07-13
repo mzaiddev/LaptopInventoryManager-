@@ -1,0 +1,203 @@
+# ==========================================
+# Dependencies
+# ==========================================
+node_modules/
+jspm_packages/
+bower_components/
+
+# ==========================================
+# Build Output
+# ==========================================
+dist/
+build/
+out/
+release/
+releases/
+dist-electron/
+dist-main/
+dist-renderer/
+app/dist/
+app/build/
+.out/
+
+# ==========================================
+# Next.js
+# ==========================================
+.next/
+
+# ==========================================
+# React / Vite
+# ==========================================
+coverage/
+
+# ==========================================
+# Electron
+# ==========================================
+electron-builder.yml
+electron-builder.env
+
+# Electron Build Artifacts
+*.exe
+*.msi
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.snap
+*.blockmap
+*.asar
+
+# Electron Auto Updater
+latest.yml
+latest-linux.yml
+latest-mac.yml
+
+# Electron Logs
+electron-debug.log
+electron-log.log
+
+# Native Modules
+*.node
+
+# ==========================================
+# Package Managers
+# ==========================================
+.pnp
+.pnp.js
+.npm/
+.pnpm-store/
+.yarn/*
+!.yarn/releases
+!.yarn/plugins
+!.yarn/sdks
+!.yarn/versions
+
+# ==========================================
+# Environment Variables
+# ==========================================
+.env
+.env.*
+!.env.example
+
+# ==========================================
+# TypeScript
+# ==========================================
+*.tsbuildinfo
+
+# ==========================================
+# Cache
+# ==========================================
+.cache/
+.cache-loader/
+.parcel-cache/
+.turbo/
+.eslintcache
+.stylelintcache/
+
+# ==========================================
+# Logs
+# ==========================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ==========================================
+# Temporary Files
+# ==========================================
+tmp/
+temp/
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# ==========================================
+# Debug
+# ==========================================
+*.pid
+*.pid.lock
+*.seed
+
+# ==========================================
+# IDEs
+# ==========================================
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+.idea/
+*.iml
+
+# ==========================================
+# Operating System Files
+# ==========================================
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# ==========================================
+# Prisma / SQLite
+# ==========================================
+prisma/*.db
+prisma/*.db-journal
+*.sqlite
+*.sqlite3
+
+# ==========================================
+# Firebase
+# ==========================================
+.firebase/
+
+# ==========================================
+# Vercel
+# ==========================================
+.vercel/
+
+# ==========================================
+# Netlify
+# ==========================================
+.netlify/
+
+# ==========================================
+# Docker
+# ==========================================
+docker-compose.override.yml
+
+# ==========================================
+# Certificates
+# ==========================================
+*.pem
+*.key
+*.crt
+*.pfx
+
+# ==========================================
+# Archives
+# ==========================================
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+*.tgz
+
+# ==========================================
+# Generated Images (Optional)
+# ==========================================
+*.psd
+*.ai
+
+# ==========================================
+# Local Configuration
+# ==========================================
+.local/
+config.local.*
+.history/
