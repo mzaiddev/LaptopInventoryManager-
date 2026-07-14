@@ -60,6 +60,15 @@ contextBridge.exposeInMainWorld("api", {
   createReturn: (data) => ipcRenderer.invoke("ledger:createReturn", data),
   getAllReturns: (filters) => ipcRenderer.invoke("ledger:getAllReturns", filters),
 
+  // Damage Management
+  recordDamage: (data) => ipcRenderer.invoke("damage:record", data),
+  getAllDamages: (filters) => ipcRenderer.invoke("damage:getAll", filters),
+  correctDamage: (id, data) => ipcRenderer.invoke("damage:correct", id, data),
+
+  // Customer Profile
+  getCustomerFullProfile: (customerId) => ipcRenderer.invoke("customer:getFullProfile", customerId),
+  getCustomerStatement: (customerId) => ipcRenderer.invoke("customer:getStatement", customerId),
+
   // Reports
   getLedgerSummary: () => ipcRenderer.invoke("ledger:getLedgerSummary"),
   getSalesReport: (filters) => ipcRenderer.invoke("ledger:getSalesReport", filters),

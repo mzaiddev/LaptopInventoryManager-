@@ -206,11 +206,7 @@ class ModalComponent {
             <input type="number" step="0.01" min="0" class="form-control" id="pf-purchase-price" value="${pd.purchase_price || ""}" required>
             <div class="form-error" id="pf-purchase-price-error"></div>
           </div>
-          <div class="form-group">
-            <label>Selling Price *</label>
-            <input type="number" step="0.01" min="0" class="form-control" id="pf-selling-price" value="${pd.selling_price || ""}" required>
-            <div class="form-error" id="pf-selling-price-error"></div>
-          </div>
+          <!-- Selling Price removed - managed from Sales module -->
           <div class="form-group">
             <label>Quantity *</label>
             <input type="number" min="0" class="form-control" id="pf-quantity" value="${pd.quantity || 1}" required>
@@ -288,8 +284,7 @@ class ModalComponent {
       supplier: document.getElementById("pf-supplier")?.value?.trim() || "",
       purchase_price:
         parseFloat(document.getElementById("pf-purchase-price")?.value) || 0,
-      selling_price:
-        parseFloat(document.getElementById("pf-selling-price")?.value) || 0,
+      selling_price: 0,
       quantity: parseInt(document.getElementById("pf-quantity")?.value) || 1,
       purchase_date: document.getElementById("pf-purchase-date")?.value || "",
       warranty: document.getElementById("pf-warranty")?.value?.trim() || "",

@@ -34,65 +34,127 @@ const InventoryPage = {
     const content = document.getElementById("page-content");
     content.innerHTML = `
       <style>
-        /* category chip styles */
         .chip{padding:6px 10px;border-radius:16px;border:1px solid var(--muted);background:var(--bg);cursor:pointer;font-size:13px}
         .chip.active{background:var(--primary);color:#fff;border-color:var(--primary)}
         .category-list{align-items:center}
+        /* Tab styles */
+        .inventory-tabs{display:flex;gap:0;margin-bottom:0;border-bottom:2px solid var(--border-color)}
+        .inv-tab{padding:12px 24px;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-size:14px;font-weight:500;color:var(--text-secondary);transition:all var(--transition)}
+        .inv-tab:hover{color:var(--text-primary);background:var(--bg-tertiary)}
+        .inv-tab.active{border-bottom-color:var(--primary);color:var(--primary)}
+        .inv-tab svg{width:16px;height:16px;margin-right:6px;vertical-align:middle}
+        .inv-tab .tab-count{background:var(--bg-tertiary);padding:2px 8px;border-radius:10px;font-size:11px;margin-left:6px}
+        .inv-tab.active .tab-count{background:var(--primary-light);color:var(--primary)}
       </style>
       <div class="page-header">
         <div>
           <h1>Inventory</h1>
-          <p>Manage your products</p>
+          <p>Manage your products and track damages</p>
         </div>
-        <button class="btn btn-primary" onclick="InventoryPage.showAddProduct()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-          Add Product
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="InventoryPage.showAddProduct()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Add Product
+          </button>
+          <button class="btn btn-danger" onclick="InventoryPage.showRecordDamage()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+              <line x1="18" y1="6" x2="6" y2="18"/><circle cx="12" cy="12" r="10"/>
+            </svg>
+            Record Damage
+          </button>
+          <button class="btn btn-secondary" onclick="InventoryPage.printInventory('all')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+              <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+            </svg>
+            Print All
+          </button>
+        </div>
+      </div>
+      <!-- Tabs -->
+      <div class="inventory-tabs">
+        <button class="inv-tab active" id="tab-products" onclick="InventoryPage.switchTab('products')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Products
+          <span class="tab-count" id="tab-products-count">0</span>
+        </button>
+        <button class="inv-tab" id="tab-damages" onclick="InventoryPage.switchTab('damages')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Damages
+          <span class="tab-count" id="tab-damages-count">0</span>
         </button>
       </div>
-      <div class="card">
-        <div class="card-body">
-          <div class="filters-bar">
-            <div class="search-box">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
-              <input type="text" id="inventory-search" placeholder="Search by name, model, category, serial..." oninput="InventoryPage.onSearch()">
+      <!-- Products Tab Content -->
+      <div id="inventory-products-tab">
+        <div class="card">
+          <div class="card-body">
+            <div class="filters-bar">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input type="text" id="inventory-search" placeholder="Search by name, model, category, serial..." oninput="InventoryPage.onSearch()">
+              </div>
+              <div class="filter-group">
+                <select id="filter-category" onchange="InventoryPage.onFilter()">
+                  <option value="">All Categories</option>
+                </select>
+                <select id="filter-supplier" onchange="InventoryPage.onFilter()" style="display:none;">
+                  <option value="">All Suppliers</option>
+                </select>
+                <select id="filter-status" onchange="InventoryPage.onFilter()">
+                  <option value="">All Status</option>
+                  <option value="In Stock">In Stock</option>
+                  <option value="Reserved">Reserved</option>
+                  <option value="Sold">Sold</option>
+                  <option value="Returned">Returned</option>
+                  <option value="Damaged">Damaged</option>
+                  <option value="Lost">Lost</option>
+                </select>
+                <select id="filter-condition" onchange="InventoryPage.onFilter()">
+                  <option value="">All Conditions</option>
+                  <option value="Excellent">Excellent</option>
+                  <option value="Good">Good</option>
+                  <option value="Fair">Fair</option>
+                  <option value="Damaged">Damaged</option>
+                  <option value="For Parts">For Parts</option>
+                </select>
+              </div>
             </div>
-            <div class="filter-group">
-              <select id="filter-category" onchange="InventoryPage.onFilter()">
-                <option value="">All Categories</option>
-              </select>
-
-              <select id="filter-supplier" onchange="InventoryPage.onFilter()" style="display:none;">
-                <option value="">All Suppliers</option>
-              </select>
-
-              <select id="filter-status" onchange="InventoryPage.onFilter()">
-                <option value="">All Status</option>
-                <option value="In Stock">In Stock</option>
-                <option value="Reserved">Reserved</option>
-                <option value="Sold">Sold</option>
-                <option value="Returned">Returned</option>
-                <option value="Damaged">Damaged</option>
-                <option value="Lost">Lost</option>
-              </select>
-              <select id="filter-condition" onchange="InventoryPage.onFilter()">
-                <option value="">All Conditions</option>
-                <option value="Excellent">Excellent</option>
-                <option value="Good">Good</option>
-                <option value="Fair">Fair</option>
-                <option value="Damaged">Damaged</option>
-                <option value="For Parts">For Parts</option>
-              </select>
+            <div id="category-list" class="category-list" style="margin:12px 0;display:flex;gap:8px;flex-wrap:wrap;">
+              <!-- category chips will be injected here -->
             </div>
+            <div id="inventory-table-container"><div class="loading"><div class="spinner"></div></div></div>
+            <div id="inventory-pagination"></div>
           </div>
-          <div id="category-list" class="category-list" style="margin:12px 0;display:flex;gap:8px;flex-wrap:wrap;">
-            <!-- category chips will be injected here -->
+        </div>
+      </div>
+      <!-- Damages Tab Content -->
+      <div id="inventory-damages-tab" style="display:none;">
+        <div class="card">
+          <div class="card-body">
+            <div class="filters-bar">
+              <div class="search-box" style="max-width:none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input type="text" id="damages-search" placeholder="Search damages by product name, reference..." oninput="InventoryPage.onDamagesSearch()">
+              </div>
+              <div class="filter-group">
+                <select id="filter-damage-type" onchange="InventoryPage.loadDamages()">
+                  <option value="">All Types</option>
+                  <option value="Damaged">Damaged</option>
+                  <option value="Disposed">Disposed</option>
+                  <option value="Repaired">Repaired</option>
+                  <option value="Corrected">Restored</option>
+                </select>
+                <input type="date" id="filter-damage-from" onchange="InventoryPage.loadDamages()" style="padding:8px 12px;border:1px solid var(--border-color);border-radius:var(--radius);font-size:13px;background:var(--card-bg);color:var(--text-primary);">
+                <input type="date" id="filter-damage-to" onchange="InventoryPage.loadDamages()" style="padding:8px 12px;border:1px solid var(--border-color);border-radius:var(--radius);font-size:13px;background:var(--card-bg);color:var(--text-primary);">
+              </div>
+            </div>
+            <div id="damages-table-container"><div class="loading"><div class="spinner"></div></div></div>
           </div>
-          <div id="inventory-table-container"><div class="loading"><div class="spinner"></div></div></div>
-          <div id="inventory-pagination"></div>
         </div>
       </div>
     `;
@@ -252,6 +314,10 @@ const InventoryPage = {
 
       App.table.render(data.products);
       App.pagination.update(data.total, data.page, data.totalPages);
+
+      // Update products tab count
+      const countEl = document.getElementById('tab-products-count');
+      if (countEl) countEl.textContent = data.total;
     } catch (err) {
       container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${err.message}</p></div>`;
     }
@@ -429,13 +495,10 @@ const InventoryPage = {
             <div class="detail-label">Purchase Price</div>
             <div class="detail-value">${Formatters.formatCurrency(p.purchase_price, currency)}</div>
           </div>
-          <div class="detail-field">
-            <div class="detail-label">Selling Price</div>
-            <div class="detail-value">${Formatters.formatCurrency(p.selling_price, currency)}</div>
-          </div>
+          <!-- Selling Price removed - managed from Sales module -->
           <div class="detail-field">
             <div class="detail-label">Quantity</div>
-            <div class="detail-value">${p.quantity}</div>
+            <div class="detail-value" style="font-weight:600;">${p.quantity}</div>
           </div>
           <div class="detail-field">
             <div class="detail-label">Purchase Date</div>
@@ -635,6 +698,354 @@ const InventoryPage = {
       }
     } catch (err) {
       Toast.error("Failed to change condition: " + err.message);
+    }
+  },
+
+  async showRecordDamage() {
+    try {
+      const result = await window.api.getProducts({ limit: 1000 });
+      if (!result.success) {
+        Toast.error("Failed to load products.");
+        return;
+      }
+      const allProducts = result.data.products || [];
+      // Only show products with available stock
+      const products = allProducts.filter(p => p.quantity > 0 && p.status !== 'Sold' && p.status !== 'Lost');
+
+      const formHtml = `
+        <form id="damage-form" onsubmit="return false;">
+          <div class="form-group">
+            <label>Product *</label>
+            <select class="form-control" id="dm-product">
+              <option value="">Select Product</option>
+              ${products.map(p => {
+                return `<option value="${p.id}" data-name="${this.escapeHtml(p.product_name)}">${this.escapeHtml(p.product_name)} (Qty: ${p.quantity})</option>`;
+              }).join('')}
+            </select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Damaged Quantity *</label>
+              <input type="number" min="1" class="form-control" id="dm-qty" value="1">
+            </div>
+            <div class="form-group">
+              <label>Date</label>
+              <input type="date" class="form-control" id="dm-date" value="${new Date().toISOString().split('T')[0]}">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Damage Type</label>
+            <select class="form-control" id="dm-type">
+              <option value="Damaged">Damaged</option>
+              <option value="Disposed">Disposed</option>
+              <option value="Repaired">Repaired</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Reason</label>
+            <input type="text" class="form-control" id="dm-reason" placeholder="e.g., Screen cracked, water damage...">
+          </div>
+          <div class="form-group">
+            <label>Notes</label>
+            <textarea class="form-control" id="dm-notes" rows="2" placeholder="Additional notes..."></textarea>
+          </div>
+        </form>
+      `;
+
+      Modal.showForm("Record Product Damage", formHtml, async () => {
+        const productId = parseInt(document.getElementById("dm-product")?.value);
+        const qty = parseInt(document.getElementById("dm-qty")?.value);
+        const date = document.getElementById("dm-date")?.value;
+        const type = document.getElementById("dm-type")?.value;
+        const reason = document.getElementById("dm-reason")?.value?.trim() || "";
+        const notes = document.getElementById("dm-notes")?.value?.trim() || "";
+
+        if (!productId || !qty || qty < 1) {
+          Toast.error("Please select a product and enter a valid quantity.");
+          return;
+        }
+
+        try {
+          const result = await window.api.recordDamage({
+            product_id: productId,
+            quantity: qty,
+            recorded_date: date,
+            damage_type: type || 'Damaged',
+            reason: reason,
+            notes: notes
+          });
+          if (result.success) {
+            Toast.success(`Damage recorded. Reference: ${result.data.referenceNo}`);
+            Modal.close();
+            this.refresh();
+          } else {
+            Toast.error(result.error || "Failed to record damage.");
+          }
+        } catch (err) {
+          Toast.error(err.message);
+        }
+      }, "sm");
+    } catch (err) {
+      Toast.error(err.message);
+    }
+  },
+
+  async restoreProduct(id) {
+    Modal.showConfirm(
+      "Restore Product",
+      "Are you sure you want to restore this product to normal (In Stock) status? This will NOT restore the quantity lost to damage - use the Damages tab to restore actual stock.",
+      async () => {
+        try {
+          const result = await window.api.changeProductStatus(id, "In Stock");
+          if (result.success) {
+            Toast.success("Product restored to In Stock.");
+            this.refresh();
+          } else {
+            Toast.error(result.error || "Failed to restore product.");
+          }
+        } catch (err) {
+          Toast.error(err.message);
+        }
+      },
+    );
+  },
+
+  // ==================== TAB SYSTEM ====================
+
+  currentTab: 'products',
+
+  switchTab(tab) {
+    this.currentTab = tab;
+    document.querySelectorAll('.inv-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById(`tab-${tab}`).classList.add('active');
+    document.getElementById('inventory-products-tab').style.display = tab === 'products' ? '' : 'none';
+    document.getElementById('inventory-damages-tab').style.display = tab === 'damages' ? '' : 'none';
+
+    if (tab === 'damages') {
+      this.loadDamages();
+    }
+  },
+
+  async loadDamages() {
+    const container = document.getElementById('damages-table-container');
+    if (!container) return;
+    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+    try {
+      const search = document.getElementById('damages-search')?.value?.trim() || '';
+      const type = document.getElementById('filter-damage-type')?.value || '';
+      const dateFrom = document.getElementById('filter-damage-from')?.value || '';
+      const dateTo = document.getElementById('filter-damage-to')?.value || '';
+
+      const filters = { limit: 500 };
+      if (type) filters.damage_type = type;
+      if (dateFrom) filters.date_from = dateFrom;
+      if (dateTo) filters.date_to = dateTo;
+
+      const result = await window.api.getAllDamages(filters);
+      if (!result.success) {
+        container.innerHTML = '<div class="empty-state"><h3>Error</h3><p>' + result.error + '</p></div>';
+        return;
+      }
+
+      let damages = result.data.damages || [];
+      const total = result.data.total || 0;
+
+      // Update tab count
+      const countEl = document.getElementById('tab-damages-count');
+      if (countEl) countEl.textContent = total;
+
+      // Client-side search filter
+      if (search) {
+        const s = search.toLowerCase();
+        damages = damages.filter(d =>
+          (d.product_name || '').toLowerCase().includes(s) ||
+          (d.reference_no || '').toLowerCase().includes(s) ||
+          (d.reason || '').toLowerCase().includes(s)
+        );
+      }
+
+      if (damages.length === 0) {
+        container.innerHTML = '<div class="empty-state"><h3>No Damage Records</h3><p>No damages recorded yet. Use "Record Damage" to start.</p></div>';
+        return;
+      }
+
+      const currency = App.currency || 'USD';
+
+      let html = '<div style="overflow-x:auto;"><table><thead><tr>';
+      html += '<th>#</th><th>Reference</th><th>Product</th><th>Qty</th><th>Type</th><th>Reason</th><th>Date</th><th>Value Lost</th><th>Current Stock</th><th>Actions</th>';
+      html += '</tr></thead><tbody>';
+
+      damages.forEach((d, i) => {
+        const isRestorable = d.damage_type !== 'Corrected' && d.damage_type !== 'Repaired';
+        const valueLost = (d.quantity || 0) * (d.purchase_price || 0);
+        const typeClass = d.damage_type === 'Corrected' ? 'badge-in-stock' : d.damage_type === 'Disposed' ? 'badge-lost' : 'badge-damaged';
+
+        html += `<tr>
+          <td>${i + 1}</td>
+          <td><strong>${this.escapeHtml(d.reference_no)}</strong></td>
+          <td><strong>${this.escapeHtml(d.product_name || 'Unknown')}</strong></td>
+          <td style="text-align:center;font-weight:600;">${d.quantity}</td>
+          <td><span class="badge ${typeClass}">${this.escapeHtml(d.display_type || d.damage_type)}</span></td>
+          <td>${this.escapeHtml(d.reason) || '-'}</td>
+          <td>${Formatters.formatDate(d.recorded_date)}</td>
+          <td style="text-align:right;">${Formatters.formatCurrency(valueLost, currency)}</td>
+          <td style="text-align:center;"><span style="font-weight:600;color:${(d.current_qty || 0) > 0 ? 'var(--success)' : 'var(--danger)'};">${d.current_qty || 0}</span></td>
+          <td>
+            <div class="action-buttons">
+              ${isRestorable ? `<button class="btn btn-sm btn-success" onclick="InventoryPage.restoreFromDamages(${d.id}, ${d.product_id}, ${d.quantity})" title="Restore Stock">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;">
+                  <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                </svg>
+                Restore
+              </button>` : ''}
+              <button class="btn btn-sm btn-primary" onclick="InventoryPage.viewProduct(${d.product_id})" title="View Product">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                </svg>
+              </button>
+            </div>
+          </td>
+        </tr>`;
+      });
+
+      html += '</tbody></table></div>';
+      container.innerHTML = html;
+    } catch (err) {
+      container.innerHTML = '<div class="empty-state"><h3>Error</h3><p>' + err.message + '</p></div>';
+    }
+  },
+
+  onDamagesSearch() {
+    clearTimeout(this._damageSearchTimeout);
+    this._damageSearchTimeout = setTimeout(() => {
+      this.loadDamages();
+    }, 300);
+  },
+
+  async restoreFromDamages(damageId, productId, quantity) {
+    Modal.showConfirm(
+      'Restore Stock from Damage',
+      'Are you sure you want to restore ' + quantity + ' unit(s) back to stock?\nThis will:\n- Add ' + quantity + ' back to the product quantity\n- Mark this damage record as "Restored"\n- The product becomes available for sale again',
+      async () => {
+        try {
+          const result = await window.api.correctDamage(damageId, {
+            quantity: 0,
+            reason: 'Restored to stock',
+            notes: ''
+          });
+          if (result.success) {
+            Toast.success(quantity + ' unit(s) restored to stock.');
+            // Refresh both tabs
+            this.loadDamages();
+            this.loadProducts();
+          } else {
+            Toast.error(result.error || 'Failed to restore stock.');
+          }
+        } catch (err) {
+          Toast.error(err.message);
+        }
+      }
+    );
+  },
+
+  async printInventory(mode) {
+    try {
+      // Load all products
+      const result = await window.api.getProducts({ limit: 5000 });
+      if (!result.success) { Toast.error('Failed to load products.'); return; }
+      const products = result.data.products || [];
+
+      if (products.length === 0) {
+        Toast.warning('No products to print.');
+        return;
+      }
+
+      const shopName = document.getElementById('shop-name')?.textContent || 'Inventory Report';
+      const dateStr = new Date().toLocaleDateString();
+
+      const printWindow = window.open('', '_blank', 'width=1100,height=800');
+      if (!printWindow) {
+        Toast.error('Please allow pop-ups for printing.');
+        return;
+      }
+
+      const currency = App.currency || 'PKR';
+      const currencyFmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: currency });
+      const totalValue = products.reduce((s, p) => s + ((p.purchase_price || 0) * p.quantity), 0);
+      const damagedValue = products.reduce((s, p) => s + (p.status === 'Damaged' ? ((p.purchase_price || 0) * p.quantity) : 0), 0);
+
+      printWindow.document.write(`
+<html>
+<head><title>Inventory Report</title>
+<style>
+  @page { margin: 12mm; size: A4 landscape; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; padding: 10px; background: #fff; }
+  .report-header { text-align: center; margin-bottom: 18px; border-bottom: 3px solid #2563eb; padding-bottom: 12px; }
+  .report-header h1 { font-size: 20px; color: #1e293b; margin-bottom: 4px; }
+  .report-header p { font-size: 12px; color: #64748b; }
+  .summary-row { display: flex; gap: 16px; margin-bottom: 14px; flex-wrap: wrap; }
+  .summary-item { padding: 6px 14px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0; }
+  .summary-item .label { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+  .summary-item .value { font-size: 16px; font-weight: 700; color: #1e293b; }
+  table { width: 100%; border-collapse: collapse; font-size: 10px; }
+  th { background: #2563eb; color: #fff; padding: 6px 8px; text-align: left; font-weight: 600; white-space: nowrap; }
+  td { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; color: #334155; }
+  tr:nth-child(even) { background: #f8fafc; }
+  .badge-p { padding: 2px 6px; border-radius: 10px; font-size: 9px; font-weight: 500; display: inline-block; }
+  .b-instock { background: #dcfce7; color: #166534; }
+  .b-reserved { background: #fef3c7; color: #92400e; }
+  .b-sold { background: #dbeafe; color: #1e40af; }
+  .b-damaged { background: #fee2e2; color: #991b1b; }
+  .b-returned { background: #fce7f3; color: #9d174d; }
+  .b-lost { background: #f3f4f6; color: #374151; }
+  .report-footer { margin-top: 16px; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+</style>
+</head>
+<body>
+  <div class="report-header">
+    <h1>${this.escapeHtml(shopName)}</h1>
+    <p>Complete Inventory Report &mdash; ${dateStr} | ${products.length} Products Listed</p>
+  </div>
+  <div class="summary-row">
+    <div class="summary-item"><div class="label">Total Products</div><div class="value">${products.length}</div></div>
+    <div class="summary-item"><div class="label">Total Quantity</div><div class="value">${products.reduce((s,p) => s + p.quantity, 0)}</div></div>
+    <div class="summary-item"><div class="label">Total Value</div><div class="value">${currencyFmt.format(totalValue)}</div></div>
+    <div class="summary-item"><div class="label">Damaged Value</div><div class="value" style="color:#ef4444;">${currencyFmt.format(damagedValue)}</div></div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>#</th><th>Product Name</th><th>Category</th><th>Model</th><th>Serial No.</th><th>Qty</th><th>Status</th><th>Condition</th><th>Location</th><th>Purchase Price</th>
+    </tr></thead>
+    <tbody>
+      ${products.map((p, i) => {
+        const statusClass = p.status === 'In Stock' ? 'b-instock' : p.status === 'Damaged' ? 'b-damaged' : p.status === 'Reserved' ? 'b-reserved' : p.status === 'Sold' ? 'b-sold' : p.status === 'Returned' ? 'b-returned' : 'b-lost';
+        return `<tr>
+          <td>${i + 1}</td>
+          <td><strong>${this.escapeHtml(p.product_name)}</strong></td>
+          <td>${this.escapeHtml(p.category)}</td>
+          <td>${this.escapeHtml(p.model) || '-'}</td>
+          <td>${this.escapeHtml(p.serial_number) || '-'}</td>
+          <td style="text-align:center;font-weight:600;">${p.quantity}</td>
+          <td><span class="badge-p ${statusClass}">${p.status}</span></td>
+          <td>${this.escapeHtml(p.condition)}</td>
+          <td>${this.escapeHtml(p.storage_location) || '-'}</td>
+          <td style="text-align:right;">${currencyFmt.format(p.purchase_price || 0)}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>
+  <div class="report-footer">
+    <p>Generated by Laptop Inventory Manager | ${dateStr}</p>
+  </div>
+  <script>window.onload = function() { setTimeout(function() { window.print(); }, 300); };<\/script>
+</body>
+</html>
+`);
+      printWindow.document.close();
+    } catch (err) {
+      Toast.error('Print error: ' + err.message);
     }
   },
 

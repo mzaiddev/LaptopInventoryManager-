@@ -295,6 +295,12 @@ body {
 }
 .btn-success:hover { background: #16a34a; }
 
+.btn-warning {
+  background: var(--warning);
+  color: #fff;
+}
+.btn-warning:hover { background: #d97706; }
+
 .btn-secondary {
   background: var(--bg-tertiary);
   color: var(--text-primary);
@@ -823,6 +829,11 @@ body.dark-mode .badge-for-parts { background: #374151; color: #d1d5db; }
 }
 
 /* Responsive */
+/* Text utilities */
+.text-success { color: var(--success); }
+.text-danger { color: var(--danger); }
+.text-warning { color: var(--warning); }
+
 @media (max-width: 768px) {
   #sidebar {
     width: 60px;

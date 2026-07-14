@@ -488,6 +488,221 @@ body.dark-mode .badge-loan { background: #4c1d95; color: #c4b5fd; }
   border-bottom-color: var(--primary);
 }
 
+/* ==================== CUSTOMER PROFILE STYLES ==================== */
+
+.customer-profile {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.profile-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.profile-info h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.profile-info p {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.profile-status {
+  margin-left: auto;
+}
+
+.profile-balance-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.profile-balance-card {
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  text-align: center;
+  background: var(--bg-secondary);
+}
+
+.profile-balance-card .pbc-value {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.profile-balance-card .pbc-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.profile-balance-card.success .pbc-value { color: var(--success); }
+.profile-balance-card.danger .pbc-value { color: var(--danger); }
+
+.profile-section {
+  margin-bottom: 16px;
+}
+
+.profile-section h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.profile-sale-item {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.profile-sale-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  background: var(--bg-secondary);
+  transition: background var(--transition);
+}
+
+.profile-sale-header:hover {
+  background: var(--bg-tertiary);
+}
+
+.profile-sale-ref {
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+}
+
+.profile-sale-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.profile-sale-amounts {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  font-size: 13px;
+}
+
+.profile-sale-total {
+  font-weight: 600;
+}
+
+.profile-sale-remaining {
+  font-weight: 600;
+}
+
+.profile-toggle-icon {
+  font-size: 12px;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.profile-sale-details {
+  padding: 12px 14px;
+  border-top: 1px solid var(--border-color);
+  background: var(--card-bg);
+}
+
+.profile-payments {
+  margin-top: 8px;
+}
+
+.profile-payment-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 0;
+  font-size: 13px;
+  border-bottom: 1px dashed var(--border-color);
+}
+
+.profile-payment-item:last-child {
+  border-bottom: none;
+}
+
+.profile-return-item,
+.profile-damage-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.profile-return-info {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex: 1;
+}
+
+.text-danger {
+  color: var(--danger) !important;
+}
+
+.text-success {
+  color: var(--success) !important;
+}
+
+/* Modal md size */
+.modal-md {
+  max-width: 800px;
+}
+
+/* Customer Statement */
+.customer-statement {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* Stat card clickable on dashboard */
+.stat-card.clickable {
+  cursor: pointer;
+}
+
+.stat-card .stat-trend {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .product-select-row,

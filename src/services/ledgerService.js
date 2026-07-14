@@ -77,16 +77,14 @@ class LedgerService {
   addCustomer(data) {
     const db = getDatabase();
     const stmt = db.prepare(`
-      INSERT INTO customers (customer_name, phone, address, email, credit_limit, opening_balance, status, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO customers (customer_name, phone, address, email, status, notes)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
     const result = stmt.run(
       data.customer_name,
       data.phone || "",
       data.address || "",
       data.email || "",
-      data.credit_limit || 0,
-      data.opening_balance || 0,
       data.status || "Active",
       data.notes || "",
     );
@@ -98,7 +96,7 @@ class LedgerService {
     db.prepare(`
       UPDATE customers SET
         customer_name = ?, phone = ?, address = ?, email = ?,
-        credit_limit = ?, opening_balance = ?, status = ?, notes = ?,
+        status = ?, notes = ?,
         updated_at = datetime('now','localtime')
       WHERE id = ?
     `).run(
@@ -106,8 +104,6 @@ class LedgerService {
       data.phone || "",
       data.address || "",
       data.email || "",
-      data.credit_limit || 0,
-      data.opening_balance || 0,
       data.status || "Active",
       data.notes || "",
       id,
@@ -132,9 +128,6 @@ class LedgerService {
 
   getCustomerBalance(id) {
     const db = getDatabase();
-    const customer = db
-      .prepare("SELECT opening_balance FROM customers WHERE id = ?")
-      .get(id);
     const ledgerStats = db
       .prepare(
         `SELECT
@@ -143,12 +136,11 @@ class LedgerService {
         FROM ledgers WHERE customer_id = ?`,
       )
       .get(id);
-    const opening = customer?.opening_balance || 0;
     const totalSales = ledgerStats?.total_sales || 0;
     const totalPaid = ledgerStats?.total_paid || 0;
-    const outstanding = totalSales - totalPaid + opening;
+    const outstanding = totalSales - totalPaid;
     return {
-      opening_balance: opening,
+      opening_balance: 0,
       total_sales: totalSales,
       total_paid: totalPaid,
       outstanding_balance: outstanding,
@@ -652,6 +644,312 @@ class LedgerService {
       total: totalResult?.total || 0,
       page: filters.page || 1,
       limit,
+    };
+  }
+
+  // ==================== DAMAGE MANAGEMENT ====================
+
+  recordDamage(data) {
+    const db = getDatabase();
+
+    const product = db.prepare("SELECT * FROM products WHERE id = ?").get(data.product_id);
+    if (!product) {
+      throw new Error("Product not found");
+    }
+
+    if (data.quantity > product.quantity) {
+      throw new Error(
+        `Cannot record ${data.quantity} damaged. Available quantity: ${product.quantity}`
+      );
+    }
+
+    const date = new Date();
+    const dateStr = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
+    const countRef = db.prepare("SELECT COUNT(*) as cnt FROM damage_records").get();
+    const referenceNo = `DMG-${dateStr}-${String((countRef?.cnt || 0) + 1).padStart(4, "0")}`;
+
+    const result = db.transaction(() => {
+      // Record the damage
+      const stmt = db.prepare(`
+        INSERT INTO damage_records (product_id, quantity, damage_type, reason, reference_no, recorded_by, recorded_date, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const insResult = stmt.run(
+        data.product_id,
+        data.quantity,
+        data.damage_type || 'Damaged',
+        data.reason || '',
+        referenceNo,
+        data.recorded_by || '',
+        data.recorded_date || new Date().toISOString().split('T')[0],
+        data.notes || ''
+      );
+
+      // Reduce product quantity directly
+      const newQty = product.quantity - data.quantity;
+      const newStatus = newQty <= 0 ? 'Damaged' : product.status;
+      db.prepare(
+        "UPDATE products SET quantity = ?, status = ?, updated_at = datetime('now','localtime') WHERE id = ?"
+      ).run(newQty, newStatus, data.product_id);
+
+      return { id: insResult.lastInsertRowid, referenceNo };
+    })();
+
+    return result;
+  }
+
+  getAllDamages(filters = {}) {
+    const db = getDatabase();
+    let query = `
+      SELECT dr.*, p.product_name, p.category, p.purchase_price,
+        CASE WHEN dr.damage_type = 'Corrected' THEN 'Restored' ELSE dr.damage_type END as display_type
+      FROM damage_records dr
+      LEFT JOIN products p ON dr.product_id = p.id
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (filters.product_id) {
+      query += " AND dr.product_id = ?";
+      params.push(filters.product_id);
+    }
+
+    if (filters.damage_type) {
+      query += " AND dr.damage_type = ?";
+      params.push(filters.damage_type);
+    }
+
+    if (filters.date_from) {
+      query += " AND dr.recorded_date >= ?";
+      params.push(filters.date_from);
+    }
+
+    if (filters.date_to) {
+      query += " AND dr.recorded_date <= ?";
+      params.push(filters.date_to);
+    }
+
+    query += " ORDER BY dr.created_at DESC";
+
+    const limit = filters.limit || 50;
+    const offset = filters.page ? (filters.page - 1) * limit : 0;
+
+    // Build a proper count query by extracting the WHERE clause
+    const whereMatch = query.match(/WHERE[\s\S]*/);
+    const whereClause = whereMatch ? whereMatch[0] : '';
+    let totalResult;
+    try {
+      totalResult = db.prepare("SELECT COUNT(*) as total FROM damage_records dr LEFT JOIN products p ON dr.product_id = p.id " + whereClause).get(...params);
+    } catch(e) {
+      totalResult = { total: 0 };
+    }
+
+    query += " LIMIT ? OFFSET ?";
+    params.push(limit, offset);
+
+    const damages = db.prepare(query).all(...params);
+
+    // Get current product quantities for each damage record
+    for (const dmg of damages) {
+      const product = db.prepare("SELECT quantity, status FROM products WHERE id = ?").get(dmg.product_id);
+      if (product) {
+        dmg.current_qty = product.quantity;
+        dmg.product_status = product.status;
+      } else {
+        dmg.current_qty = 0;
+        dmg.product_status = 'Deleted';
+      }
+    }
+
+    return {
+      damages,
+      total: totalResult?.total || 0,
+      page: filters.page || 1,
+      limit
+    };
+  }
+
+  correctDamage(id, correctionData) {
+    const db = getDatabase();
+    const existing = db.prepare("SELECT * FROM damage_records WHERE id = ?").get(id);
+    if (!existing) {
+      throw new Error("Damage record not found");
+    }
+
+    const result = db.transaction(() => {
+      // If quantity is explicitly provided (including 0), use it; otherwise keep existing
+      const newQuantity = correctionData.quantity !== undefined ? correctionData.quantity : existing.quantity;
+      // How many units are being restored?
+      const restoreQty = existing.quantity - newQuantity;
+
+      // Update the damage record
+      db.prepare(`
+        UPDATE damage_records SET
+          damage_type = 'Corrected',
+          reason = CASE WHEN ? != '' THEN ? ELSE reason END,
+          notes = CASE WHEN ? != '' THEN ? ELSE notes END,
+          updated_at = datetime('now','localtime')
+        WHERE id = ?
+      `).run(
+        correctionData.reason || '', correctionData.reason || '',
+        correctionData.notes || '', correctionData.notes || '',
+        id
+      );
+
+      // If restoring stock, add quantity back to product
+      if (restoreQty > 0) {
+        const product = db.prepare("SELECT * FROM products WHERE id = ?").get(existing.product_id);
+        if (product) {
+          const newQty = product.quantity + restoreQty;
+          const newStatus = newQty > 0 ? 'In Stock' : product.status;
+          db.prepare(
+            "UPDATE products SET quantity = ?, status = ?, updated_at = datetime('now','localtime') WHERE id = ?"
+          ).run(newQty, newStatus, existing.product_id);
+        }
+      }
+
+      return { success: true };
+    })();
+
+    return result;
+  }
+
+  // ==================== CUSTOMER FULL PROFILE ====================
+
+  getCustomerFullProfile(customerId) {
+    const db = getDatabase();
+    const customer = db.prepare("SELECT * FROM customers WHERE id = ?").get(customerId);
+    if (!customer) return null;
+
+    // Get all sales for this customer
+    const sales = db.prepare(`
+      SELECT si.*, l.ledger_type, l.status as ledger_status,
+        (SELECT COUNT(*) FROM sale_issue_items WHERE sale_issue_id = si.id) as items_count
+      FROM sale_issues si
+      LEFT JOIN ledgers l ON si.ledger_id = l.id
+      WHERE si.customer_id = ?
+      ORDER BY si.issue_date DESC
+    `).all(customerId);
+
+    // Get payments for each sale's ledger with running balance
+    for (const sale of sales) {
+      if (sale.ledger_id) {
+        const rawPayments = db.prepare(`
+          SELECT * FROM ledger_payments WHERE ledger_id = ? ORDER BY payment_date ASC, id ASC
+        `).all(sale.ledger_id);
+        // Calculate running balance for each payment
+        let runningPaid = 0;
+        sale.payments = rawPayments.map(p => {
+          runningPaid += p.amount;
+          const remainingAfter = sale.total_amount - runningPaid;
+          return {
+            ...p,
+            running_paid: runningPaid,
+            remaining_after: Math.max(0, remainingAfter)
+          };
+        });
+      } else {
+        sale.payments = [];
+      }
+
+      // Get items for this sale
+      sale.items = db.prepare(`
+        SELECT sii.*, p.category, p.serial_number
+        FROM sale_issue_items sii
+        LEFT JOIN products p ON sii.product_id = p.id
+        WHERE sii.sale_issue_id = ?
+      `).all(sale.id);
+    }
+
+    // Get all returns
+    const returns = db.prepare(`
+      SELECT r.*, si.reference_no as sale_reference
+      FROM returns r
+      LEFT JOIN sale_issues si ON r.sale_issue_id = si.id
+      WHERE r.customer_id = ?
+      ORDER BY r.return_date DESC
+    `).all(customerId);
+
+    for (const ret of returns) {
+      ret.items = db.prepare("SELECT * FROM return_items WHERE return_id = ?").all(ret.id);
+    }
+
+    // Get all ledgers
+    const ledgers = db.prepare(`
+      SELECT l.*,
+        (SELECT COUNT(*) FROM ledger_payments WHERE ledger_id = l.id) as payments_count
+      FROM ledgers l
+      WHERE l.customer_id = ?
+      ORDER BY l.created_at DESC
+    `).all(customerId);
+
+    for (const ledger of ledgers) {
+      ledger.payments = db.prepare(
+        "SELECT * FROM ledger_payments WHERE ledger_id = ? ORDER BY payment_date DESC"
+      ).all(ledger.id);
+    }
+
+    // Get damage records for products sold to this customer
+    const damages = db.prepare(`
+      SELECT dr.*, p.product_name, p.category
+      FROM damage_records dr
+      LEFT JOIN products p ON dr.product_id = p.id
+      WHERE dr.product_id IN (
+        SELECT DISTINCT sii.product_id FROM sale_issue_items sii
+        JOIN sale_issues si ON sii.sale_issue_id = si.id
+        WHERE si.customer_id = ?
+      )
+      ORDER BY dr.created_at DESC
+    `).all(customerId);
+
+    // Balance
+    const balance = db.prepare(`
+      SELECT
+        COALESCE(SUM(total_amount), 0) as total_sales,
+        COALESCE(SUM(paid_amount), 0) as total_paid,
+        COALESCE(SUM(remaining_amount), 0) as total_outstanding
+      FROM ledgers WHERE customer_id = ?
+    `).get(customerId);
+
+    return {
+      customer,
+      sales,
+      returns,
+      ledgers,
+      damages,
+      balance: {
+        opening_balance: 0,
+        total_sales: balance.total_sales || 0,
+        total_paid: balance.total_paid || 0,
+        total_outstanding: balance.total_outstanding || 0
+      }
+    };
+  }
+
+  getCustomerStatement(customerId) {
+    const db = getDatabase();
+    const profile = this.getCustomerFullProfile(customerId);
+    if (!profile) return null;
+
+    const settings = {};
+    const dbSettings = db.prepare("SELECT * FROM settings").all();
+    for (const row of dbSettings) {
+      settings[row.key] = row.value;
+    }
+
+    return {
+      shopName: settings.shop_name || 'Laptop Inventory Manager',
+      shopAddress: settings.shop_address || '',
+      shopPhone: settings.phone_number || '',
+      shopEmail: settings.email || '',
+      currency: settings.currency || 'USD',
+      customer: profile.customer,
+      sales: profile.sales,
+      returns: profile.returns,
+      ledgers: profile.ledgers,
+      damages: profile.damages,
+      balance: profile.balance,
+      generatedAt: new Date().toISOString()
     };
   }
 

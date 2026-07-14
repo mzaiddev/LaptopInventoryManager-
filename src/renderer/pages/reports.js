@@ -14,6 +14,7 @@ const ReportsPage = {
         <button class="tab-item" data-tab="sales" onclick="ReportsPage.switchTab('sales')">Sales Report</button>
         <button class="tab-item" data-tab="outstanding" onclick="ReportsPage.switchTab('outstanding')">Outstanding Dues</button>
         <button class="tab-item" data-tab="customers" onclick="ReportsPage.switchTab('customers')">Customer Report</button>
+        <button class="tab-item" data-tab="damage" onclick="ReportsPage.switchTab('damage')">Damages</button>
       </div>
       <div id="reports-content">
         <div class="loading"><div class="spinner"></div></div>
@@ -42,6 +43,7 @@ const ReportsPage = {
       case "sales": await this.renderSalesReport(container); break;
       case "outstanding": await this.renderOutstanding(container); break;
       case "customers": await this.renderCustomerReport(container); break;
+      case "damage": await this.renderDamageReport(container); break;
     }
   },
 
@@ -314,7 +316,6 @@ const ReportsPage = {
               <tr>
                 <th>Customer</th>
                 <th>Phone</th>
-                <th>Opening Bal</th>
                 <th>Total Sales</th>
                 <th>Total Paid</th>
                 <th>Outstanding</th>
@@ -325,10 +326,85 @@ const ReportsPage = {
                 <tr>
                   <td><strong>${this.escapeHtml(c.customer_name)}</strong></td>
                   <td>${this.escapeHtml(c.phone) || '-'}</td>
-                  <td>${Formatters.formatCurrency(c.opening_balance, currency)}</td>
                   <td>${Formatters.formatCurrency(c.total_sales, currency)}</td>
                   <td>${Formatters.formatCurrency(c.total_paid, currency)}</td>
                   <td style="font-weight:600;color:${c.outstanding_balance > 0 ? 'var(--danger)' : 'var(--success)'};">${Formatters.formatCurrency(c.outstanding_balance, currency)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="no-print" style="display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn btn-secondary" onclick="window.print()">Print Report</button>
+        </div>
+      `;
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${err.message}</p></div>`;
+    }
+  },
+
+  async renderDamageReport(container) {
+    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+    try {
+      const result = await window.api.getAllDamages({ limit: 1000 });
+      if (!result.success) {
+        container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${result.error}</p></div>`;
+        return;
+      }
+
+      const data = result.data;
+      const damages = data.damages || [];
+
+      if (damages.length === 0) {
+        container.innerHTML = '<div class="empty-state"><h3>No Damage Records</h3><p>No damages have been recorded yet.</p></div>';
+        return;
+      }
+
+      const totalQty = damages.reduce((sum, d) => sum + d.quantity, 0);
+      const currency = App.currency || 'USD';
+      const totalValue = damages.reduce((sum, d) => sum + (d.quantity * (d.purchase_price || 0)), 0);
+
+      container.innerHTML = `
+        <div class="ledger-stats-grid" style="grid-template-columns:repeat(3,1fr);">
+          <div class="ledger-stat-card stat-danger">
+            <div class="stat-value">${damages.length}</div>
+            <div class="stat-label">Damage Records</div>
+          </div>
+          <div class="ledger-stat-card stat-danger">
+            <div class="stat-value">${totalQty}</div>
+            <div class="stat-label">Total Damaged Quantity</div>
+          </div>
+          <div class="ledger-stat-card stat-danger">
+            <div class="stat-value">${Formatters.formatCurrency(totalValue, currency)}</div>
+            <div class="stat-label">Total Value Lost</div>
+          </div>
+        </div>
+        <div class="report-card">
+          <table class="report-table">
+            <thead>
+              <tr>
+                <th>Reference</th>
+                <th>Product</th>
+                <th>Category</th>
+                <th>Qty</th>
+                <th>Type</th>
+                <th>Date</th>
+                <th>Reason</th>
+                <th>Value Lost</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${damages.map(d => `
+                <tr>
+                  <td>${this.escapeHtml(d.reference_no)}</td>
+                  <td>${this.escapeHtml(d.product_name)}</td>
+                  <td>${this.escapeHtml(d.category) || '-'}</td>
+                  <td>${d.quantity}</td>
+                  <td><span class="badge badge-damaged">${this.escapeHtml(d.damage_type)}</span></td>
+                  <td>${Formatters.formatDate(d.recorded_date)}</td>
+                  <td style="max-width:150px;">${this.escapeHtml(d.reason) || '-'}</td>
+                  <td style="font-weight:600;color:var(--danger);">${Formatters.formatCurrency(d.quantity * (d.purchase_price || 0), currency)}</td>
                 </tr>
               `).join('')}
             </tbody>

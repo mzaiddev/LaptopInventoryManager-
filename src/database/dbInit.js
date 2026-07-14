@@ -23,6 +23,12 @@ function initDatabase() {
   // Migrate returns table to add reference_no if missing
   migrateReturnsAddReferenceNo();
 
+  // Remove damaged_quantity column (moved to damage_records table only)
+  migrateRemoveDamagedQuantity();
+
+  // Remove credit_limit and opening_balance from customers
+  migrateRemoveCustomerFields();
+
   createTables();
   createIndexes();
   seedDefaults();
@@ -95,8 +101,6 @@ function createTables() {
       phone TEXT DEFAULT '',
       address TEXT DEFAULT '',
       email TEXT DEFAULT '',
-      credit_limit REAL DEFAULT 0,
-      opening_balance REAL DEFAULT 0,
       status TEXT DEFAULT 'Active' CHECK(status IN ('Active','Inactive')),
       notes TEXT DEFAULT '',
       created_at DATETIME DEFAULT (datetime('now','localtime')),
@@ -196,6 +200,22 @@ function createTables() {
       FOREIGN KEY (return_id) REFERENCES returns(id) ON DELETE CASCADE,
       FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
     );
+
+    -- Damage Records table
+    CREATE TABLE IF NOT EXISTS damage_records (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id INTEGER NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      damage_type TEXT DEFAULT 'Damaged' CHECK(damage_type IN ('Damaged','Disposed','Repaired','Corrected')),
+      reason TEXT DEFAULT '',
+      reference_no TEXT NOT NULL DEFAULT '',
+      recorded_by TEXT DEFAULT '',
+      recorded_date TEXT NOT NULL,
+      notes TEXT DEFAULT '',
+      created_at DATETIME DEFAULT (datetime('now','localtime')),
+      updated_at DATETIME DEFAULT (datetime('now','localtime')),
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
+    );
   `);
 }
 
@@ -243,6 +263,100 @@ function migrateReturnsAddReferenceNo() {
     console.log("Migration completed: reference_no added to returns table");
   } catch (err) {
     console.error("Error migrating returns table:", err);
+  }
+}
+function migrateRemoveDamagedQuantity() {
+  try {
+    const row = db.prepare("PRAGMA table_info(products)").all();
+    const hasColumn = row.some((r) => r && r.name === "damaged_quantity");
+    if (!hasColumn) return;
+
+    console.log('Migrating database: removing "damaged_quantity" column from products table');
+
+    db.transaction(() => {
+      db.pragma("foreign_keys = OFF");
+
+      // Create new table without damaged_quantity
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS products_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          product_name TEXT NOT NULL,
+          category TEXT NOT NULL,
+          model TEXT DEFAULT '',
+          serial_number TEXT DEFAULT '',
+          supplier TEXT DEFAULT '',
+          purchase_price REAL NOT NULL DEFAULT 0,
+          selling_price REAL NOT NULL DEFAULT 0,
+          quantity INTEGER NOT NULL DEFAULT 1,
+          purchase_date TEXT DEFAULT '',
+          warranty TEXT DEFAULT '',
+          storage_location TEXT DEFAULT '',
+          notes TEXT DEFAULT '',
+          status TEXT DEFAULT 'In Stock' CHECK(status IN ('In Stock','Reserved','Sold','Returned','Damaged','Lost')),
+          condition TEXT DEFAULT 'Excellent' CHECK(condition IN ('Excellent','Good','Fair','Damaged','For Parts')),
+          created_at DATETIME DEFAULT (datetime('now','localtime')),
+          updated_at DATETIME DEFAULT (datetime('now','localtime'))
+        );
+      `);
+
+      // Copy data (skip damaged_quantity column)
+      db.exec(`
+        INSERT INTO products_new (id, product_name, category, model, serial_number, supplier, purchase_price, selling_price, quantity, purchase_date, warranty, storage_location, notes, status, condition, created_at, updated_at)
+        SELECT id, product_name, category, model, serial_number, supplier, purchase_price, selling_price, quantity, purchase_date, warranty, storage_location, notes, status, condition, created_at, updated_at FROM products;
+      `);
+
+      db.exec("DROP TABLE products;");
+      db.exec("ALTER TABLE products_new RENAME TO products;");
+
+      db.pragma("foreign_keys = ON");
+    })();
+
+    console.log("Migration completed: damaged_quantity column removed from products");
+  } catch (err) {
+    console.error("Error migrating products table to remove damaged_quantity:", err);
+  }
+}
+
+function migrateRemoveCustomerFields() {
+  try {
+    const row = db.prepare("PRAGMA table_info(customers)").all();
+    const hasCreditLimit = row.some((r) => r && r.name === "credit_limit");
+    const hasOpeningBalance = row.some((r) => r && r.name === "opening_balance");
+    if (!hasCreditLimit && !hasOpeningBalance) return;
+
+    console.log('Migrating database: removing credit_limit and opening_balance from customers table');
+
+    db.transaction(() => {
+      db.pragma("foreign_keys = OFF");
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS customers_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          customer_name TEXT NOT NULL,
+          phone TEXT DEFAULT '',
+          address TEXT DEFAULT '',
+          email TEXT DEFAULT '',
+          status TEXT DEFAULT 'Active' CHECK(status IN ('Active','Inactive')),
+          notes TEXT DEFAULT '',
+          created_at DATETIME DEFAULT (datetime('now','localtime')),
+          updated_at DATETIME DEFAULT (datetime('now','localtime'))
+        );
+      `);
+
+      db.exec(`
+        INSERT INTO customers_new (id, customer_name, phone, address, email, status, notes, created_at, updated_at)
+        SELECT id, customer_name, phone, address, email, status, notes, created_at, updated_at FROM customers;
+      `);
+
+      db.exec("DROP TABLE customers;");
+      db.exec("ALTER TABLE customers_new RENAME TO customers;");
+
+      db.pragma("foreign_keys = ON");
+    })();
+
+    console.log("Migration completed: credit_limit and opening_balance removed from customers");
+  } catch (err) {
+    console.error("Error migrating customers table:", err);
   }
 }
 
@@ -350,6 +464,11 @@ function createIndexes() {
     -- Return items indexes
     CREATE INDEX IF NOT EXISTS idx_return_items_return ON return_items(return_id);
     CREATE INDEX IF NOT EXISTS idx_return_items_product ON return_items(product_id);
+
+    -- Damage record indexes
+    CREATE INDEX IF NOT EXISTS idx_damage_records_product ON damage_records(product_id);
+    CREATE INDEX IF NOT EXISTS idx_damage_records_date ON damage_records(recorded_date);
+    CREATE INDEX IF NOT EXISTS idx_damage_records_type ON damage_records(damage_type);
   `);
 }
 

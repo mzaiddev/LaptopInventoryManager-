@@ -144,12 +144,7 @@ const App = {
         sortable: true,
         type: "currency",
       },
-      {
-        field: "selling_price",
-        label: "Selling",
-        sortable: true,
-        type: "currency",
-      },
+      // Selling Price column removed - managed from Sales module
       {
         field: "status",
         label: "Status",
@@ -193,6 +188,11 @@ const App = {
   getRowActions(row) {
     const safeName = this.escapeHtml(row.product_name).replace(/'/g, "\\'");
     return `
+      ${row.status === 'Damaged' ? `<button class="btn btn-sm btn-success" onclick="InventoryPage.restoreProduct(${row.id})" title="Restore to Normal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;">
+          <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+        </svg>
+      </button>` : ''}
       <button class="btn btn-sm btn-primary" onclick="InventoryPage.viewProduct(${row.id})" title="View Details">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;">
           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>

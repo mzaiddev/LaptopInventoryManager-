@@ -350,6 +350,51 @@ function registerIpcHandlers() {
     }
   });
 
+  // --- Damage Management ---
+  ipcMain.handle("damage:record", async (event, data) => {
+    try {
+      const result = ledgerService.recordDamage(data);
+      return { success: true, data: result };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("damage:getAll", async (event, filters) => {
+    try {
+      return { success: true, data: ledgerService.getAllDamages(filters) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("damage:correct", async (event, id, data) => {
+    try {
+      return { success: true, data: ledgerService.correctDamage(id, data) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // --- Customer Profile ---
+  ipcMain.handle("customer:getFullProfile", async (event, customerId) => {
+    try {
+      const profile = ledgerService.getCustomerFullProfile(customerId);
+      return { success: true, data: profile };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("customer:getStatement", async (event, customerId) => {
+    try {
+      const statement = ledgerService.getCustomerStatement(customerId);
+      return { success: true, data: statement };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
   // --- Reports ---
   ipcMain.handle("ledger:getLedgerSummary", async () => {
     try {
@@ -391,13 +436,7 @@ function validateProduct(data) {
   ) {
     errors.push("Purchase price cannot be negative.");
   }
-  if (
-    data.selling_price === undefined ||
-    data.selling_price === null ||
-    data.selling_price < 0
-  ) {
-    errors.push("Selling price cannot be negative.");
-  }
+  // Selling price validation removed - managed from Sales module
   if (
     data.quantity === undefined ||
     data.quantity === null ||
