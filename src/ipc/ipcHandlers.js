@@ -305,25 +305,25 @@ function registerIpcHandlers() {
     }
   });
 
-  // --- Ledgers ---
-  ipcMain.handle("ledger:getAllLedgers", async (event, filters) => {
+  // --- Sales (replaces ledgers) ---
+  ipcMain.handle("sale:getAllSales", async (event, filters) => {
     try {
-      return { success: true, data: ledgerService.getAllLedgers(filters) };
+      return { success: true, data: ledgerService.getAllSales(filters) };
     } catch (err) {
       return { success: false, error: err.message };
     }
   });
 
-  ipcMain.handle("ledger:getLedgerById", async (event, id) => {
+  ipcMain.handle("sale:getSaleById", async (event, id) => {
     try {
-      return { success: true, data: ledgerService.getLedgerById(id) };
+      return { success: true, data: ledgerService.getSaleById(id) };
     } catch (err) {
       return { success: false, error: err.message };
     }
   });
 
   // --- Payments ---
-  ipcMain.handle("ledger:addPayment", async (event, data) => {
+  ipcMain.handle("sale:addPayment", async (event, data) => {
     try {
       const result = ledgerService.addPayment(data);
       return { success: true, data: result };
@@ -396,9 +396,9 @@ function registerIpcHandlers() {
   });
 
   // --- Reports ---
-  ipcMain.handle("ledger:getLedgerSummary", async () => {
+  ipcMain.handle("sale:getSalesSummary", async () => {
     try {
-      return { success: true, data: ledgerService.getLedgerSummary() };
+      return { success: true, data: ledgerService.getSalesSummary() };
     } catch (err) {
       return { success: false, error: err.message };
     }

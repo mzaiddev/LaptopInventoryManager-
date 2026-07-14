@@ -9,7 +9,7 @@ class DashboardService {
     const financialSummary = this.getFinancialSummary(db);
     const conditionSummary = this.getConditionSummary(db);
     const salesSummary = this.getSalesSummary(db);
-    const ledgerSummary = this.getLedgerFinancialSummary(db);
+    const saleSummary = this.getSaleFinancialSummary(db);
     const recentActivity = this.getRecentActivity(db);
     const damageSummary = this.getDamageSummary(db);
 
@@ -18,7 +18,7 @@ class DashboardService {
       financialSummary,
       conditionSummary,
       salesSummary,
-      ledgerSummary,
+      saleSummary,
       damageSummary,
       recentActivity,
       currency
@@ -28,7 +28,20 @@ class DashboardService {
   getInventorySummary(db) {
     // Damaged count comes from damage_records, not from products table
     const damagedCount = db.prepare(`
-      SELECT COALESCE(SUM(dr.quantity), 0) as total FROM damage_records WHERE damage_type IN ('Damaged', 'Disposed')
+      SELECT COALESCE(SUM(quantity), 0) as total FROM damage_records WHERE damage_type IN ('Damaged', 'Disposed')
+    `).get();
+
+    // Actual sold quantity from sale_issue_items (products sold via transactions)
+    const soldFromSales = db.prepare(`
+      SELECT COALESCE(SUM(quantity), 0) as total FROM sale_issue_items
+    `).get();
+
+    // Actual returned quantity from return_items (products returned via returns)
+    const returnedFromReturns = db.prepare(`
+      SELECT COALESCE(SUM(ri.quantity), 0) as total
+      FROM return_items ri
+      JOIN returns r ON ri.return_id = r.id
+      WHERE r.status = 'Completed'
     `).get();
 
     const stats = db.prepare(`
@@ -49,7 +62,9 @@ class DashboardService {
       reserved: stats.reserved,
       sold: stats.sold,
       returned: stats.returned,
-      damaged: damagedCount.total || 0
+      damaged: damagedCount.total || 0,
+      totalSoldFromSales: soldFromSales.total || 0,
+      totalReturnedFromReturns: returnedFromReturns.total || 0
     };
   }
 
@@ -140,17 +155,17 @@ class DashboardService {
     };
   }
 
-  getLedgerFinancialSummary(db) {
+  getSaleFinancialSummary(db) {
     const stats = db.prepare(`
       SELECT
         COALESCE(SUM(remaining_amount), 0) as total_outstanding,
-        COALESCE(SUM(total_amount), 0) as total_ledger_sales,
-        COALESCE(SUM(paid_amount), 0) as total_ledger_collected,
-        COUNT(*) as total_ledgers,
-        COALESCE(SUM(CASE WHEN status = 'Outstanding' THEN 1 ELSE 0 END), 0) as outstanding_ledgers,
-        COALESCE(SUM(CASE WHEN status = 'Paid' THEN 1 ELSE 0 END), 0) as paid_ledgers,
-        COALESCE(SUM(CASE WHEN status = 'Partial' THEN 1 ELSE 0 END), 0) as partial_ledgers
-      FROM ledgers
+        COALESCE(SUM(total_amount), 0) as total_sale_amounts,
+        COALESCE(SUM(paid_amount), 0) as total_sale_collected,
+        COUNT(*) as total_invoices,
+        COALESCE(SUM(CASE WHEN payment_status = 'Outstanding' THEN 1 ELSE 0 END), 0) as outstanding_count,
+        COALESCE(SUM(CASE WHEN payment_status = 'Paid' THEN 1 ELSE 0 END), 0) as paid_count,
+        COALESCE(SUM(CASE WHEN payment_status = 'Partial' THEN 1 ELSE 0 END), 0) as partial_count
+      FROM sale_issues
     `).get();
 
     const returnsTotal = db.prepare(`
@@ -161,12 +176,12 @@ class DashboardService {
 
     return {
       totalOutstanding: stats.total_outstanding,
-      totalLedgerSales: stats.total_ledger_sales,
-      totalLedgerCollected: stats.total_ledger_collected,
-      totalLedgers: stats.total_ledgers,
-      outstandingLedgers: stats.outstanding_ledgers,
-      paidLedgers: stats.paid_ledgers,
-      partialLedgers: stats.partial_ledgers,
+      totalSaleAmounts: stats.total_sale_amounts,
+      totalSaleCollected: stats.total_sale_collected,
+      totalInvoices: stats.total_invoices,
+      outstandingInvoices: stats.outstanding_count,
+      paidInvoices: stats.paid_count,
+      partialInvoices: stats.partial_count,
       totalReturnsValue: returnsTotal.total_returns_value,
       totalReturns: returnsTotal.total_returns
     };
@@ -207,11 +222,11 @@ class DashboardService {
     `).all();
 
     const recentPayments = db.prepare(`
-      SELECT lp.id, lp.amount, lp.payment_date, lp.payment_method, l.reference_no as ledger_ref, c.customer_name
-      FROM ledger_payments lp
-      LEFT JOIN ledgers l ON lp.ledger_id = l.id
-      LEFT JOIN customers c ON l.customer_id = c.id
-      ORDER BY lp.created_at DESC LIMIT 5
+      SELECT p.id, p.amount, p.payment_date, p.payment_method, si.reference_no as sale_ref, c.customer_name
+      FROM payments p
+      LEFT JOIN sale_issues si ON p.sale_issue_id = si.id
+      LEFT JOIN customers c ON si.customer_id = c.id
+      ORDER BY p.created_at DESC LIMIT 5
     `).all();
 
     const recentDamages = db.prepare(`

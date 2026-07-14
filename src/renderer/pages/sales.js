@@ -6,6 +6,9 @@ const SalesPage = {
   searchTimeout: null,
 
   async load() {
+    // Reset state to prevent stale data from carrying over
+    this.selectedCustomer = null;
+    this.selectedProducts = [];
     const content = document.getElementById("page-content");
     content.innerHTML = `
       <div class="page-header">

@@ -297,19 +297,14 @@ const ReturnsPage = {
         return;
       }
 
-      // Get ledger for items
-      if (!sale.ledger_id) {
-        container.innerHTML = '<p style="color:var(--danger);">No ledger linked to this sale.</p>';
-        return;
-      }
-
-      const ledgerResult = await window.api.getLedgerById(sale.ledger_id);
-      if (!ledgerResult.success || !ledgerResult.data || !ledgerResult.data.items) {
+      // Get sale items directly
+      const saleResult = await window.api.getSaleById(parseInt(saleId));
+      if (!saleResult.success || !saleResult.data || !saleResult.data.items) {
         container.innerHTML = '<p style="color:var(--danger);">Could not load sale items.</p>';
         return;
       }
 
-      const items = ledgerResult.data.items;
+      const items = saleResult.data.items;
       if (items.length === 0) {
         container.innerHTML = '<p style="color:var(--text-muted);">No items in this sale.</p>';
         return;

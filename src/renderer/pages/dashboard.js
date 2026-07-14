@@ -47,7 +47,7 @@ const DashboardPage = {
     const fin = data.financialSummary;
     const cond = data.conditionSummary;
     const sales = data.salesSummary;
-    const ledger = data.ledgerSummary;
+    const ledger = data.saleSummary;
     const damage = data.damageSummary;
     const activity = data.recentActivity;
 
@@ -113,7 +113,7 @@ const DashboardPage = {
             </div>
             <div class="stat-value">${Formatters.formatCurrency(ledger.totalOutstanding, currency)}</div>
             <div class="stat-label">Outstanding Balance</div>
-            <div class="stat-trend">${ledger.outstandingLedgers} outstanding ledgers</div>
+            <div class="stat-trend">${ledger.outstandingInvoices || 0} outstanding invoices</div>
           </div>
           <div class="stat-card clickable" onclick="DashboardPage.showDetail('Payments Collected', DashboardPage.getCollectedDetailHtml)" title="Click for details">
             <div class="stat-icon green">
@@ -134,6 +134,16 @@ const DashboardPage = {
             <div class="stat-value">${Formatters.formatCurrency(fin.damagedStockValue, currency)}</div>
             <div class="stat-label">Damaged Stock Value</div>
             <div class="stat-trend">${damage.damagedStatusQty} units damaged</div>
+          </div>
+          <div class="stat-card clickable" onclick="DashboardPage.showDetail('Returns & Credits', DashboardPage.getReturnsDetailHtml)" title="Click for details">
+            <div class="stat-icon warning">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+              </svg>
+            </div>
+            <div class="stat-value">${Formatters.formatCurrency(ledger.totalReturnsValue, currency)}</div>
+            <div class="stat-label">Returns / Credits</div>
+            <div class="stat-trend">${ledger.totalReturns || 0} return transactions</div>
           </div>
           <div class="stat-card clickable" onclick="DashboardPage.showDetail('Net Profit', DashboardPage.getProfitDetailHtml)" title="Click for details">
             <div class="stat-icon blue">
@@ -227,8 +237,9 @@ const DashboardPage = {
                 <polyline points="20 6 9 17 4 12"/>
               </svg>
             </div>
-            <div class="stat-value">${inv.sold}</div>
-            <div class="stat-label">Sold (total qty)</div>
+            <div class="stat-value">${inv.totalSoldFromSales}</div>
+            <div class="stat-label">Sold (from sales)</div>
+            <div class="stat-trend">${inv.totalReturnedFromReturns} returned via returns</div>
           </div>
         </div>
       </div>
@@ -359,7 +370,7 @@ const DashboardPage = {
         </div>
         <div class="activity-info">
           <div class="activity-title">${Formatters.formatCurrency(item.amount, currency)} received</div>
-          <div class="activity-subtitle">${this.escapeHtml(item.customer_name)} - ${this.escapeHtml(item.ledger_ref)} (${item.payment_method})</div>
+          <div class="activity-subtitle">${this.escapeHtml(item.customer_name)} - ${this.escapeHtml(item.sale_ref)} (${item.payment_method})</div>
         </div>
         <div class="activity-time">${Formatters.formatRelativeTime(item.payment_date)}</div>
       </li>
@@ -490,7 +501,7 @@ const DashboardPage = {
     const result = await window.api.getDashboardData();
     if (!result.success) throw new Error(result.error);
     const f = result.data.financialSummary;
-    const l = result.data.ledgerSummary;
+    const l = result.data.saleSummary;
     const currency = App.currency || 'USD';
     const netProfit = f.grossProfit - (l.totalReturnsValue || 0);
     return `
@@ -523,7 +534,7 @@ const DashboardPage = {
     const result = await window.api.getDashboardData();
     if (!result.success) throw new Error(result.error);
     const f = result.data.financialSummary;
-    const l = result.data.ledgerSummary;
+    const l = result.data.saleSummary;
     const currency = App.currency || 'USD';
     const netRevenue = f.totalSoldValue - (l.totalReturnsValue || 0);
     return `
@@ -559,20 +570,20 @@ const DashboardPage = {
         Total Due: ${Formatters.formatCurrency(totalOutstanding, currency)} (${data.length} customers)
       </div>
       <table class="report-table">
-        <thead><tr><th>Customer</th><th>Phone</th><th>Ledgers</th><th>Outstanding</th></tr></thead>
+        <thead><tr><th>Customer</th><th>Phone</th><th>Invoices</th><th>Outstanding</th></tr></thead>
         <tbody>
           ${data.map(c => `
             <tr>
               <td><strong>${safe(c.customer_name)}</strong></td>
               <td>${safe(c.phone) || '-'}</td>
-              <td>${c.ledger_count}</td>
+              <td>${c.invoice_count}</td>
               <td style="font-weight:700;color:var(--danger);">${Formatters.formatCurrency(c.total_outstanding, currency)}</td>
             </tr>
           `).join('')}
         </tbody>
       </table>
       <div style="margin-top:12px;">
-        <button class="btn btn-primary btn-sm" onclick="Modal.close();App.navigate('ledgers')">View All Ledgers</button>
+        <button class="btn btn-primary btn-sm" onclick="Modal.close();App.navigate('ledgers')">View All Sales</button>
       </div>
     `;
   },
@@ -581,7 +592,7 @@ const DashboardPage = {
     const result = await window.api.getDashboardData();
     if (!result.success) throw new Error(result.error);
     const s = result.data.salesSummary;
-    const l = result.data.ledgerSummary;
+    const l = result.data.saleSummary;
     const currency = App.currency || 'USD';
     return `
       <div class="ledger-stats-grid" style="grid-template-columns:repeat(2,1fr);">
@@ -590,8 +601,8 @@ const DashboardPage = {
           <div class="stat-label">Total Collected</div>
         </div>
         <div class="ledger-stat-card">
-          <div class="stat-value">${Formatters.formatCurrency(l.totalLedgerCollected, currency)}</div>
-          <div class="stat-label">From Ledgers</div>
+          <div class="stat-value">${Formatters.formatCurrency(l.totalSaleCollected, currency)}</div>
+          <div class="stat-label">From Invoices</div>
         </div>
         <div class="ledger-stat-card">
           <div class="stat-value">${Formatters.formatCurrency(s.todayCollected, currency)}</div>
@@ -690,14 +701,49 @@ const DashboardPage = {
     `);
   },
 
+  async getReturnsDetailHtml() {
+    const result = await window.api.getDashboardData();
+    if (!result.success) throw new Error(result.error);
+    const l = result.data.saleSummary;
+    const inv = result.data.inventorySummary;
+    const currency = App.currency || 'USD';
+    return `
+      <div class="ledger-stats-grid" style="grid-template-columns:repeat(2,1fr);">
+        <div class="ledger-stat-card stat-warning">
+          <div class="stat-value">${Formatters.formatCurrency(l.totalReturnsValue, currency)}</div>
+          <div class="stat-label">Total Return Value</div>
+        </div>
+        <div class="ledger-stat-card">
+          <div class="stat-value">${l.totalReturns || 0}</div>
+          <div class="stat-label">Return Transactions</div>
+        </div>
+        <div class="ledger-stat-card">
+          <div class="stat-value">${inv.totalReturnedFromReturns}</div>
+          <div class="stat-label">Units Returned (from returns table)</div>
+        </div>
+        <div class="ledger-stat-card">
+          <div class="stat-value">${inv.totalSoldFromSales}</div>
+          <div class="stat-label">Total Units Sold (from sales table)</div>
+        </div>
+      </div>
+      <p style="margin-top:12px;color:var(--text-secondary);font-size:13px;">
+        Return values are deducted from sales revenue and profit calculations.
+        Stock is restored to inventory when returns are processed.
+      </p>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button class="btn btn-primary btn-sm" onclick="Modal.close();App.navigate('returns')">View Returns</button>
+      </div>
+    `;
+  },
+
   getSoldQtyDetailHtml() {
     return Promise.resolve(`
       <p style="margin-bottom:12px;color:var(--text-secondary);">
-        Total quantity of products that have been marked as sold. This includes items
-        from both cash and loan transactions.
+        Total quantity of products that have been sold via transactions.
+        This shows the actual count from sale_issue_items table.
       </p>
       <div style="display:flex;gap:8px;">
-        <button class="btn btn-primary btn-sm" onclick="Modal.close();App.navigate('ledgers')">View Ledgers</button>
+        <button class="btn btn-primary btn-sm" onclick="Modal.close();App.navigate('ledgers')">View Sales</button>
       </div>
     `);
   },

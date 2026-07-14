@@ -7,7 +7,7 @@ const LedgersPage = {
     customer_id: "",
     date_from: "",
     date_to: "",
-    sortBy: "l.created_at",
+    sortBy: "si.created_at",
     sortOrder: "desc",
     page: 1,
     limit: 50,
@@ -18,8 +18,8 @@ const LedgersPage = {
     content.innerHTML = `
       <div class="page-header">
         <div>
-          <h1>Ledgers</h1>
-          <p>View all transactions and track payments</p>
+          <h1>Sales & Ledgers</h1>
+          <p>View all sales with their payment history</p>
         </div>
         <button class="btn btn-primary" onclick="App.navigate('sales')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
@@ -35,7 +35,7 @@ const LedgersPage = {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
-              <input type="text" id="ledger-search" placeholder="Search by customer, reference..." oninput="LedgersPage.onSearch()">
+              <input type="text" id="ledger-search" placeholder="Search by customer, sale reference..." oninput="LedgersPage.onSearch()">
             </div>
             <div class="filter-group">
               <select id="filter-ledger-status" onchange="LedgersPage.onFilter()">
@@ -63,23 +63,21 @@ const LedgersPage = {
 
   async refresh() {
     await this.loadLedgers();
-  },
-
-  async loadLedgers() {
+  },    async loadLedgers() {
     const container = document.getElementById("ledgers-table-container");
     if (!container) return;
     container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
     try {
-      const result = await window.api.getAllLedgers(this.currentFilters);
+      const result = await window.api.getAllSales(this.currentFilters);
       if (!result.success) {
         container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${result.error}</p></div>`;
         return;
       }
 
       const data = result.data;
-      if (!data.ledgers || data.ledgers.length === 0) {
-        container.innerHTML = '<div class="empty-state"><h3>No transactions found</h3><p>Create a sale or issue to see ledger entries.</p></div>';
+      if (!data.sales || data.sales.length === 0) {
+        container.innerHTML = '<div class="empty-state"><h3>No transactions found</h3><p>Create a sale or issue to see entries.</p></div>';
         return;
       }
 
@@ -88,10 +86,12 @@ const LedgersPage = {
           <table>
             <thead>
               <tr>
-                <th>Reference</th>
+                <th style="width:30px;"></th>
+                <th>Sale Ref</th>
                 <th>Customer</th>
                 <th>Date</th>
                 <th>Type</th>
+                <th>Items</th>
                 <th>Total</th>
                 <th>Paid</th>
                 <th>Remaining</th>
@@ -100,29 +100,71 @@ const LedgersPage = {
               </tr>
             </thead>
             <tbody>
-              ${data.ledgers.map(l => `
-                <tr>
-                  <td><strong>${this.escapeHtml(l.reference_no)}</strong></td>
+              ${data.sales.map((l, idx) => `
+                <tr style="cursor:pointer;" onclick="LedgersPage.toggleSaleDetails('${l.sale_id}')">
+                  <td><span class="ledger-toggle-icon" id="toggle-icon-${l.sale_id}">&#9654;</span></td>
+                  <td><strong>${this.escapeHtml(l.sale_reference)}</strong></td>
                   <td>${this.escapeHtml(l.customer_name) || 'N/A'}</td>
                   <td>${Formatters.formatDate(l.transaction_date)}</td>
-                  <td><span class="badge ${l.ledger_type === 'Cash' ? 'badge-cash' : 'badge-loan'}">${l.ledger_type}</span></td>
+                  <td>
+                    <span class="badge ${l.ledger_type === 'Cash' ? 'badge-cash' : 'badge-loan'}">${l.ledger_type}</span>
+                    <span style="font-size:11px;color:var(--text-muted);margin-left:4px;">${this.escapeHtml(l.transaction_type)}</span>
+                  </td>
+                  <td style="font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${this.escapeHtml(l.items_summary || '')}">${this.escapeHtml(l.items_summary) || '-'}</td>
                   <td>${Formatters.formatCurrency(l.total_amount, App.currency)}</td>
                   <td>${Formatters.formatCurrency(l.paid_amount, App.currency)}</td>
                   <td style="font-weight:600;color:${l.remaining_amount > 0 ? 'var(--danger)' : 'var(--success)'};">${Formatters.formatCurrency(l.remaining_amount, App.currency)}</td>
                   <td><span class="badge ${l.status === 'Paid' ? 'badge-paid' : l.status === 'Partial' ? 'badge-partial' : 'badge-outstanding'}">${l.status}</span></td>
-                  <td>
+                  <td onclick="event.stopPropagation();">
                     <div class="action-buttons">
-                      <button class="btn btn-sm btn-primary" onclick="LedgersPage.viewLedger(${l.id})" title="View Details">
+                      <button class="btn btn-sm btn-primary" onclick="LedgersPage.viewSale(${l.sale_id})" title="View Full Details">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                       </button>
                       ${l.remaining_amount > 0 ? `
-                        <button class="btn btn-sm btn-success" onclick="LedgersPage.showAddPayment(${l.id})" title="Add Payment">
+                        <button class="btn btn-sm btn-success" onclick="LedgersPage.showAddPayment(${l.sale_id})" title="Add Payment">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="20 6 9 17 4 12"/></svg>
                         </button>
                       ` : ''}
-                      <button class="btn btn-sm btn-secondary" onclick="LedgersPage.printInvoice(${l.id})" title="Print Invoice">
+                      <button class="btn btn-sm btn-secondary" onclick="LedgersPage.printInvoice(${l.sale_id})" title="Print Invoice">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                       </button>
+                    </div>
+                  </td>
+                </tr>
+                <tr id="sale-details-row-${l.sale_id}" style="display:none;">
+                  <td colspan="11" style="padding:0;">
+                    <div style="padding:12px 16px;background:var(--bg-secondary);border-top:1px solid var(--border-color);">
+                      <div style="margin-bottom:10px;">
+                        <strong style="font-size:13px;color:#475569;">Products in this Sale:</strong>
+                        <div style="font-size:12px;color:#64748b;margin-top:4px;">${this.escapeHtml(l.items_summary) || 'N/A'}</div>
+                      </div>
+                      <div>
+                        <strong style="font-size:13px;color:#475569;">Payment History:</strong>
+                        ${l.payments && l.payments.length > 0 ? `
+                          <table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12px;">
+                            <thead>
+                              <tr style="background:#f1f5f9;">
+                                <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:left;color:#64748b;font-size:10px;text-transform:uppercase;">Date</th>
+                                <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:left;color:#64748b;font-size:10px;text-transform:uppercase;">Method</th>
+                                <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:right;color:#64748b;font-size:10px;text-transform:uppercase;">Paid</th>
+                                <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:right;color:#64748b;font-size:10px;text-transform:uppercase;">Remaining</th>
+                                <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:left;color:#64748b;font-size:10px;text-transform:uppercase;">Note</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              ${l.payments.map(p => `
+                                <tr>
+                                  <td style="padding:4px 8px;border:1px solid #e2e8f0;">${Formatters.formatDate(p.payment_date)}</td>
+                                  <td style="padding:4px 8px;border:1px solid #e2e8f0;">${this.escapeHtml(p.payment_method)}</td>
+                                  <td style="padding:4px 8px;border:1px solid #e2e8f0;text-align:right;font-weight:600;color:#22c55e;">${Formatters.formatCurrency(p.amount, App.currency)}</td>
+                                  <td style="padding:4px 8px;border:1px solid #e2e8f0;text-align:right;color:${p.remaining_after > 0 ? '#ef4444' : '#22c55e'};font-weight:600;">${Formatters.formatCurrency(p.remaining_after, App.currency)}</td>
+                                  <td style="padding:4px 8px;border:1px solid #e2e8f0;">${this.escapeHtml(p.note) || '-'}</td>
+                                </tr>
+                              `).join('')}
+                            </tbody>
+                          </table>
+                        ` : '<div style="font-size:12px;color:#94a3b8;padding:6px 0;">No payments recorded.</div>'}
+                      </div>
                     </div>
                   </td>
                 </tr>
@@ -179,11 +221,25 @@ const LedgersPage = {
     this.loadLedgers();
   },
 
-  async viewLedger(id) {
+  toggleSaleDetails(saleId) {
+    const row = document.getElementById(`sale-details-row-${saleId}`);
+    const icon = document.getElementById(`toggle-icon-${saleId}`);
+    if (row) {
+      const isVisible = row.style.display !== 'none';
+      row.style.display = isVisible ? 'none' : 'table-row';
+      if (icon) {
+        icon.style.transform = isVisible ? 'rotate(0deg)' : 'rotate(90deg)';
+        icon.style.display = 'inline-block';
+        icon.style.transition = 'transform 0.2s ease';
+      }
+    }
+  },
+
+  async viewSale(id) {
     try {
-      const result = await window.api.getLedgerById(id);
+      const result = await window.api.getSaleById(id);
       if (!result.success || !result.data) {
-        Toast.error("Failed to load ledger details.");
+        Toast.error("Failed to load sale details.");
         return;
       }
 
@@ -192,7 +248,7 @@ const LedgersPage = {
 
       const itemsHtml = l.items && l.items.length > 0 ? `
         <div style="margin-top:16px;">
-          <h4 style="margin-bottom:8px;">Products</h4>
+          <h4 style="margin-bottom:8px;font-size:14px;">Products in Sale</h4>
           <table class="report-table">
             <thead>
               <tr><th>Product</th><th>Qty</th><th>Price</th><th>Subtotal</th></tr>
@@ -213,24 +269,28 @@ const LedgersPage = {
 
       const paymentsHtml = l.payments && l.payments.length > 0 ? `
         <div style="margin-top:16px;">
-          <h4 style="margin-bottom:8px;">Payment History</h4>
-          <div class="payment-history">
-            ${l.payments.map(p => `
-              <div class="payment-item">
-                <div class="payment-info">
-                  <div class="payment-date">${Formatters.formatDate(p.payment_date)}</div>
-                  <div class="payment-method">${p.payment_method}${p.note ? ' - ' + this.escapeHtml(p.note) : ''}</div>
-                </div>
-                <div class="payment-amount">${Formatters.formatCurrency(p.amount, currency)}</div>
-              </div>
-            `).join('')}
-          </div>
+          <h4 style="margin-bottom:8px;font-size:14px;">Payment History</h4>
+          <table class="report-table">
+            <thead>
+              <tr><th>Date</th><th>Method</th><th style="text-align:right;">Amount</th><th>Note</th></tr>
+            </thead>
+            <tbody>
+              ${l.payments.map(p => `
+                <tr>
+                  <td>${Formatters.formatDate(p.payment_date)}</td>
+                  <td>${this.escapeHtml(p.payment_method)}</td>
+                  <td style="text-align:right;font-weight:600;color:var(--success);">${Formatters.formatCurrency(p.amount, currency)}</td>
+                  <td>${this.escapeHtml(p.note) || '-'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
         </div>
-      ` : '';
+      ` : '<div style="margin-top:16px;"><p style="color:var(--text-muted);">No payments recorded yet.</p></div>';
 
       const returnsHtml = l.returns && l.returns.length > 0 ? `
         <div style="margin-top:16px;">
-          <h4 style="margin-bottom:8px;">Returns</h4>
+          <h4 style="margin-bottom:8px;font-size:14px;">Returns</h4>
           ${l.returns.map(r => `
             <div class="payment-item">
               <div class="payment-info">
@@ -246,7 +306,7 @@ const LedgersPage = {
       const body = `
         <div class="ledger-details-grid">
           <div class="detail-field">
-            <div class="detail-label">Reference</div>
+            <div class="detail-label">Sale Reference</div>
             <div class="detail-value">${this.escapeHtml(l.reference_no)}</div>
           </div>
           <div class="detail-field">
@@ -255,7 +315,7 @@ const LedgersPage = {
           </div>
           <div class="detail-field">
             <div class="detail-label">Date</div>
-            <div class="detail-value">${Formatters.formatDate(l.transaction_date)}</div>
+            <div class="detail-value">${Formatters.formatDate(l.issue_date || l.transaction_date)}</div>
           </div>
           <div class="detail-field">
             <div class="detail-label">Type</div>
@@ -275,10 +335,9 @@ const LedgersPage = {
           </div>
           <div class="detail-field">
             <div class="detail-label">Status</div>
-            <div class="detail-value"><span class="badge ${l.status === 'Paid' ? 'badge-paid' : l.status === 'Partial' ? 'badge-partial' : 'badge-outstanding'}">${l.status}</span></div>
+            <div class="detail-value"><span class="badge ${l.payment_status === 'Paid' ? 'badge-paid' : l.payment_status === 'Partial' ? 'badge-partial' : 'badge-outstanding'}">${l.payment_status}</span></div>
           </div>
         </div>
-        ${l.description ? `<p style="margin-top:12px;color:var(--text-secondary);">${this.escapeHtml(l.description)}</p>` : ''}
         ${itemsHtml}
         ${paymentsHtml}
         ${returnsHtml}
@@ -290,13 +349,13 @@ const LedgersPage = {
         <button class="btn btn-primary" onclick="window.Modal.close(); LedgersPage.printInvoice(${l.id})">Print Invoice</button>
       `;
 
-      Modal.show({ title: `Ledger - ${l.reference_no}`, body, footer, size: "lg" });
+      Modal.show({ title: `Sale - ${l.reference_no}`, body, footer, size: "lg" });
     } catch (err) {
       Toast.error(err.message);
     }
   },
 
-  showAddPayment(ledgerId) {
+  showAddPayment(saleId) {
     const formHtml = `
       <form id="payment-form" onsubmit="return false;">
         <div class="form-group">
@@ -331,7 +390,7 @@ const LedgersPage = {
       }
       try {
         const result = await window.api.addPayment({
-          ledger_id: ledgerId,
+          sale_issue_id: saleId,
           payment_date: document.getElementById("pmt-date")?.value || new Date().toISOString().split('T')[0],
           amount: amount,
           payment_method: document.getElementById("pmt-method")?.value || "Cash",
@@ -350,10 +409,18 @@ const LedgersPage = {
     }, "sm");
   },
 
-  printInvoice(ledgerId) {
-    window.api.getLedgerById(ledgerId).then(result => {
+  async printInvoice(saleId) {
+    try {
+      // Load company info
+      const settingsResult = await window.api.getSettings();
+      const company = settingsResult.success ? settingsResult.data : {};
+      const shopName = company.shop_name || 'Laptop Inventory Manager';
+      const shopAddress = company.shop_address || '';
+      const shopPhone = company.phone_number || '';
+
+      const result = await window.api.getSaleById(saleId);
       if (!result.success || !result.data) {
-        Toast.error("Failed to load ledger for printing.");
+        Toast.error("Failed to load sale for printing.");
         return;
       }
       const l = result.data;
@@ -365,10 +432,13 @@ const LedgersPage = {
         <head>
           <title>Invoice - ${l.reference_no}</title>
           <style>
+            @page { margin: 10mm; }
             body { font-family: 'Courier New', monospace; padding: 20px; color: #333; }
-            .invoice-header { text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #333; }
+            .shop-header { text-align: center; margin-bottom: 12px; }
+            .shop-header h1 { font-size: 20px; margin-bottom: 2px; }
+            .shop-header p { font-size: 12px; color: #555; margin: 1px 0; }
+            .invoice-header { text-align: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #333; }
             .invoice-header h2 { font-size: 22px; margin-bottom: 4px; }
-            .invoice-header p { font-size: 13px; color: #555; margin: 2px 0; }
             .invoice-info { display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 13px; }
             table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 13px; }
             table th { background: #f5f5f5; padding: 8px 10px; text-align: left; border: 1px solid #ddd; font-size: 12px; text-transform: uppercase; }
@@ -381,6 +451,11 @@ const LedgersPage = {
           </style>
         </head>
         <body>
+          <div class="shop-header">
+            <h1>${this.escapeHtml(shopName)}</h1>
+            ${shopAddress ? `<p>${this.escapeHtml(shopAddress)}</p>` : ''}
+            ${shopPhone ? `<p>Phone: ${this.escapeHtml(shopPhone)}</p>` : ''}
+          </div>
           <div class="invoice-header">
             <h2>INVOICE</h2>
             <p>${this.escapeHtml(l.reference_no)}</p>
@@ -392,9 +467,9 @@ const LedgersPage = {
               <strong>Address:</strong> ${this.escapeHtml(l.address) || 'N/A'}
             </div>
             <div style="text-align:right;">
-              <strong>Date:</strong> ${Formatters.formatDate(l.transaction_date)}<br>
+              <strong>Date:</strong> ${Formatters.formatDate(l.issue_date || l.transaction_date)}<br>
               <strong>Type:</strong> ${l.ledger_type}<br>
-              <strong>Status:</strong> ${l.status}
+              <strong>Status:</strong> ${l.payment_status}
             </div>
           </div>
           <table>
@@ -421,13 +496,15 @@ const LedgersPage = {
             <p>Thank you for your business!</p>
           </div>
           <script>
-            window.onload = function() { window.print(); window.close(); }
+            window.onload = function() { setTimeout(function() { window.print(); }, 300); }
           <\/script>
         </body>
         </html>
       `);
       printWindow.document.close();
-    }).catch(err => Toast.error(err.message));
+    } catch (err) {
+      Toast.error(err.message);
+    }
   },
 
   escapeHtml(str) {

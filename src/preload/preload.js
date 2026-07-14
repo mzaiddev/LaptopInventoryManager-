@@ -49,12 +49,12 @@ contextBridge.exposeInMainWorld("api", {
   // Sales
   createSale: (data) => ipcRenderer.invoke("ledger:createSale", data),
 
-  // Ledgers
-  getAllLedgers: (filters) => ipcRenderer.invoke("ledger:getAllLedgers", filters),
-  getLedgerById: (id) => ipcRenderer.invoke("ledger:getLedgerById", id),
+  // Sales (replaces ledgers)
+  getAllSales: (filters) => ipcRenderer.invoke("sale:getAllSales", filters),
+  getSaleById: (id) => ipcRenderer.invoke("sale:getSaleById", id),
 
   // Payments
-  addPayment: (data) => ipcRenderer.invoke("ledger:addPayment", data),
+  addPayment: (data) => ipcRenderer.invoke("sale:addPayment", data),
 
   // Returns
   createReturn: (data) => ipcRenderer.invoke("ledger:createReturn", data),
@@ -70,7 +70,7 @@ contextBridge.exposeInMainWorld("api", {
   getCustomerStatement: (customerId) => ipcRenderer.invoke("customer:getStatement", customerId),
 
   // Reports
-  getLedgerSummary: () => ipcRenderer.invoke("ledger:getLedgerSummary"),
+  getSalesSummary: () => ipcRenderer.invoke("sale:getSalesSummary"),
   getSalesReport: (filters) => ipcRenderer.invoke("ledger:getSalesReport", filters),
   getOutstandingReport: () => ipcRenderer.invoke("ledger:getOutstandingReport"),
 });
