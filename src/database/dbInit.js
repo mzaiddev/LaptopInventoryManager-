@@ -20,6 +20,9 @@ function initDatabase() {
   // If the old schema had a 'brand' column, migrate to remove it
   migrateRemoveBrandIfNeeded();
 
+  // Migrate returns table to add reference_no if missing
+  migrateReturnsAddReferenceNo();
+
   createTables();
   createIndexes();
   seedDefaults();
@@ -84,7 +87,163 @@ function createTables() {
       file_size INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT (datetime('now','localtime'))
     );
+
+    -- Customers table
+    CREATE TABLE IF NOT EXISTS customers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_name TEXT NOT NULL,
+      phone TEXT DEFAULT '',
+      address TEXT DEFAULT '',
+      email TEXT DEFAULT '',
+      credit_limit REAL DEFAULT 0,
+      opening_balance REAL DEFAULT 0,
+      status TEXT DEFAULT 'Active' CHECK(status IN ('Active','Inactive')),
+      notes TEXT DEFAULT '',
+      created_at DATETIME DEFAULT (datetime('now','localtime')),
+      updated_at DATETIME DEFAULT (datetime('now','localtime'))
+    );
+
+    -- Ledgers table
+    CREATE TABLE IF NOT EXISTS ledgers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_id INTEGER NOT NULL,
+      ledger_type TEXT NOT NULL CHECK(ledger_type IN ('Cash','Loan')),
+      reference_no TEXT NOT NULL,
+      transaction_date TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      total_amount REAL NOT NULL DEFAULT 0,
+      paid_amount REAL NOT NULL DEFAULT 0,
+      remaining_amount REAL NOT NULL DEFAULT 0,
+      status TEXT DEFAULT 'Outstanding' CHECK(status IN ('Paid','Partial','Outstanding')),
+      created_at DATETIME DEFAULT (datetime('now','localtime')),
+      updated_at DATETIME DEFAULT (datetime('now','localtime')),
+      FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT
+    );
+
+    -- Sale Issues table
+    CREATE TABLE IF NOT EXISTS sale_issues (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_id INTEGER NOT NULL,
+      ledger_id INTEGER,
+      reference_no TEXT NOT NULL,
+      issue_date TEXT NOT NULL,
+      transaction_type TEXT DEFAULT 'Sale' CHECK(transaction_type IN ('Sale','Issue')),
+      total_amount REAL NOT NULL DEFAULT 0,
+      paid_amount REAL NOT NULL DEFAULT 0,
+      remaining_amount REAL NOT NULL DEFAULT 0,
+      payment_status TEXT DEFAULT 'Outstanding' CHECK(payment_status IN ('Paid','Partial','Outstanding')),
+      notes TEXT DEFAULT '',
+      created_at DATETIME DEFAULT (datetime('now','localtime')),
+      updated_at DATETIME DEFAULT (datetime('now','localtime')),
+      FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT,
+      FOREIGN KEY (ledger_id) REFERENCES ledgers(id) ON DELETE SET NULL
+    );
+
+    -- Sale Issue Items table
+    CREATE TABLE IF NOT EXISTS sale_issue_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sale_issue_id INTEGER NOT NULL,
+      product_id INTEGER NOT NULL,
+      product_name TEXT NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      unit_price REAL NOT NULL DEFAULT 0,
+      subtotal REAL NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT (datetime('now','localtime')),
+      FOREIGN KEY (sale_issue_id) REFERENCES sale_issues(id) ON DELETE CASCADE,
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
+    );
+
+    -- Ledger Payments table
+    CREATE TABLE IF NOT EXISTS ledger_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ledger_id INTEGER NOT NULL,
+      payment_date TEXT NOT NULL,
+      amount REAL NOT NULL DEFAULT 0,
+      payment_method TEXT DEFAULT 'Cash' CHECK(payment_method IN ('Cash','Bank','Online','Other')),
+      note TEXT DEFAULT '',
+      created_at DATETIME DEFAULT (datetime('now','localtime')),
+      FOREIGN KEY (ledger_id) REFERENCES ledgers(id) ON DELETE CASCADE
+    );
+
+    -- Returns table
+    CREATE TABLE IF NOT EXISTS returns (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_id INTEGER NOT NULL,
+      sale_issue_id INTEGER,
+      ledger_id INTEGER,
+      reference_no TEXT NOT NULL,
+      return_date TEXT NOT NULL,
+      reason TEXT DEFAULT '',
+      total_return_amount REAL NOT NULL DEFAULT 0,
+      status TEXT DEFAULT 'Completed' CHECK(status IN ('Completed','Pending','Cancelled')),
+      created_at DATETIME DEFAULT (datetime('now','localtime')),
+      updated_at DATETIME DEFAULT (datetime('now','localtime')),
+      FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT,
+      FOREIGN KEY (sale_issue_id) REFERENCES sale_issues(id) ON DELETE SET NULL,
+      FOREIGN KEY (ledger_id) REFERENCES ledgers(id) ON DELETE SET NULL
+    );
+
+    -- Return Items table
+    CREATE TABLE IF NOT EXISTS return_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      return_id INTEGER NOT NULL,
+      product_id INTEGER NOT NULL,
+      product_name TEXT NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      unit_price REAL NOT NULL DEFAULT 0,
+      subtotal REAL NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT (datetime('now','localtime')),
+      FOREIGN KEY (return_id) REFERENCES returns(id) ON DELETE CASCADE,
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
+    );
   `);
+}
+
+function migrateReturnsAddReferenceNo() {
+  try {
+    const row = db.prepare("PRAGMA table_info(returns)").all();
+    const hasRefNo = row.some((r) => r && r.name === "reference_no");
+    if (hasRefNo) return;
+
+    console.log('Migrating database: adding "reference_no" column to returns table');
+
+    db.transaction(() => {
+      db.pragma("foreign_keys = OFF");
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS returns_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          customer_id INTEGER NOT NULL,
+          sale_issue_id INTEGER,
+          ledger_id INTEGER,
+          reference_no TEXT NOT NULL DEFAULT '',
+          return_date TEXT NOT NULL,
+          reason TEXT DEFAULT '',
+          total_return_amount REAL NOT NULL DEFAULT 0,
+          status TEXT DEFAULT 'Completed' CHECK(status IN ('Completed','Pending','Cancelled')),
+          created_at DATETIME DEFAULT (datetime('now','localtime')),
+          updated_at DATETIME DEFAULT (datetime('now','localtime')),
+          FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT,
+          FOREIGN KEY (sale_issue_id) REFERENCES sale_issues(id) ON DELETE SET NULL,
+          FOREIGN KEY (ledger_id) REFERENCES ledgers(id) ON DELETE SET NULL
+        );
+      `);
+
+      db.exec(`
+        INSERT INTO returns_new (id, customer_id, sale_issue_id, ledger_id, reference_no, return_date, reason, total_return_amount, status, created_at, updated_at)
+        SELECT id, customer_id, sale_issue_id, ledger_id, 'RET-MIGRATED-' || id, return_date, reason, total_return_amount, status, created_at, updated_at FROM returns;
+      `);
+
+      db.exec("DROP TABLE returns;");
+      db.exec("ALTER TABLE returns_new RENAME TO returns;");
+
+      db.pragma("foreign_keys = ON");
+    })();
+
+    console.log("Migration completed: reference_no added to returns table");
+  } catch (err) {
+    console.error("Error migrating returns table:", err);
+  }
 }
 
 function migrateRemoveBrandIfNeeded() {
@@ -149,7 +308,6 @@ function createIndexes() {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_products_name ON products(product_name);
     CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
-    -- brand index removed
     CREATE INDEX IF NOT EXISTS idx_products_serial ON products(serial_number);
     CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
     CREATE INDEX IF NOT EXISTS idx_products_condition ON products(condition);
@@ -157,6 +315,41 @@ function createIndexes() {
     CREATE INDEX IF NOT EXISTS idx_products_created ON products(created_at);
     CREATE INDEX IF NOT EXISTS idx_inspection_product ON inspection_notes(product_id);
     CREATE INDEX IF NOT EXISTS idx_backup_created ON backup_history(created_at);
+
+    -- Customer indexes
+    CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(customer_name);
+    CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
+    CREATE INDEX IF NOT EXISTS idx_customers_status ON customers(status);
+
+    -- Ledger indexes
+    CREATE INDEX IF NOT EXISTS idx_ledgers_customer ON ledgers(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_ledgers_reference ON ledgers(reference_no);
+    CREATE INDEX IF NOT EXISTS idx_ledgers_status ON ledgers(status);
+    CREATE INDEX IF NOT EXISTS idx_ledgers_date ON ledgers(transaction_date);
+
+    -- Sale issue indexes
+    CREATE INDEX IF NOT EXISTS idx_sale_issues_customer ON sale_issues(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_sale_issues_ledger ON sale_issues(ledger_id);
+    CREATE INDEX IF NOT EXISTS idx_sale_issues_reference ON sale_issues(reference_no);
+    CREATE INDEX IF NOT EXISTS idx_sale_issues_date ON sale_issues(issue_date);
+    CREATE INDEX IF NOT EXISTS idx_sale_issues_status ON sale_issues(payment_status);
+
+    -- Sale issue items indexes
+    CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_issue_items(sale_issue_id);
+    CREATE INDEX IF NOT EXISTS idx_sale_items_product ON sale_issue_items(product_id);
+
+    -- Payment indexes
+    CREATE INDEX IF NOT EXISTS idx_payments_ledger ON ledger_payments(ledger_id);
+    CREATE INDEX IF NOT EXISTS idx_payments_date ON ledger_payments(payment_date);
+
+    -- Return indexes
+    CREATE INDEX IF NOT EXISTS idx_returns_customer ON returns(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_returns_sale ON returns(sale_issue_id);
+    CREATE INDEX IF NOT EXISTS idx_returns_date ON returns(return_date);
+
+    -- Return items indexes
+    CREATE INDEX IF NOT EXISTS idx_return_items_return ON return_items(return_id);
+    CREATE INDEX IF NOT EXISTS idx_return_items_product ON return_items(product_id);
   `);
 }
 
@@ -170,8 +363,6 @@ function seedDefaults() {
     backup_folder: "",
     theme: "light",
   };
-
-  // brands removed from default settings
 
   const insertSetting = db.prepare(
     "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",

@@ -1,0 +1,508 @@
+/* ==================== LEDGER MODULE STYLES ==================== */
+
+/* Customer Search */
+.customer-search-container {
+  position: relative;
+}
+
+.customer-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 100;
+  max-height: 250px;
+  overflow-y: auto;
+  display: none;
+}
+
+.customer-search-results.show {
+  display: block;
+}
+
+.customer-search-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-color);
+  transition: background var(--transition);
+}
+
+.customer-search-item:last-child {
+  border-bottom: none;
+}
+
+.customer-search-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.customer-search-item .name {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.customer-search-item .phone {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Selected Customer Badge */
+.selected-customer {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--primary-light);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  margin-top: 8px;
+}
+
+.selected-customer .name {
+  font-weight: 500;
+  color: var(--primary);
+}
+
+.selected-customer .remove-btn {
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+/* Sale Form */
+.sale-form {
+  max-width: 100%;
+}
+
+.sale-form .form-section {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sale-form .form-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.sale-form .form-section h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+}
+
+/* Product Selection in Sale */
+.product-select-row {
+  display: grid;
+  grid-template-columns: 2fr 80px 120px 100px 40px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.product-select-row.header {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0 4px;
+  margin-bottom: 4px;
+}
+
+.product-select-row .remove-item-btn {
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 20px;
+  padding: 4px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: background var(--transition);
+}
+
+.product-select-row .remove-item-btn:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+.add-product-btn {
+  margin-top: 8px;
+}
+
+/* Sale Summary */
+.sale-summary {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.sale-summary .summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 14px;
+}
+
+.sale-summary .summary-row.total {
+  font-size: 18px;
+  font-weight: 700;
+  border-top: 2px solid var(--border-color);
+  padding-top: 10px;
+  margin-top: 6px;
+  color: var(--primary);
+}
+
+/* Ledger Details */
+.ledger-details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.ledger-details-grid .detail-field {
+  padding: 8px 0;
+}
+
+.ledger-details-grid .detail-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.ledger-details-grid .detail-value {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+/* Payment History */
+.payment-history {
+  margin-top: 16px;
+}
+
+.payment-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  transition: background var(--transition);
+}
+
+.payment-item:hover {
+  background: var(--bg-secondary);
+}
+
+.payment-item .payment-info {
+  flex: 1;
+}
+
+.payment-item .payment-date {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.payment-item .payment-method {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.payment-item .payment-amount {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--success);
+}
+
+/* Return Items */
+.return-item-row {
+  display: grid;
+  grid-template-columns: 2fr 80px 120px 100px 40px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.return-item-row.header {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Status Badges for Ledger */
+.badge-paid {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badge-partial {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge-outstanding {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.badge-cash {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-loan {
+  background: #fce7f3;
+  color: #9d174d;
+}
+
+body.dark-mode .badge-paid { background: #064e3b; color: #a7f3d0; }
+body.dark-mode .badge-partial { background: #78350f; color: #fde68a; }
+body.dark-mode .badge-outstanding { background: #7f1d1d; color: #fca5a5; }
+body.dark-mode .badge-cash { background: #1e3a5f; color: #93c5fd; }
+body.dark-mode .badge-loan { background: #4c1d95; color: #c4b5fd; }
+
+/* Report Cards */
+.report-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.report-card h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+}
+
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.report-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 2px solid var(--border-color);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.report-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.report-table tr:hover td {
+  background: var(--bg-secondary);
+}
+
+/* Print Styles */
+@media print {
+  #sidebar, #topbar, .btn, .no-print {
+    display: none !important;
+  }
+  #main-content {
+    margin-left: 0 !important;
+  }
+  #page-content {
+    padding: 0 !important;
+  }
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+  }
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+}
+
+/* Invoice Print */
+.invoice-print {
+  padding: 20px;
+  font-family: 'Courier New', monospace;
+}
+
+.invoice-print .invoice-header {
+  text-align: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #333;
+}
+
+.invoice-print .invoice-header h2 {
+  font-size: 22px;
+  margin-bottom: 4px;
+}
+
+.invoice-print .invoice-header p {
+  font-size: 13px;
+  color: #555;
+  margin: 2px 0;
+}
+
+.invoice-print .invoice-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  font-size: 13px;
+}
+
+.invoice-print table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 15px;
+  font-size: 13px;
+}
+
+.invoice-print table th {
+  background: #f5f5f5;
+  padding: 8px 10px;
+  text-align: left;
+  border: 1px solid #ddd;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.invoice-print table td {
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+}
+
+.invoice-print .invoice-totals {
+  text-align: right;
+  font-size: 14px;
+  margin-top: 10px;
+}
+
+.invoice-print .invoice-totals .total-line {
+  padding: 4px 0;
+}
+
+.invoice-print .invoice-totals .grand-total {
+  font-size: 18px;
+  font-weight: 700;
+  border-top: 2px solid #333;
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+.invoice-print .invoice-footer {
+  text-align: center;
+  margin-top: 30px;
+  padding-top: 15px;
+  border-top: 1px solid #ddd;
+  font-size: 12px;
+  color: #666;
+}
+
+/* Quick Stats */
+.ledger-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.ledger-stat-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  text-align: center;
+}
+
+.ledger-stat-card .stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 4px;
+}
+
+.ledger-stat-card .stat-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ledger-stat-card.stat-danger .stat-value { color: var(--danger); }
+.ledger-stat-card.stat-success .stat-value { color: var(--success); }
+.ledger-stat-card.stat-warning .stat-value { color: var(--warning); }
+
+/* Tabs */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 0;
+}
+
+.tab-item {
+  padding: 10px 20px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all var(--transition);
+}
+
+.tab-item:hover {
+  color: var(--text-primary);
+}
+
+.tab-item.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .product-select-row,
+  .return-item-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .product-select-row.header,
+  .return-item-row.header {
+    display: none;
+  }
+  .ledger-details-grid {
+    grid-template-columns: 1fr;
+  }
+  .ledger-stats-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

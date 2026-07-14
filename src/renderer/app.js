@@ -2,7 +2,6 @@
 const App = {
   currentPage: "dashboard",
   currency: "PKR",
-  // brands removed
   table: null,
   pagination: null,
 
@@ -22,8 +21,6 @@ const App = {
           shopNameEl.textContent =
             result.data.shop_name || "Laptop Inventory Manager";
         }
-
-        // brands removed
       }
     } catch (err) {
       console.error("Failed to load settings:", err);
@@ -62,6 +59,21 @@ const App = {
         case "inventory":
           await InventoryPage.load();
           break;
+        case "customers":
+          await CustomersPage.load();
+          break;
+        case "sales":
+          await SalesPage.load();
+          break;
+        case "ledgers":
+          await LedgersPage.load();
+          break;
+        case "returns":
+          await ReturnsPage.load();
+          break;
+        case "reports":
+          await ReportsPage.load();
+          break;
         case "backup":
           await BackupPage.load();
           break;
@@ -82,6 +94,21 @@ const App = {
         break;
       case "inventory":
         await InventoryPage.refresh();
+        break;
+      case "customers":
+        await CustomersPage.refresh();
+        break;
+      case "sales":
+        await SalesPage.load();
+        break;
+      case "ledgers":
+        await LedgersPage.refresh();
+        break;
+      case "returns":
+        await ReturnsPage.refresh();
+        break;
+      case "reports":
+        await ReportsPage.refresh();
         break;
       case "backup":
         await BackupPage.refresh();

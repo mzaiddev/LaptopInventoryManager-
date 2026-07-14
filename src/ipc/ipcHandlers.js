@@ -3,6 +3,7 @@ const inventoryService = require("../services/inventoryService");
 const dashboardService = require("../services/dashboardService");
 const backupService = require("../services/backupService");
 const settingsService = require("../services/settingsService");
+const ledgerService = require("../services/ledgerService");
 const fs = require("fs");
 
 function registerIpcHandlers() {
@@ -227,6 +228,148 @@ function registerIpcHandlers() {
       app.relaunch();
       app.exit(0);
       return { success: true, data: result };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // ==================== LEDGER MODULE IPC HANDLERS ====================
+
+  // --- Customers ---
+  ipcMain.handle("ledger:getAllCustomers", async (event, filters) => {
+    try {
+      return { success: true, data: ledgerService.getAllCustomers(filters) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("ledger:getCustomerById", async (event, id) => {
+    try {
+      return { success: true, data: ledgerService.getCustomerById(id) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("ledger:searchCustomers", async (event, query) => {
+    try {
+      return { success: true, data: ledgerService.searchCustomers(query) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("ledger:addCustomer", async (event, data) => {
+    try {
+      const result = ledgerService.addCustomer(data);
+      return { success: true, data: result };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("ledger:updateCustomer", async (event, id, data) => {
+    try {
+      ledgerService.updateCustomer(id, data);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("ledger:deleteCustomer", async (event, id) => {
+    try {
+      ledgerService.deleteCustomer(id);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("ledger:getCustomerBalance", async (event, id) => {
+    try {
+      return { success: true, data: ledgerService.getCustomerBalance(id) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // --- Sales ---
+  ipcMain.handle("ledger:createSale", async (event, data) => {
+    try {
+      const result = ledgerService.createSale(data);
+      return { success: true, data: result };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // --- Ledgers ---
+  ipcMain.handle("ledger:getAllLedgers", async (event, filters) => {
+    try {
+      return { success: true, data: ledgerService.getAllLedgers(filters) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("ledger:getLedgerById", async (event, id) => {
+    try {
+      return { success: true, data: ledgerService.getLedgerById(id) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // --- Payments ---
+  ipcMain.handle("ledger:addPayment", async (event, data) => {
+    try {
+      const result = ledgerService.addPayment(data);
+      return { success: true, data: result };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // --- Returns ---
+  ipcMain.handle("ledger:createReturn", async (event, data) => {
+    try {
+      const result = ledgerService.createReturn(data);
+      return { success: true, data: result };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("ledger:getAllReturns", async (event, filters) => {
+    try {
+      return { success: true, data: ledgerService.getAllReturns(filters) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // --- Reports ---
+  ipcMain.handle("ledger:getLedgerSummary", async () => {
+    try {
+      return { success: true, data: ledgerService.getLedgerSummary() };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("ledger:getSalesReport", async (event, filters) => {
+    try {
+      return { success: true, data: ledgerService.getSalesReport(filters) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("ledger:getOutstandingReport", async () => {
+    try {
+      return { success: true, data: ledgerService.getOutstandingReport() };
     } catch (err) {
       return { success: false, error: err.message };
     }

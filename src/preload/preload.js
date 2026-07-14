@@ -27,7 +27,6 @@ contextBridge.exposeInMainWorld("api", {
   getSettings: () => ipcRenderer.invoke("settings:getAll"),
   updateSettings: (settings) => ipcRenderer.invoke("settings:update", settings),
   selectFolder: () => ipcRenderer.invoke("settings:selectFolder"),
-  // brands removed
 
   // Backup
   createBackup: () => ipcRenderer.invoke("backup:create"),
@@ -35,4 +34,34 @@ contextBridge.exposeInMainWorld("api", {
   deleteBackup: (backupId) => ipcRenderer.invoke("backup:delete", backupId),
   selectBackupFile: () => ipcRenderer.invoke("backup:selectFile"),
   restoreBackup: (path) => ipcRenderer.invoke("backup:restore", path),
+
+  // ============ LEDGER MODULE ============
+
+  // Customers
+  getAllCustomers: (filters) => ipcRenderer.invoke("ledger:getAllCustomers", filters),
+  getCustomerById: (id) => ipcRenderer.invoke("ledger:getCustomerById", id),
+  searchCustomers: (query) => ipcRenderer.invoke("ledger:searchCustomers", query),
+  addCustomer: (data) => ipcRenderer.invoke("ledger:addCustomer", data),
+  updateCustomer: (id, data) => ipcRenderer.invoke("ledger:updateCustomer", id, data),
+  deleteCustomer: (id) => ipcRenderer.invoke("ledger:deleteCustomer", id),
+  getCustomerBalance: (id) => ipcRenderer.invoke("ledger:getCustomerBalance", id),
+
+  // Sales
+  createSale: (data) => ipcRenderer.invoke("ledger:createSale", data),
+
+  // Ledgers
+  getAllLedgers: (filters) => ipcRenderer.invoke("ledger:getAllLedgers", filters),
+  getLedgerById: (id) => ipcRenderer.invoke("ledger:getLedgerById", id),
+
+  // Payments
+  addPayment: (data) => ipcRenderer.invoke("ledger:addPayment", data),
+
+  // Returns
+  createReturn: (data) => ipcRenderer.invoke("ledger:createReturn", data),
+  getAllReturns: (filters) => ipcRenderer.invoke("ledger:getAllReturns", filters),
+
+  // Reports
+  getLedgerSummary: () => ipcRenderer.invoke("ledger:getLedgerSummary"),
+  getSalesReport: (filters) => ipcRenderer.invoke("ledger:getSalesReport", filters),
+  getOutstandingReport: () => ipcRenderer.invoke("ledger:getOutstandingReport"),
 });
