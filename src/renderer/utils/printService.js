@@ -60,6 +60,32 @@ const PrintService = {
   buildSelectionDialog(options, company) {
     const { data, columns, filters } = options;
     
+    // Build print options section (for sales printing)
+    let printOptionsSection = '';
+    if (options.showPrintOptions) {
+      printOptionsSection = `
+        <div class="print-options-section" style="margin-bottom:16px;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;">
+          <label style="font-weight:600;font-size:13px;color:#374151;display:block;margin-bottom:8px;">
+            Print Options:
+          </label>
+          <div style="display:flex;flex-wrap:wrap;gap:16px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;cursor:pointer;">
+              <input type="checkbox" id="print-include-customer" ${options.includeCustomer ? 'checked' : ''} onchange="PrintService.updateSelectionCount()">
+              <span>Include Customer Details</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;cursor:pointer;">
+              <input type="checkbox" id="print-include-sales" ${options.includeSales ? '' : ''} onchange="PrintService.updateSelectionCount()">
+              <span>Include Related Sales</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;cursor:pointer;">
+              <input type="checkbox" id="print-include-payment-history" ${options.includePaymentHistory ? '' : ''} onchange="PrintService.updateSelectionCount()">
+              <span>Include Payment History</span>
+            </label>
+          </div>
+        </div>
+      `;
+    }
+    
     // Build category filter chips + dropdown
     let categoryChips = '';
     let categoryDropdown = '';
@@ -142,6 +168,7 @@ const PrintService = {
 
     return `
       <div class="print-dialog-content" style="max-height:70vh;overflow-y:auto;">
+        ${printOptionsSection}
         ${categoryDropdown}
         ${filterBar}
         <div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:8px;">
@@ -241,7 +268,7 @@ const PrintService = {
     if (allCheckbox) allCheckbox.checked = checked;
     if (headerCheckbox) headerCheckbox.checked = checked;
     
-    // Toggle all visible rows
+    // Toggle all visible rows - only if checked is true, otherwise uncheck
     document.querySelectorAll('.print-selection-table tbody tr').forEach(row => {
       if (row.style.display !== 'none') {
         const cb = row.querySelector('.print-row-checkbox');
@@ -273,6 +300,14 @@ const PrintService = {
     return indices;
   },
 
+  getPrintOptions() {
+    return {
+      includeCustomer: document.getElementById('print-include-customer')?.checked || false,
+      includeSales: document.getElementById('print-include-sales')?.checked || false,
+      includePaymentHistory: document.getElementById('print-include-payment-history')?.checked || false
+    };
+  },
+
   async executePrint() {
     try {
       const options = this._currentPrintOptions;
@@ -300,8 +335,11 @@ const PrintService = {
 
       Modal.close();
       
+      // Get print options (for sales printing)
+      const printOpts = this.getPrintOptions();
+      
       // Generate and open print window
-      const html = this.generatePrintHtml(options.title, selectedData, options, company);
+      const html = await this.generatePrintHtml(options.title, selectedData, options, company, printOpts);
       this.openPrintWindow(options.title, html);
       
       this.clearPrintOptions();
@@ -311,7 +349,7 @@ const PrintService = {
     }
   },
 
-  generatePrintHtml(title, data, options, company) {
+  async generatePrintHtml(title, data, options, company, printOpts = {}) {
     const { columns, landscape, subtitle, summaryItems } = options;
     const dateStr = new Date().toLocaleDateString();
     const timeStr = new Date().toLocaleTimeString();

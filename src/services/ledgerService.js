@@ -724,6 +724,148 @@ class LedgerService {
     const db = getDatabase();
     return db.prepare("SELECT c.id as customer_id, c.customer_name, c.phone, COALESCE(SUM(si.total_amount), 0) as total_sales, COALESCE(SUM(si.paid_amount), 0) as total_paid, COALESCE(SUM(si.remaining_amount), 0) as total_outstanding, COUNT(si.id) as invoice_count FROM customers c LEFT JOIN sale_issues si ON c.id = si.customer_id AND si.remaining_amount > 0 WHERE c.status = 'Active' GROUP BY c.id HAVING total_outstanding > 0 ORDER BY total_outstanding DESC").all();
   }
+
+  // ==================== DELETE SALE ====================
+  deleteSale(saleId) {
+    const db = getDatabase();
+    
+    const sale = db.prepare("SELECT * FROM sale_issues WHERE id = ?").get(saleId);
+    if (!sale) {
+      throw new Error("Sale not found");
+    }
+    
+    return db.transaction(() => {
+      // Restore stock for all items in the sale
+      const items = db.prepare("SELECT product_id, quantity FROM sale_issue_items WHERE sale_issue_id = ?").all(saleId);
+      for (const item of items) {
+        db.prepare("UPDATE products SET quantity = quantity + ?, status = CASE WHEN status = 'Sold' THEN 'In Stock' WHEN quantity + ? > 0 THEN status ELSE status END, updated_at = datetime('now','localtime') WHERE id = ?").run(item.quantity, item.quantity, item.product_id);
+      }
+      
+      // Delete payments
+      db.prepare("DELETE FROM payments WHERE sale_issue_id = ?").run(saleId);
+      
+      // Delete sale items
+      db.prepare("DELETE FROM sale_issue_items WHERE sale_issue_id = ?").run(saleId);
+      
+      // Delete the sale itself
+      db.prepare("DELETE FROM sale_issues WHERE id = ?").run(saleId);
+      
+      return { success: true };
+    })();
+  }
+
+  // ==================== DELETE PAYMENT ====================
+  deletePayment(paymentId) {
+    const db = getDatabase();
+    
+    const payment = db.prepare("SELECT * FROM payments WHERE id = ?").get(paymentId);
+    if (!payment) {
+      throw new Error("Payment not found");
+    }
+    
+    const sale = db.prepare("SELECT * FROM sale_issues WHERE id = ?").get(payment.sale_issue_id);
+    if (!sale) {
+      throw new Error("Sale not found for this payment");
+    }
+    
+    return db.transaction(() => {
+      // Get all payments for this sale to recalculate totals
+      const allPayments = db.prepare("SELECT * FROM payments WHERE sale_issue_id = ? ORDER BY payment_date ASC, id ASC").all(payment.sale_issue_id);
+      
+      // Find and remove the deleted payment
+      const remainingPayments = allPayments.filter(p => p.id !== paymentId);
+      
+      // Recalculate paid amount
+      let newPaid = 0;
+      for (const p of remainingPayments) {
+        newPaid += p.amount;
+      }
+      
+      const newRemaining = Math.max(0, sale.total_amount - newPaid);
+      const newStatus = newRemaining <= 0 ? "Paid" : newPaid > 0 ? "Partial" : "Outstanding";
+      
+      // Delete the payment
+      db.prepare("DELETE FROM payments WHERE id = ?").run(paymentId);
+      
+      // Update sale totals
+      db.prepare("UPDATE sale_issues SET paid_amount = ?, remaining_amount = ?, payment_status = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(newPaid, newRemaining, newStatus, payment.sale_issue_id);
+      
+      return { success: true, newPaid, newRemaining, newStatus };
+    })();
+  }
+
+  // ==================== UPDATE SALE ====================
+  updateSale(saleId, data) {
+    const db = getDatabase();
+    
+    const sale = db.prepare("SELECT * FROM sale_issues WHERE id = ?").get(saleId);
+    if (!sale) {
+      throw new Error("Sale not found");
+    }
+    
+    return db.transaction(() => {
+      // Update sale basic info
+      if (data.customer_id !== undefined) {
+        db.prepare("UPDATE sale_issues SET customer_id = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(data.customer_id, saleId);
+      }
+      if (data.issue_date !== undefined) {
+        db.prepare("UPDATE sale_issues SET issue_date = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(data.issue_date, saleId);
+      }
+      if (data.transaction_type !== undefined) {
+        db.prepare("UPDATE sale_issues SET transaction_type = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(data.transaction_type, saleId);
+      }
+      if (data.notes !== undefined) {
+        db.prepare("UPDATE sale_issues SET notes = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(data.notes || "", saleId);
+      }
+      
+      // Update payment method if provided
+      if (data.payment_method !== undefined) {
+        const existingPayment = db.prepare("SELECT id FROM payments WHERE sale_issue_id = ? LIMIT 1").get(saleId);
+        if (existingPayment) {
+          db.prepare("UPDATE payments SET payment_method = ? WHERE sale_issue_id = ?").run(data.payment_method, saleId);
+        }
+      }
+      
+      return { success: true };
+    })();
+  }
+
+  // ==================== UPDATE PAYMENT ====================
+  updatePayment(paymentId, data) {
+    const db = getDatabase();
+    
+    const payment = db.prepare("SELECT * FROM payments WHERE id = ?").get(paymentId);
+    if (!payment) {
+      throw new Error("Payment not found");
+    }
+    
+    const sale = db.prepare("SELECT * FROM sale_issues WHERE id = ?").get(payment.sale_issue_id);
+    if (!sale) {
+      throw new Error("Sale not found for this payment");
+    }
+    
+    return db.transaction(() => {
+      // Update payment
+      db.prepare("UPDATE payments SET payment_date = ?, amount = ?, payment_method = ?, note = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(
+        data.payment_date || payment.payment_date,
+        data.amount !== undefined ? data.amount : payment.amount,
+        data.payment_method || payment.payment_method,
+        data.note !== undefined ? data.note : payment.note,
+        paymentId
+      );
+      
+      // Recalculate total paid amount
+      const allPayments = db.prepare("SELECT * FROM payments WHERE sale_issue_id = ?").all(payment.sale_issue_id);
+      const newPaid = allPayments.reduce((sum, p) => sum + p.amount, 0);
+      const newRemaining = Math.max(0, sale.total_amount - newPaid);
+      const newStatus = newRemaining <= 0 ? "Paid" : newPaid > 0 ? "Partial" : "Outstanding";
+      
+      // Update sale totals
+      db.prepare("UPDATE sale_issues SET paid_amount = ?, remaining_amount = ?, payment_status = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(newPaid, newRemaining, newStatus, payment.sale_issue_id);
+      
+      return { success: true, newPaid, newRemaining, newStatus };
+    })();
+  }
 }
 
 module.exports = new LedgerService();

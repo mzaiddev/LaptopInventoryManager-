@@ -71,7 +71,9 @@ const LedgersPage = {
 
   async refresh() {
     await this.loadLedgers();
-  },    async loadLedgers() {
+  },
+
+  async loadLedgers() {
     const container = document.getElementById("ledgers-table-container");
     if (!container) return;
     container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
@@ -136,6 +138,12 @@ const LedgersPage = {
                       <button class="btn btn-sm btn-secondary" onclick="LedgersPage.printInvoice(${l.sale_id})" title="Print Invoice">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                       </button>
+                      <button class="btn btn-sm btn-warning" onclick="LedgersPage.editSale(${l.sale_id})" title="Edit Sale">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 0-3 0L12 9l4 11 4.5-4.5z"/></svg>
+                      </button>
+                      <button class="btn btn-sm btn-danger" onclick="LedgersPage.deleteSaleConfirm(${l.sale_id})" title="Delete Sale">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="3 6 5 6 21 0"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -157,6 +165,7 @@ const LedgersPage = {
                                 <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:right;color:#64748b;font-size:10px;text-transform:uppercase;">Paid</th>
                                 <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:right;color:#64748b;font-size:10px;text-transform:uppercase;">Remaining</th>
                                 <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:left;color:#64748b;font-size:10px;text-transform:uppercase;">Note</th>
+                                <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:center;color:#64748b;font-size:10px;text-transform:uppercase;">Actions</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -167,6 +176,14 @@ const LedgersPage = {
                                   <td style="padding:4px 8px;border:1px solid #e2e8f0;text-align:right;font-weight:600;color:#22c55e;">${Formatters.formatCurrency(p.amount, App.currency)}</td>
                                   <td style="padding:4px 8px;border:1px solid #e2e8f0;text-align:right;color:${p.remaining_after > 0 ? '#ef4444' : '#22c55e'};font-weight:600;">${Formatters.formatCurrency(p.remaining_after, App.currency)}</td>
                                   <td style="padding:4px 8px;border:1px solid #e2e8f0;">${this.escapeHtml(p.note) || '-'}</td>
+                                  <td style="padding:4px 8px;border:1px solid #e2e8f0;text-align:center;">
+                                    <button class="btn btn-sm btn-warning" onclick="LedgersPage.editPayment(${p.id}, ${l.sale_id})" title="Edit Payment" style="padding:2px 6px;font-size:10px;">
+                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 0-3 0L12 9l4 11 4.5-4.5z"/></svg>
+                                    </button>
+                                    <button class="btn btn-sm btn-danger" onclick="LedgersPage.deletePaymentConfirm(${p.id}, ${l.sale_id})" title="Delete Payment" style="padding:2px 6px;font-size:10px;margin-left:4px;">
+                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px;"><polyline points="3 6 5 6 21 0"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                                    </button>
+                                  </td>
                                 </tr>
                               `).join('')}
                             </tbody>
@@ -280,7 +297,7 @@ const LedgersPage = {
           <h4 style="margin-bottom:8px;font-size:14px;">Payment History</h4>
           <table class="report-table">
             <thead>
-              <tr><th>Date</th><th>Method</th><th style="text-align:right;">Amount</th><th>Note</th></tr>
+              <tr><th>Date</th><th>Method</th><th style="text-align:right;">Amount</th><th>Note</th><th>Actions</th></tr>
             </thead>
             <tbody>
               ${l.payments.map(p => `
@@ -289,6 +306,14 @@ const LedgersPage = {
                   <td>${this.escapeHtml(p.payment_method)}</td>
                   <td style="text-align:right;font-weight:600;color:var(--success);">${Formatters.formatCurrency(p.amount, currency)}</td>
                   <td>${this.escapeHtml(p.note) || '-'}</td>
+                  <td>
+                    <button class="btn btn-sm btn-warning" onclick="LedgersPage.editPayment(${p.id}, ${l.id})" title="Edit Payment" style="padding:2px 6px;font-size:10px;">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 0-3 0L12 9l4 11 4.5-4.5z"/></svg>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="LedgersPage.deletePaymentConfirm(${p.id}, ${l.id})" title="Delete Payment" style="padding:2px 6px;font-size:10px;margin-left:4px;">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px;"><polyline points="3 6 5 6 21 0"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                    </button>
+                  </td>
                 </tr>
               `).join('')}
             </tbody>
@@ -354,6 +379,8 @@ const LedgersPage = {
       const footer = `
         <button class="btn btn-secondary" onclick="window.Modal.close()">Close</button>
         ${l.remaining_amount > 0 ? `<button class="btn btn-success" onclick="window.Modal.close(); LedgersPage.showAddPayment(${l.id})">Add Payment</button>` : ''}
+        <button class="btn btn-warning" onclick="window.Modal.close(); LedgersPage.editSale(${l.id})">Edit Sale</button>
+        <button class="btn btn-danger" onclick="window.Modal.close(); LedgersPage.deleteSaleConfirm(${l.id})">Delete Sale</button>
         <button class="btn btn-primary" onclick="window.Modal.close(); LedgersPage.printInvoice(${l.id})">Print Invoice</button>
       `;
 
@@ -415,6 +442,181 @@ const LedgersPage = {
         Toast.error(err.message);
       }
     }, "sm");
+  },
+
+  // ==================== DELETE SALE ====================
+  async deleteSaleConfirm(saleId) {
+    const confirmed = confirm("Are you sure you want to delete this sale? This will restore all products to inventory and remove all payment records. This action cannot be undone.");
+    if (!confirmed) return;
+    
+    try {
+      const result = await window.api.deleteSale(saleId);
+      if (result.success) {
+        Toast.success("Sale deleted successfully.");
+        this.loadLedgers();
+      } else {
+        Toast.error(result.error || "Failed to delete sale.");
+      }
+    } catch (err) {
+      Toast.error(err.message);
+    }
+  },
+
+  // ==================== EDIT SALE ====================
+  async editSale(saleId) {
+    try {
+      const result = await window.api.getSaleById(saleId);
+      if (!result.success || !result.data) {
+        Toast.error("Failed to load sale details.");
+        return;
+      }
+      
+      const l = result.data;
+      const customersResult = await window.api.getAllCustomers({});
+      const customers = customersResult.success ? customersResult.data.customers || [] : [];
+      
+      const formHtml = `
+        <form id="edit-sale-form" onsubmit="return false;">
+          <div class="form-group">
+            <label>Customer</label>
+            <select class="form-control" id="edit-sale-customer">
+              ${customers.map(c => `<option value="${c.id}" ${c.id === l.customer_id ? 'selected' : ''}>${this.escapeHtml(c.customer_name)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Date</label>
+              <input type="date" class="form-control" id="edit-sale-date" value="${l.issue_date || new Date().toISOString().split('T')[0]}">
+            </div>
+            <div class="form-group">
+              <label>Transaction Type</label>
+              <select class="form-control" id="edit-sale-type">
+                <option value="Sale" ${l.transaction_type === 'Sale' ? 'selected' : ''}>Sale</option>
+                <option value="Issue" ${l.transaction_type === 'Issue' ? 'selected' : ''}>Issue</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Notes</label>
+            <input type="text" class="form-control" id="edit-sale-notes" value="${this.escapeHtml(l.notes || '')}">
+          </div>
+        </form>
+      `;
+
+      Modal.showForm("Edit Sale", formHtml, async () => {
+        try {
+          const updateResult = await window.api.updateSale(saleId, {
+            customer_id: parseInt(document.getElementById("edit-sale-customer")?.value),
+            issue_date: document.getElementById("edit-sale-date")?.value,
+            transaction_type: document.getElementById("edit-sale-type")?.value,
+            notes: document.getElementById("edit-sale-notes")?.value?.trim() || ""
+          });
+          
+          if (updateResult.success) {
+            Toast.success("Sale updated successfully.");
+            Modal.close();
+            this.loadLedgers();
+          } else {
+            Toast.error(updateResult.error || "Failed to update sale.");
+          }
+        } catch (err) {
+          Toast.error(err.message);
+        }
+      }, "sm");
+    } catch (err) {
+      Toast.error(err.message);
+    }
+  },
+
+  // ==================== EDIT PAYMENT ====================
+  async editPayment(paymentId, saleId) {
+    try {
+      const result = await window.api.getSaleById(saleId);
+      if (!result.success || !result.data) {
+        Toast.error("Failed to load sale details.");
+        return;
+      }
+      
+      const l = result.data;
+      const payment = l.payments?.find(p => p.id === paymentId);
+      if (!payment) {
+        Toast.error("Payment not found.");
+        return;
+      }
+      
+      const formHtml = `
+        <form id="edit-payment-form" onsubmit="return false;">
+          <div class="form-group">
+            <label>Payment Date</label>
+            <input type="date" class="form-control" id="edit-pmt-date" value="${payment.payment_date}">
+          </div>
+          <div class="form-group">
+            <label>Amount *</label>
+            <input type="number" step="0.01" min="0.01" class="form-control" id="edit-pmt-amount" value="${payment.amount}" required>
+          </div>
+          <div class="form-group">
+            <label>Payment Method</label>
+            <select class="form-control" id="edit-pmt-method">
+              <option value="Cash" ${payment.payment_method === 'Cash' ? 'selected' : ''}>Cash</option>
+              <option value="Bank" ${payment.payment_method === 'Bank' ? 'selected' : ''}>Bank</option>
+              <option value="Online" ${payment.payment_method === 'Online' ? 'selected' : ''}>Online</option>
+              <option value="Other" ${payment.payment_method === 'Other' ? 'selected' : ''}>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Note</label>
+            <input type="text" class="form-control" id="edit-pmt-note" value="${this.escapeHtml(payment.note || '')}">
+          </div>
+        </form>
+      `;
+
+      Modal.showForm("Edit Payment", formHtml, async () => {
+        const amount = parseFloat(document.getElementById("edit-pmt-amount")?.value);
+        if (!amount || amount <= 0) {
+          Toast.error("Please enter a valid amount.");
+          return;
+        }
+        
+        try {
+          const updateResult = await window.api.updatePayment(paymentId, {
+            payment_date: document.getElementById("edit-pmt-date")?.value,
+            amount: amount,
+            payment_method: document.getElementById("edit-pmt-method")?.value,
+            note: document.getElementById("edit-pmt-note")?.value?.trim() || ""
+          });
+          
+          if (updateResult.success) {
+            Toast.success("Payment updated successfully.");
+            Modal.close();
+            this.loadLedgers();
+          } else {
+            Toast.error(updateResult.error || "Failed to update payment.");
+          }
+        } catch (err) {
+          Toast.error(err.message);
+        }
+      }, "sm");
+    } catch (err) {
+      Toast.error(err.message);
+    }
+  },
+
+  // ==================== DELETE PAYMENT ====================
+  async deletePaymentConfirm(paymentId, saleId) {
+    const confirmed = confirm("Are you sure you want to delete this payment? This will recalculate the sale balance. This action cannot be undone.");
+    if (!confirmed) return;
+    
+    try {
+      const result = await window.api.deletePayment(paymentId);
+      if (result.success) {
+        Toast.success("Payment deleted successfully.");
+        this.loadLedgers();
+      } else {
+        Toast.error(result.error || "Failed to delete payment.");
+      }
+    } catch (err) {
+      Toast.error(err.message);
+    }
   },
 
   async openPrintDialog() {
@@ -481,6 +683,7 @@ const LedgersPage = {
           categoryLabel: 'Ledger Type'
         },
         landscape: false,
+        showPrintOptions: true,
         subtitle: 'With full payment history',
         summaryItems: [
           { label: 'Total Sales', value: sales.length },

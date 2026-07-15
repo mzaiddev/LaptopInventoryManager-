@@ -332,6 +332,46 @@ function registerIpcHandlers() {
     }
   });
 
+  // --- Delete Sale ---
+  ipcMain.handle("sale:delete", async (event, saleId) => {
+    try {
+      const result = ledgerService.deleteSale(saleId);
+      return { success: true, data: result };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // --- Delete Payment ---
+  ipcMain.handle("sale:deletePayment", async (event, paymentId) => {
+    try {
+      const result = ledgerService.deletePayment(paymentId);
+      return { success: true, data: result };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // --- Update Sale ---
+  ipcMain.handle("sale:update", async (event, saleId, data) => {
+    try {
+      const result = ledgerService.updateSale(saleId, data);
+      return { success: true, data: result };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // --- Update Payment ---
+  ipcMain.handle("sale:updatePayment", async (event, paymentId, data) => {
+    try {
+      const result = ledgerService.updatePayment(paymentId, data);
+      return { success: true, data: result };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
   // --- Returns ---
   ipcMain.handle("ledger:createReturn", async (event, data) => {
     try {
