@@ -56,7 +56,7 @@ const SalesPage = {
                   <label>Ledger Type</label>
                   <select class="form-control" id="sale-ledger-type" onchange="SalesPage.onLedgerTypeChange()">
                     <option value="Cash">Cash (Full Payment)</option>
-                    <option value="Loan">Loan (Partial/Outstanding)</option>
+                    <option value="Loan">Loan (Partial/Remaining)</option>
                   </select>
                 </div>
                 <div class="form-group" id="sale-paid-amount-group" style="display:none;">

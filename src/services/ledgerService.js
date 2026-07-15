@@ -126,10 +126,27 @@ class LedgerService {
     return { success: true };
   }
 
+  _getCustomerOldBalanceData(db, customerId) {
+    try {
+      const debit = db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM old_balances WHERE customer_id = ? AND balance_type = 'Debit'").get(customerId);
+      const credit = db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM old_balances WHERE customer_id = ? AND balance_type = 'Credit'").get(customerId);
+      const records = db.prepare("SELECT * FROM old_balances WHERE customer_id = ? ORDER BY created_at DESC").all(customerId);
+      return {
+        debit: debit?.total || 0,
+        credit: credit?.total || 0,
+        net: (debit?.total || 0) - (credit?.total || 0),
+        records: records || []
+      };
+    } catch(e) {
+      return { debit: 0, credit: 0, net: 0, records: [] };
+    }
+  }
+
   getCustomerBalance(id) {
     const db = getDatabase();
     const s = db.prepare("SELECT COALESCE(SUM(total_amount), 0) as ts, COALESCE(SUM(paid_amount), 0) as tp FROM sale_issues WHERE customer_id = ?").get(id);
-    return { opening_balance: 0, total_sales: s.ts, total_paid: s.tp, outstanding_balance: s.ts - s.tp };
+    const oldData = this._getCustomerOldBalanceData(db, id);
+    return { opening_balance: oldData.net, total_sales: s.ts, total_paid: s.tp, outstanding_balance: s.ts - s.tp, old_balance_debit: oldData.debit, old_balance_credit: oldData.credit, old_balance_net: oldData.net };
   }
 
   // ==================== SALE / ISSUE CREATION ====================
@@ -644,7 +661,22 @@ class LedgerService {
 
     const balance = db.prepare("SELECT COALESCE(SUM(total_amount), 0) as ts, COALESCE(SUM(paid_amount), 0) as tp, COALESCE(SUM(remaining_amount), 0) as to_ FROM sale_issues WHERE customer_id = ?").get(customerId);
 
-    return { customer, sales, returns, damages, balance: { opening_balance: 0, total_sales: balance.ts || 0, total_paid: balance.tp || 0, total_outstanding: balance.to_ || 0 } };
+    // Get old balance data via shared helper
+    const oldData = this._getCustomerOldBalanceData(db, customerId);
+
+    return {
+      customer, sales, returns, damages,
+      old_balances: oldData.records,
+      balance: {
+        opening_balance: 0,
+        total_sales: balance.ts || 0,
+        total_paid: balance.tp || 0,
+        total_outstanding: balance.to_ || 0,
+        old_balance_debit: oldData.debit,
+        old_balance_credit: oldData.credit,
+        old_balance_net: oldData.net,
+      }
+    };
   }
 
   getCustomerStatement(customerId) {

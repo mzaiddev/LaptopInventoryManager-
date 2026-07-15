@@ -12,6 +12,7 @@ class DashboardService {
     const saleSummary = this.getSaleFinancialSummary(db);
     const recentActivity = this.getRecentActivity(db);
     const damageSummary = this.getDamageSummary(db);
+    const oldBalanceSummary = this.getOldBalanceSummary(db);
 
     return {
       inventorySummary,
@@ -20,6 +21,7 @@ class DashboardService {
       salesSummary,
       saleSummary,
       damageSummary,
+      oldBalanceSummary,
       recentActivity,
       currency
     };
@@ -237,6 +239,30 @@ class DashboardService {
     `).all();
 
     return { recentSales, recentReturns, recentPayments, recentDamages };
+  }
+
+  getOldBalanceSummary(db) {
+    try {
+      const stats = db.prepare(`
+        SELECT
+          COALESCE(SUM(CASE WHEN balance_type = 'Debit' THEN amount ELSE 0 END), 0) as total_debit,
+          COALESCE(SUM(CASE WHEN balance_type = 'Credit' THEN amount ELSE 0 END), 0) as total_credit,
+          COUNT(DISTINCT customer_id) as total_customers,
+          COUNT(*) as total_records
+        FROM old_balances
+      `).get();
+
+      return {
+        totalDebit: stats.total_debit || 0,
+        totalCredit: stats.total_credit || 0,
+        totalCustomers: stats.total_customers || 0,
+        totalRecords: stats.total_records || 0,
+        netOldBalance: (stats.total_debit || 0) - (stats.total_credit || 0)
+      };
+    } catch (err) {
+      console.error("Error in getOldBalanceSummary (table might not exist yet):", err.message);
+      return { totalDebit: 0, totalCredit: 0, totalCustomers: 0, totalRecords: 0, netOldBalance: 0 };
+    }
   }
 
   getSetting(key) {

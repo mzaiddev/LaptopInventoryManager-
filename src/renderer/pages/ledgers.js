@@ -50,7 +50,7 @@ const LedgersPage = {
                 <option value="">All Status</option>
                 <option value="Paid">Paid</option>
                 <option value="Partial">Partial</option>
-                <option value="Outstanding">Outstanding</option>
+                <option value="Outstanding">Remaining</option>
               </select>
               <select id="filter-ledger-type" onchange="LedgersPage.onFilter()">
                 <option value="">All Types</option>
@@ -689,7 +689,7 @@ const LedgersPage = {
           { label: 'Total Sales', value: sales.length },
           { label: 'Paid', value: paidCount },
           { label: 'Partial', value: partialCount },
-          { label: 'Outstanding', value: outstandingCount },
+          { label: 'Remaining', value: outstandingCount },
           { label: 'Total Amount', value: Formatters.formatCurrency(totalAmount, currency) },
           { label: 'Total Paid', value: Formatters.formatCurrency(totalPaid, currency) },
           { label: 'Total Due', value: Formatters.formatCurrency(totalRemaining, currency) },

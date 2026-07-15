@@ -222,6 +222,7 @@ const CustomersPage = {
       const c = profile.customer;
       const balance = profile.balance;
       const currency = App.currency || 'USD';
+      const oldBalances = profile.old_balances || [];
 
       // Sales history
       const salesHtml = profile.sales && profile.sales.length > 0
@@ -264,7 +265,7 @@ const CustomersPage = {
                       <span>${Formatters.formatDate(p.payment_date)}</span>
                       <span>${this.escapeHtml(p.payment_method)}</span>
                       <span style="font-weight:600;color:var(--success);">${Formatters.formatCurrency(p.amount, currency)}</span>
-                      ${p.note ? `<span style="color:var(--text-muted);font-size:12px;">${this.escapeHtml(p.note)}</span>` : ''}
+                      ${p.note ? '<span style="color:var(--text-muted);font-size:12px;">' + this.escapeHtml(p.note) + '</span>' : ''}
                     </div>
                   `).join('')}
                 </div>
@@ -274,6 +275,49 @@ const CustomersPage = {
         `).join('')
         : '<p style="color:var(--text-muted);padding:10px;">No sales yet.</p>';
 
+      // Build combined total card (remaining + old balance)
+      const combinedTotal = balance.total_outstanding + (balance.old_balance_net || 0);
+      const combinedCardClass = combinedTotal > 0 ? 'danger' : 'success';
+      const combinedTotalCardHtml = '<div class="profile-balance-card ' + combinedCardClass + '">' +
+        '<div class="pbc-value" style="font-size:18px;font-weight:800;">' + Formatters.formatCurrency(combinedTotal, currency) + '</div>' +
+        '<div class="pbc-label">Total Balance Due</div></div>';
+
+      // Build old balance card HTML (using string concat to avoid deep template nesting)
+      let oldBalanceCardHtml = '';
+      if (balance.old_balance_net !== undefined) {
+        const cardClass = balance.old_balance_net > 0 ? 'danger' : 'success';
+        let labelText = '';
+        if (balance.old_balance_debit > 0) labelText += 'Debit: ' + Formatters.formatCurrency(balance.old_balance_debit, currency);
+        if (balance.old_balance_credit > 0) labelText += ' Credit: ' + Formatters.formatCurrency(balance.old_balance_credit, currency);
+        oldBalanceCardHtml = '<div class="profile-balance-card ' + cardClass + '">' +
+          '<div class="pbc-value" style="font-size:16px;">' + Formatters.formatCurrency(balance.old_balance_net, currency) + '</div>' +
+          '<div class="pbc-label" style="font-size:10px;">Old Balance (' + labelText + ')</div></div>';
+      }
+
+      // Build old balance items list HTML (using string concat to avoid deep template nesting)
+      let oldBalancesSectionHtml = '';
+      if (oldBalances.length > 0) {
+        let itemsHtml = '';
+        for (let oi = 0; oi < oldBalances.length; oi++) {
+          const ob = oldBalances[oi];
+          const isDebit = ob.balance_type === 'Debit';
+          const color = isDebit ? 'var(--danger)' : 'var(--success)';
+          const label = isDebit ? 'Debit (Owes)' : 'Credit (Owed)';
+          const notesHtml = ob.notes ? '<span style="font-size:11px;color:var(--text-muted);">' + this.escapeHtml(ob.notes) + '</span>' : '';
+          itemsHtml += '<div class="profile-old-balance-item" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border:1px solid var(--border-color);border-radius:var(--radius);margin-bottom:6px;">' +
+            '<div style="display:flex;flex-direction:column;gap:2px;">' +
+              '<span style="font-weight:600;font-size:13px;color:' + color + ';">' + label + '</span>' +
+              notesHtml +
+              '<span style="font-size:10px;color:var(--text-muted);">' + Formatters.formatDate(ob.created_at) + '</span>' +
+            '</div>' +
+            '<span style="font-weight:700;font-size:15px;color:' + color + ';">' + Formatters.formatCurrency(ob.amount, currency) + '</span>' +
+          '</div>';
+        }
+        oldBalancesSectionHtml = '<div class="profile-section">' +
+          '<h4>Old Balances (' + oldBalances.length + ')</h4>' +
+          itemsHtml + '</div>';
+      }
+
       const body = `
         <div class="customer-profile">
           <div class="profile-header">
@@ -281,7 +325,7 @@ const CustomersPage = {
             <div class="profile-info">
               <h3>${this.escapeHtml(c.customer_name)}</h3>
               <p>${this.escapeHtml(c.phone) || 'No phone'}${c.email ? ' | ' + this.escapeHtml(c.email) : ''}</p>
-              ${c.address ? `<p style="color:var(--text-muted);font-size:12px;">${this.escapeHtml(c.address)}</p>` : ''}
+              ${c.address ? '<p style="color:var(--text-muted);font-size:12px;">' + this.escapeHtml(c.address) + '</p>' : ''}
             </div>
             <div class="profile-status">
               <span class="badge ${c.status === 'Active' ? 'badge-in-stock' : 'badge-lost'}">${c.status}</span>
@@ -299,9 +343,13 @@ const CustomersPage = {
             </div>
             <div class="profile-balance-card ${balance.total_outstanding > 0 ? 'danger' : 'success'}">
               <div class="pbc-value">${Formatters.formatCurrency(balance.total_outstanding, currency)}</div>
-              <div class="pbc-label">Outstanding Balance</div>
+              <div class="pbc-label">Remaining Balance</div>
             </div>
+            ${oldBalanceCardHtml}
+            ${combinedTotalCardHtml}
           </div>
+
+          ${oldBalancesSectionHtml}
 
           <div class="profile-section">
             <h4>Sales History (${profile.sales ? profile.sales.length : 0})</h4>
@@ -316,7 +364,7 @@ const CustomersPage = {
                 <div class="profile-return-info">
                   <strong>${Formatters.formatDate(r.return_date)}</strong>
                   <span>${this.escapeHtml(r.sale_reference) || '-'}</span>
-                  ${r.reason ? `<span style="color:var(--text-muted);font-size:12px;">${this.escapeHtml(r.reason)}</span>` : ''}
+                  ${r.reason ? '<span style="color:var(--text-muted);font-size:12px;">' + this.escapeHtml(r.reason) + '</span>' : ''}
                 </div>
                 <span style="font-weight:600;color:var(--warning);">-${Formatters.formatCurrency(r.total_return_amount, currency)}</span>
               </div>
@@ -410,7 +458,6 @@ const CustomersPage = {
   },
 
   buildStatementHtml(stmt, currency) {
-    // Generate payment rows for a sale with running balance
     const buildPaymentsTable = (sale) => {
       if (!sale.payments || sale.payments.length === 0) {
         return '<p style="color:#94a3b8;font-size:12px;padding:6px 0;">No payments recorded for this sale.</p>';
@@ -422,7 +469,7 @@ const CustomersPage = {
           <td style="padding:4px 8px;border:1px solid #e2e8f0;font-size:11px;">${this.escapeHtml(p.payment_method)}</td>
           <td style="padding:4px 8px;border:1px solid #e2e8f0;font-size:11px;text-align:right;font-weight:600;color:#22c55e;">${Formatters.formatCurrency(p.amount, currency)}</td>
           <td style="padding:4px 8px;border:1px solid #e2e8f0;font-size:11px;text-align:right;color:${remaining > 0 ? '#ef4444' : '#22c55e'};font-weight:600;">${Formatters.formatCurrency(remaining, currency)}</td>
-          ${p.note ? `<td style="padding:4px 8px;border:1px solid #e2e8f0;font-size:11px;color:#94a3b8;">${this.escapeHtml(p.note)}</td>` : ''}
+          ${p.note ? '<td style="padding:4px 8px;border:1px solid #e2e8f0;font-size:11px;color:#94a3b8;">' + this.escapeHtml(p.note) + '</td>' : ''}
         </tr>`;
       }).join('');
       return `
@@ -440,7 +487,6 @@ const CustomersPage = {
         </table>`;
     };
 
-    // Build sales HTML with payment history under each sale
     const salesHtml = stmt.sales && stmt.sales.length > 0
       ? stmt.sales.map(s => {
           const payTable = buildPaymentsTable(s);
@@ -459,7 +505,7 @@ const CustomersPage = {
                 <span style="color:${s.remaining_amount > 0 ? '#ef4444' : '#22c55e'};font-weight:600;"><strong>Balance:</strong> ${Formatters.formatCurrency(s.remaining_amount, currency)}</span>
               </div>
               <div style="font-size:12px;color:#64748b;margin-bottom:4px;">
-                <strong>Items:</strong> ${s.items ? s.items.map(i => `${this.escapeHtml(i.product_name)} x${i.quantity}`).join(', ') : 'N/A'}
+                <strong>Items:</strong> ${s.items ? s.items.map(i => this.escapeHtml(i.product_name) + ' x' + i.quantity).join(', ') : 'N/A'}
               </div>
               <div style="margin-top:8px;">
                 <div style="font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">Payment History:</div>
@@ -470,7 +516,6 @@ const CustomersPage = {
         }).join('')
       : '<p style="color:#94a3b8;text-align:center;padding:20px;">No transactions found.</p>';
 
-    // Build returns table
     const returnsHtml = stmt.returns && stmt.returns.length > 0
       ? `
         <h4 style="font-size:15px;margin:16px 0 8px;color:#475569;">Returns</h4>
@@ -494,15 +539,12 @@ const CustomersPage = {
 
     return `
       <div class="customer-statement" style="font-family:'Courier New',monospace;padding:10px;">
-        <!-- Header -->
         <div style="text-align:center;margin-bottom:18px;padding-bottom:12px;border-bottom:3px solid #2563eb;">
           <h2 style="font-size:20px;margin-bottom:4px;color:#1e293b;">${this.escapeHtml(stmt.shopName)}</h2>
-          ${stmt.shopAddress ? `<p style="font-size:12px;color:#555;">${this.escapeHtml(stmt.shopAddress)}</p>` : ''}
-          ${stmt.shopPhone ? `<p style="font-size:12px;color:#555;">Phone: ${this.escapeHtml(stmt.shopPhone)}</p>` : ''}
+          ${stmt.shopAddress ? '<p style="font-size:12px;color:#555;">' + this.escapeHtml(stmt.shopAddress) + '</p>' : ''}
+          ${stmt.shopPhone ? '<p style="font-size:12px;color:#555;">Phone: ' + this.escapeHtml(stmt.shopPhone) + '</p>' : ''}
           <h3 style="margin-top:8px;font-size:16px;color:#475569;">Customer Statement</h3>
         </div>
-
-        <!-- Customer Info -->
         <div style="margin-bottom:12px;font-size:13px;">
           <table style="width:100%;">
             <tr><td style="font-weight:600;width:100px;padding:2px 0;">Customer:</td><td>${this.escapeHtml(stmt.customer.customer_name)}</td></tr>
@@ -511,32 +553,29 @@ const CustomersPage = {
             <tr><td style="font-weight:600;padding:2px 0;">Date:</td><td>${Formatters.formatDate(new Date().toISOString())}</td></tr>
           </table>
         </div>
-
-        <!-- Balance Summary -->
         <div style="margin-bottom:16px;">
           <table style="width:100%;font-size:13px;border-collapse:collapse;">
             <tr style="background:#f1f5f9;">
               <th style="padding:8px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;text-transform:uppercase;color:#64748b;">Total Sales</th>
               <th style="padding:8px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;text-transform:uppercase;color:#64748b;">Total Paid</th>
-              <th style="padding:8px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;text-transform:uppercase;color:#64748b;">Outstanding</th>
+              <th style="padding:8px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;text-transform:uppercase;color:#64748b;">Remaining</th>
+              <th style="padding:8px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;text-transform:uppercase;color:#64748b;">Old Balance</th>
+              <th style="padding:8px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;text-transform:uppercase;color:#64748b;">Total Due</th>
             </tr>
             <tr>
               <td style="padding:6px 10px;border:1px solid #e2e8f0;">${Formatters.formatCurrency(stmt.balance.total_sales, currency)}</td>
               <td style="padding:6px 10px;border:1px solid #e2e8f0;">${Formatters.formatCurrency(stmt.balance.total_paid, currency)}</td>
               <td style="padding:6px 10px;border:1px solid #e2e8f0;font-weight:700;${stmt.balance.total_outstanding > 0 ? 'color:#ef4444;' : 'color:#22c55e;'}">${Formatters.formatCurrency(stmt.balance.total_outstanding, currency)}</td>
+              <td style="padding:6px 10px;border:1px solid #e2e8f0;font-weight:700;${stmt.balance.old_balance_net > 0 ? 'color:#ef4444;' : stmt.balance.old_balance_net < 0 ? 'color:#22c55e;' : ''}">${stmt.balance.old_balance_net !== undefined ? Formatters.formatCurrency(stmt.balance.old_balance_net, currency) : Formatters.formatCurrency(0, currency)}</td>
+              <td style="padding:6px 10px;border:1px solid #e2e8f0;font-weight:700;${(stmt.balance.total_outstanding + (stmt.balance.old_balance_net || 0)) > 0 ? 'color:#ef4444;' : 'color:#22c55e;'}">${Formatters.formatCurrency(stmt.balance.total_outstanding + (stmt.balance.old_balance_net || 0), currency)}</td>
             </tr>
           </table>
         </div>
-
-        <!-- Sales with Payment History -->
         ${stmt.sales && stmt.sales.length > 0 ? `
         <h4 style="font-size:15px;margin:0 0 10px;color:#475569;">Transaction History (${stmt.sales.length})</h4>
         ${salesHtml}
         ` : ''}
-
         ${returnsHtml}
-
-        <!-- Footer -->
         <div style="text-align:center;margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;">
           <p>Generated on ${Formatters.formatDateTime(new Date().toISOString())}</p>
           <p>This is a computer-generated statement from ${this.escapeHtml(stmt.shopName)}</p>
@@ -590,7 +629,6 @@ const CustomersPage = {
 
   async shareStatementWhatsApp(customerId) {
     try {
-      // First load the full statement data
       const result = await window.api.getCustomerStatement(customerId);
       if (!result.success || !result.data) {
         Toast.error('Failed to load statement.');
@@ -603,24 +641,24 @@ const CustomersPage = {
       const customerName = stmt.customer.customer_name;
       const phone = stmt.customer.phone || '';
 
-      // Open the printable PDF window first
       this._openPdfWindow(customerName, printContent);
 
-      // Also open WhatsApp with message
       if (phone) {
         const shopName = document.getElementById('shop-name')?.textContent || 'Laptop Inventory Manager';
         const dateStr = new Date().toLocaleDateString();
         const message = encodeURIComponent(
-          `Dear ${customerName},\n\n` +
-          `Please find attached your detailed account statement from ${shopName}.\n\n` +
-          `Summary:\n` +
-          `Total Sales: ${Formatters.formatCurrency(stmt.balance.total_sales, currency)}\n` +
-          `Total Paid: ${Formatters.formatCurrency(stmt.balance.total_paid, currency)}\n` +
-          `Outstanding Balance: ${Formatters.formatCurrency(stmt.balance.total_outstanding, currency)}\n\n` +
-          `For any queries, please contact us. Thank you for your business!\n\n` +
-          `- ${shopName} | ${dateStr}`
+          'Dear ' + customerName + ',\n\n' +
+          'Please find attached your detailed account statement from ' + shopName + '.\n\n' +
+          'Summary:\n' +
+          'Total Sales: ' + Formatters.formatCurrency(stmt.balance.total_sales, currency) + '\n' +
+          'Total Paid: ' + Formatters.formatCurrency(stmt.balance.total_paid, currency) + '\n' +
+          'Remaining Balance: ' + Formatters.formatCurrency(stmt.balance.total_outstanding, currency) + '\n' +
+          'Old Balance: ' + Formatters.formatCurrency(stmt.balance.old_balance_net || 0, currency) + '\n' +
+          'Total Due: ' + Formatters.formatCurrency((stmt.balance.total_outstanding || 0) + (stmt.balance.old_balance_net || 0), currency) + '\n\n' +
+          'For any queries, please contact us. Thank you for your business!\n\n' +
+          '- ' + shopName + ' | ' + dateStr
         );
-        const waUrl = `https://wa.me/${phone.replace(/[^\d]/g, '')}?text=${message}`;
+        const waUrl = 'https://wa.me/' + phone.replace(/[^\d]/g, '') + '?text=' + message;
         window.open(waUrl, '_blank');
       } else {
         Toast.warning('Customer has no phone number. WhatsApp cannot be opened.');
@@ -690,7 +728,6 @@ const CustomersPage = {
 
   async openPrintDialog() {
     try {
-      // Load all customers with their sales data
       const result = await window.api.getAllCustomers({ limit: 5000 });
       if (!result.success) {
         Toast.error('Failed to load customers data.');
@@ -702,7 +739,6 @@ const CustomersPage = {
         return;
       }
 
-      // Get sales data for each customer
       const customerPromises = customers.map(async c => {
         const salesResult = await window.api.getCustomerFullProfile(c.id);
         const sales = salesResult.success ? salesResult.data.sales || [] : [];
@@ -712,6 +748,7 @@ const CustomersPage = {
           total_sales: balance.total_sales || 0,
           total_paid: balance.total_paid || 0,
           outstanding: balance.total_outstanding || 0,
+          old_balance: balance.old_balance_net || 0,
           sales_count: sales.length,
         };
       });
@@ -724,6 +761,8 @@ const CustomersPage = {
       const totalSales = customerData.reduce((s, c) => s + (c.total_sales || 0), 0);
       const totalPaid = customerData.reduce((s, c) => s + (c.total_paid || 0), 0);
       const totalOutstanding = customerData.reduce((s, c) => s + (c.outstanding || 0), 0);
+      const totalOldBalance = customerData.reduce((s, c) => s + (c.old_balance || 0), 0);
+      const totalCombinedDue = totalOutstanding + totalOldBalance;
 
       PrintService.showPrintDialog({
         title: 'Customers Report',
@@ -735,7 +774,8 @@ const CustomersPage = {
           { field: 'status', label: 'Status', width: '60px' },
           { field: 'total_sales', label: 'Total Sales', width: '70px', align: 'right', format: 'currency' },
           { field: 'total_paid', label: 'Total Paid', width: '70px', align: 'right', format: 'currency' },
-          { field: 'outstanding', label: 'Outstanding', width: '70px', align: 'right', format: 'currency' },
+          { field: 'outstanding', label: 'Remaining', width: '70px', align: 'right', format: 'currency' },
+          { field: 'old_balance', label: 'Old Balance', width: '70px', align: 'right', format: 'currency' },
           { field: 'sales_count', label: 'Transactions', width: '50px', align: 'center' },
         ],
         filters: {
@@ -750,7 +790,9 @@ const CustomersPage = {
           { label: 'Active Customers', value: activeCount },
           { label: 'Total Sales', value: Formatters.formatCurrency(totalSales, currency) },
           { label: 'Total Collected', value: Formatters.formatCurrency(totalPaid, currency) },
-          { label: 'Total Outstanding', value: Formatters.formatCurrency(totalOutstanding, currency) },
+          { label: 'Total Remaining', value: Formatters.formatCurrency(totalOutstanding, currency) },
+          { label: 'Total Old Balance', value: Formatters.formatCurrency(totalOldBalance, currency) },
+          { label: 'Total Balance Due', value: Formatters.formatCurrency(totalCombinedDue, currency) },
         ],
         getCompanyHeader: () => LedgersPage.getCompanyHeader()
       });

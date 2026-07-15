@@ -50,12 +50,54 @@ const DashboardPage = {
     const ledger = data.saleSummary;
     const damage = data.damageSummary;
     const activity = data.recentActivity;
+    const oldBalance = data.oldBalanceSummary;
 
     return `
       ${this.renderFinancialOverview(fin, ledger, sales, damage)}
+      ${oldBalance && oldBalance.totalRecords > 0 ? this.renderOldBalanceOverview(oldBalance) : ''}
       ${this.renderInventorySummary(inv, fin, damage)}
       ${this.renderConditionSummary(cond)}
       ${this.renderActivity(activity)}
+    `;
+  },
+
+  renderOldBalanceOverview(oldBalance) {
+    const currency = App.currency || 'USD';
+    return `
+      <div class="dashboard-section">
+        <h2>Old Balances</h2>
+        <div class="stats-grid">
+          <div class="stat-card clickable" onclick="DashboardPage.showOldBalanceDetail()" title="View old balance details">
+            <div class="stat-icon red">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+            </div>
+            <div class="stat-value">${Formatters.formatCurrency(oldBalance.totalDebit, currency)}</div>
+            <div class="stat-label">Old Debit (Customer Owes)</div>
+            <div class="stat-trend">${oldBalance.totalCustomers} customers</div>
+          </div>
+          <div class="stat-card clickable" onclick="DashboardPage.showOldBalanceDetail()" title="View old balance details">
+            <div class="stat-icon yellow">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+            </div>
+            <div class="stat-value">${Formatters.formatCurrency(oldBalance.totalCredit, currency)}</div>
+            <div class="stat-label">Old Credit (You Owe)</div>
+          </div>
+          <div class="stat-card clickable" onclick="DashboardPage.showOldBalanceDetail()" title="View old balance details">
+            <div class="stat-icon blue">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            </div>
+            <div class="stat-value">${oldBalance.totalRecords}</div>
+            <div class="stat-label">Old Balance Records</div>
+            <div class="stat-trend">${oldBalance.totalCustomers} customers</div>
+          </div>
+        </div>
+      </div>
     `;
   },
 
@@ -105,15 +147,15 @@ const DashboardPage = {
             <div class="stat-value">${Formatters.formatCurrency(netRevenue, currency)}</div>
             <div class="stat-label">Net Revenue (after returns)</div>
           </div>
-          <div class="stat-card clickable" onclick="DashboardPage.showDetail('Outstanding Balances', DashboardPage.getOutstandingDetailHtml)" title="Click for details">
+          <div class="stat-card clickable" onclick="DashboardPage.showDetail('Remaining Balances', DashboardPage.getOutstandingDetailHtml)" title="Click for details">
             <div class="stat-icon red">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
                 <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
             </div>
             <div class="stat-value">${Formatters.formatCurrency(ledger.totalOutstanding, currency)}</div>
-            <div class="stat-label">Outstanding Balance</div>
-            <div class="stat-trend">${ledger.outstandingInvoices || 0} outstanding invoices</div>
+            <div class="stat-label">Remaining Balance</div>
+            <div class="stat-trend">${ledger.outstandingInvoices || 0} remaining invoices</div>
           </div>
           <div class="stat-card clickable" onclick="DashboardPage.showDetail('Payments Collected', DashboardPage.getCollectedDetailHtml)" title="Click for details">
             <div class="stat-icon green">
@@ -465,7 +507,7 @@ const DashboardPage = {
         </div>
         <div class="ledger-stat-card stat-danger">
           <div class="stat-value">${s.outstandingCount}</div>
-          <div class="stat-label">Outstanding</div>
+          <div class="stat-label">Remaining</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:12px;">
@@ -570,7 +612,7 @@ const DashboardPage = {
         Total Due: ${Formatters.formatCurrency(totalOutstanding, currency)} (${data.length} customers)
       </div>
       <table class="report-table">
-        <thead><tr><th>Customer</th><th>Phone</th><th>Invoices</th><th>Outstanding</th></tr></thead>
+        <thead><tr><th>Customer</th><th>Phone</th><th>Invoices</th><th>Remaining</th></tr></thead>
         <tbody>
           ${data.map(c => `
             <tr>
@@ -610,7 +652,7 @@ const DashboardPage = {
         </div>
         <div class="ledger-stat-card stat-danger">
           <div class="stat-value">${Formatters.formatCurrency(l.totalOutstanding, currency)}</div>
-          <div class="stat-label">Still Outstanding</div>
+          <div class="stat-label">Still Remaining</div>
         </div>
       </div>
     `;
@@ -746,6 +788,52 @@ const DashboardPage = {
         <button class="btn btn-primary btn-sm" onclick="Modal.close();App.navigate('ledgers')">View Sales</button>
       </div>
     `);
+  },
+
+  async showOldBalanceDetail() {
+    const body = '<div class="loading"><div class="spinner" style="width:24px;height:24px;"></div></div>';
+    const footer = `
+      <button class="btn btn-secondary" onclick="window.Modal.close()">Close</button>
+      <button class="btn btn-primary" onclick="Modal.close();App.navigate('old-balances')">Manage Old Balances</button>
+    `;
+    Modal.show({ title: 'Old Balances Summary', body, footer, size: 'md' });
+
+    try {
+      const result = await window.api.getOldBalanceSummary();
+      if (!result.success) throw new Error(result.error);
+      const d = result.data;
+      const currency = App.currency || 'USD';
+      const modalBody = document.querySelector('.modal-body');
+      if (modalBody) {
+        modalBody.innerHTML = `
+          <div class="ledger-stats-grid" style="grid-template-columns:repeat(2,1fr);">
+            <div class="ledger-stat-card stat-danger">
+              <div class="stat-value">${Formatters.formatCurrency(d.total_debit, currency)}</div>
+              <div class="stat-label">Total Old Debit</div>
+            </div>
+            <div class="ledger-stat-card stat-success">
+              <div class="stat-value">${Formatters.formatCurrency(d.total_credit, currency)}</div>
+              <div class="stat-label">Total Old Credit</div>
+            </div>
+            <div class="ledger-stat-card">
+              <div class="stat-value">${d.total_customers}</div>
+              <div class="stat-label">Customers with Old Balances</div>
+            </div>
+            <div class="ledger-stat-card">
+              <div class="stat-value">${d.total_records}</div>
+              <div class="stat-label">Total Records</div>
+            </div>
+          </div>
+          <p style="margin-top:12px;color:var(--text-secondary);font-size:13px;">
+            Old balances are pre-existing customer balances recorded before using this software.
+            They do not require any products - just a balance amount per customer.
+          </p>
+        `;
+      }
+    } catch(e) {
+      const modalBody = document.querySelector('.modal-body');
+      if (modalBody) modalBody.innerHTML = `<p style="color:var(--danger);">Error: ${e.message}</p>`;
+    }
   },
 
   escapeHtml(str) {

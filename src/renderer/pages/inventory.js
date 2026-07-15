@@ -70,6 +70,12 @@ const InventoryPage = {
             </svg>
             Print
           </button>
+          <button class="btn btn-secondary" onclick="InventoryPage.openCategoryReport()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+            </svg>
+            Category Report
+          </button>
         </div>
       </div>
       <!-- Tabs -->
@@ -1054,6 +1060,118 @@ const InventoryPage = {
         Toast.error('Print error: ' + err.message);
       }
     })();
+  },
+
+  async openCategoryReport() {
+    try {
+      // Load all products
+      const result = await window.api.getProducts({ limit: 5000 });
+      if (!result.success) {
+        Toast.error('Failed to load products.');
+        return;
+      }
+      const products = result.data.products || [];
+
+      const company = await this.getCompanyHeader();
+
+      // Get ALL system categories from the master list + any extra from products
+      const allProductCats = [...new Set(products.filter(p => p.category).map(p => p.category))];
+      const allCategories = [...new Set([...DEFAULT_CATEGORY_OPTIONS, ...allProductCats])].sort();
+
+      // For each category, calculate In Stock quantity only
+      let grandTotal = 0;
+      let rowsHtml = '';
+      let catIndex = 0;
+
+      for (const cat of allCategories) {
+        catIndex++;
+        const inStockQty = products
+          .filter(p => (p.category || 'Uncategorized') === cat && p.status === 'In Stock')
+          .reduce((sum, p) => sum + (p.quantity || 0), 0);
+
+        grandTotal += inStockQty;
+
+        const bgColor = catIndex % 2 === 0 ? '#f8fafc' : '#ffffff';
+        const qtyColor = inStockQty > 0 ? '#166534' : '#94a3b8';
+        const dotColor = inStockQty > 0 ? '#22c55e' : '#d1d5db';
+
+        rowsHtml += '<tr style="background:' + bgColor + ';">' +
+          '<td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:11px;">' + catIndex + '</td>' +
+          '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' +
+            '<div style="display:flex;align-items:center;gap:8px;">' +
+              '<span style="width:8px;height:8px;border-radius:50%;background:' + dotColor + ';display:inline-block;"></span>' +
+              '<strong style="font-size:13px;color:#1e293b;">' + this.escapeHtml(cat) + '</strong>' +
+            '</div>' +
+          '</td>' +
+          '<td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;font-weight:700;font-size:15px;color:' + qtyColor + ';">' + inStockQty + '</td>' +
+        '</tr>';
+      }
+
+      const dateStr = new Date().toLocaleDateString();
+      const timeStr = new Date().toLocaleTimeString();
+
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      if (!printWindow) {
+        Toast.error('Please allow pop-ups for printing.');
+        return;
+      }
+
+      printWindow.document.write('<!DOCTYPE html>' +
+      '<html><head><title>Stock Summary by Category</title>' +
+      '<style>' +
+        '@page { margin: 8mm; size: A4 portrait; }' +
+        '* { margin: 0; padding: 0; box-sizing: border-box; }' +
+        'body { font-family: Segoe UI, Arial, sans-serif; color: #1e293b; padding: 12px; background: #fff; font-size: 11px; }' +
+        '.print-header { text-align: center; margin-bottom: 14px; border-bottom: 2px solid #2563eb; padding-bottom: 8px; }' +
+        '.print-header h1 { font-size: 18px; color: #1e293b; }' +
+        '.print-header .sub { font-size: 10px; color: #64748b; }' +
+        '.print-footer { margin-top: 14px; text-align: center; font-size: 9px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 6px; }' +
+        '.print-actions { text-align: center; margin-bottom: 10px; }' +
+        '.print-actions button { padding: 7px 18px; margin: 0 5px; border: none; border-radius: 5px; cursor: pointer; font-size: 12px; }' +
+        '.btn-print { background: #2563eb; color: #fff; }' +
+        '.btn-pdf { background: #16a34a; color: #fff; }' +
+        'table { width: 100%; border-collapse: collapse; font-size: 11px; }' +
+        'th { background: #2563eb; color: #fff; padding: 8px 12px; text-align: left; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
+        'td { padding: 6px 12px; border: 1px solid #e2e8f0; color: #334155; }' +
+        '.summary-row { display: flex; gap: 16px; justify-content: center; margin: 14px 0; }' +
+        '.summary-item { padding: 10px 20px; background: #f1f5f9; border-radius: 8px; border: 1px solid #e2e8f0; text-align: center; min-width: 140px; }' +
+        '.summary-item .label { font-size: 9px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }' +
+        '.summary-item .value { font-size: 18px; font-weight: 700; color: #1e293b; margin-top: 4px; }' +
+        '.grand-row { background: #1e40af !important; color: #fff !important; font-weight: 700; font-size: 13px; }' +
+        '.grand-row td { color: #fff !important; border-color: #1e3a5f; padding: 10px 12px; }' +
+        '@media print { .print-actions { display: none; } body { padding: 0; } }' +
+      '</style></head><body>' +
+      '<div class="print-actions"><button class="btn-print" onclick="window.print()">Print</button><button class="btn-pdf" onclick="window.print()">Download PDF</button></div>' +
+      '<div class="print-header">' +
+        '<h1>' + this.escapeHtml(company.shopName) + '</h1>' +
+        (company.address ? '<p style="font-size:11px;color:#64748b;">' + this.escapeHtml(company.address) + '</p>' : '') +
+        '<div style="font-size:10px;color:#94a3b8;">' +
+          (company.phone ? 'Phone: ' + this.escapeHtml(company.phone) + ' | ' : '') +
+          (company.email ? 'Email: ' + this.escapeHtml(company.email) + ' | ' : '') +
+          'Printed: ' + dateStr + ' ' + timeStr +
+        '</div>' +
+        '<h1 style="font-size:16px;color:#475569;margin-top:6px;">Stock Summary by Category</h1>' +
+        '<div class="sub">In Stock quantity for each product category (0 = no stock)</div>' +
+      '</div>' +
+      '<div class="summary-row">' +
+        '<div class="summary-item"><div class="label">Total Categories</div><div class="value">' + allCategories.length + '</div></div>' +
+        '<div class="summary-item"><div class="label">Total In Stock Units</div><div class="value">' + grandTotal + '</div></div>' +
+        '<div class="summary-item"><div class="label">Categories with 0</div><div class="value">' + allCategories.filter(c => products.filter(p => (p.category || "Uncategorized") === c && p.status === "In Stock").reduce((s, p) => s + (p.quantity || 0), 0) === 0).length + '</div></div>' +
+      '</div>' +
+      '<table><thead><tr>' +
+        '<th style="width:40px;text-align:center;">#</th>' +
+        '<th style="text-align:left;">Category</th>' +
+        '<th style="width:120px;text-align:center;">In Stock Qty</th>' +
+      '</tr></thead><tbody>' +
+      rowsHtml +
+      '<tr class="grand-row"><td style="text-align:center;"></td><td style="font-weight:700;">GRAND TOTAL</td><td style="text-align:center;font-weight:800;font-size:16px;">' + grandTotal + '</td></tr>' +
+      '</tbody></table>' +
+      '<div class="print-footer"><p>Generated by Laptop Inventory Manager | ' + dateStr + ' ' + timeStr + '</p></div>' +
+      '</body></html>');
+      printWindow.document.close();
+    } catch (err) {
+      Toast.error('Category report error: ' + err.message);
+    }
   },
 
   escapeHtml(str) {

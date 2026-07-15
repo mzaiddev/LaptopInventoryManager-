@@ -12,7 +12,7 @@ const ReportsPage = {
       <div class="tab-bar">
         <button class="tab-item active" data-tab="overview" onclick="ReportsPage.switchTab('overview')">Overview</button>
         <button class="tab-item" data-tab="sales" onclick="ReportsPage.switchTab('sales')">Sales Report</button>
-        <button class="tab-item" data-tab="outstanding" onclick="ReportsPage.switchTab('outstanding')">Outstanding Dues</button>
+        <button class="tab-item" data-tab="outstanding" onclick="ReportsPage.switchTab('outstanding')">Remaining Dues</button>
         <button class="tab-item" data-tab="customers" onclick="ReportsPage.switchTab('customers')">Customer Report</button>
         <button class="tab-item" data-tab="damage" onclick="ReportsPage.switchTab('damage')">Damages</button>
       </div>
@@ -69,7 +69,7 @@ const ReportsPage = {
           </div>
           <div class="ledger-stat-card stat-danger">
             <div class="stat-value">${Formatters.formatCurrency(s.total_outstanding, currency)}</div>
-            <div class="stat-label">Outstanding</div>
+            <div class="stat-label">Remaining</div>
           </div>
           <div class="ledger-stat-card">
             <div class="stat-value">${s.active_customers}</div>
@@ -102,7 +102,7 @@ const ReportsPage = {
         </div>
         <div style="display:flex;gap:12px;margin-top:16px;">
           <button class="btn btn-primary" onclick="App.navigate('sales')">New Sale / Issue</button>
-          <button class="btn btn-secondary" onclick="ReportsPage.switchTab('outstanding')">View Outstanding</button>
+          <button class="btn btn-secondary" onclick="ReportsPage.switchTab('outstanding')">View Remaining Dues</button>
         </div>
       `;
     } catch (err) {
@@ -126,7 +126,7 @@ const ReportsPage = {
             <option value="">All Status</option>
             <option value="Paid">Paid</option>
             <option value="Partial">Partial</option>
-            <option value="Outstanding">Outstanding</option>
+            <option value="Outstanding">Remaining</option>
           </select>
         </div>
       </div>
@@ -168,7 +168,7 @@ const ReportsPage = {
         <div class="ledger-stats-grid" style="grid-template-columns:repeat(3,1fr);">
           <div class="ledger-stat-card"><div class="stat-value">${sales.length}</div><div class="stat-label">Transactions</div></div>
           <div class="ledger-stat-card stat-success"><div class="stat-value">${Formatters.formatCurrency(totalAmount, currency)}</div><div class="stat-label">Total Amount</div></div>
-          <div class="ledger-stat-card stat-danger"><div class="stat-value">${Formatters.formatCurrency(totalRemaining, currency)}</div><div class="stat-label">Outstanding</div></div>
+          <div class="ledger-stat-card stat-danger"><div class="stat-value">${Formatters.formatCurrency(totalRemaining, currency)}</div><div class="stat-label">Remaining</div></div>
         </div>
         <div class="report-card">
           <table class="report-table">
@@ -276,7 +276,7 @@ const ReportsPage = {
           </tfoot>
         </table>
         <div style="margin-top:10px;font-size:11px;color:#64748b;">
-          <strong>Summary:</strong> ${sales.length} transactions | Total: ${currencyFmt(totalAmount)} | Collected: ${currencyFmt(totalPaid)} | Outstanding: ${currencyFmt(totalRemaining)}
+          <strong>Summary:</strong> ${sales.length} transactions | Total: ${currencyFmt(totalAmount)} | Collected: ${currencyFmt(totalPaid)} | Remaining: ${currencyFmt(totalRemaining)}
         </div>`;
       }
 
@@ -285,13 +285,13 @@ const ReportsPage = {
         const data = result.success ? (result.data || []) : [];
         if (data.length === 0) { Toast.warning('No outstanding dues.'); printWindow.close(); return; }
         const totalOutstanding = data.reduce((sum, c) => sum + c.total_outstanding, 0);
-        title = 'Outstanding Dues Report';
+        title = 'Remaining Dues Report';
         
         content = `
-        <div style="margin-bottom:10px;font-size:14px;font-weight:700;color:#ef4444;">Total Outstanding: ${currencyFmt(totalOutstanding)}</div>
+        <div style="margin-bottom:10px;font-size:14px;font-weight:700;color:#ef4444;">Total Remaining: ${currencyFmt(totalOutstanding)}</div>
         <table>
           <thead><tr>
-            <th>Customer</th><th>Phone</th><th>Invoices</th><th>Total Sales</th><th>Total Paid</th><th>Outstanding</th>
+            <th>Customer</th><th>Phone</th><th>Invoices</th><th>Total Sales</th><th>Total Paid</th><th>Remaining</th>
           </tr></thead>
           <tbody>
             ${data.map(c => `<tr>
@@ -327,7 +327,7 @@ const ReportsPage = {
         content = `
         <table>
           <thead><tr>
-            <th>Customer</th><th>Phone</th><th>Total Sales</th><th>Total Paid</th><th>Outstanding</th>
+            <th>Customer</th><th>Phone</th><th>Total Sales</th><th>Total Paid</th><th>Remaining</th>
           </tr></thead>
           <tbody>
             ${withBalances.map(c => `<tr>
@@ -441,7 +441,7 @@ const ReportsPage = {
       if (data.length === 0) {
         container.innerHTML = `
           <div class="empty-state">
-            <h3>No Outstanding Dues</h3>
+            <h3>No Remaining Dues</h3>
             <p>All customers have cleared their balances.</p>
           </div>
         `;
@@ -454,7 +454,7 @@ const ReportsPage = {
       container.innerHTML = `
         <div class="report-card">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-            <h3 style="margin:0;">Outstanding Dues Report</h3>
+            <h3 style="margin:0;">Remaining Dues Report</h3>
             <div style="font-size:18px;font-weight:700;color:var(--danger);">Total Due: ${Formatters.formatCurrency(totalOutstanding, currency)}</div>
           </div>
           <table class="report-table">
@@ -465,7 +465,7 @@ const ReportsPage = {
                 <th>Invoices</th>
                 <th>Total Sales</th>
                 <th>Total Paid</th>
-                <th>Outstanding</th>
+                <th>Remaining</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -534,7 +534,7 @@ const ReportsPage = {
                 <th>Phone</th>
                 <th>Total Sales</th>
                 <th>Total Paid</th>
-                <th>Outstanding</th>
+                <th>Remaining</th>
               </tr>
             </thead>
             <tbody>

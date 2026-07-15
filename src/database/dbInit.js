@@ -29,6 +29,9 @@ function initDatabase() {
   // Remove credit_limit and opening_balance from customers
   migrateRemoveCustomerFields();
 
+  // Add old_balances table
+  migrateAddOldBalancesTable();
+
   // Remove ledgers table and migrate data to sale_issues
   migrateRemoveLedgersTable();
 
@@ -212,6 +215,18 @@ function createTables() {
       created_at DATETIME DEFAULT (datetime('now','localtime')),
       updated_at DATETIME DEFAULT (datetime('now','localtime')),
       FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
+    );
+
+    -- Old Balances table (for pre-existing customer balances before using the software)
+    CREATE TABLE IF NOT EXISTS old_balances (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_id INTEGER NOT NULL,
+      amount REAL NOT NULL DEFAULT 0,
+      balance_type TEXT DEFAULT 'Debit' CHECK(balance_type IN ('Debit','Credit')),
+      notes TEXT DEFAULT '',
+      created_at DATETIME DEFAULT (datetime('now','localtime')),
+      updated_at DATETIME DEFAULT (datetime('now','localtime')),
+      FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
     );
   `);
 }
@@ -715,6 +730,89 @@ function migrateRemoveLedgersTable() {
   }
 }
 
+function migrateAddOldBalancesTable() {
+  try {
+    // Check if old_balances table exists
+    const tableExists = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='old_balances'"
+    ).get();
+    
+    if (tableExists) {
+      // Table exists - verify ALL required columns exist
+      const cols = db.prepare("PRAGMA table_info(old_balances)").all();
+      const colNames = cols.map(c => c.name);
+      const requiredCols = ['id', 'customer_id', 'amount', 'balance_type', 'notes', 'created_at', 'updated_at'];
+      const allColsExist = requiredCols.every(col => colNames.includes(col));
+      
+      if (allColsExist) return; // Table already has correct schema
+      
+      // Table exists but missing some columns - drop and recreate
+      console.log('Migrating database: recreating old_balances table with correct columns');
+      db.transaction(() => {
+        db.pragma("foreign_keys = OFF");
+        
+        // Create new table with correct schema
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS old_balances_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_id INTEGER NOT NULL,
+            amount REAL NOT NULL DEFAULT 0,
+            balance_type TEXT DEFAULT 'Debit' CHECK(balance_type IN ('Debit','Credit')),
+            notes TEXT DEFAULT '',
+            created_at DATETIME DEFAULT (datetime('now','localtime')),
+            updated_at DATETIME DEFAULT (datetime('now','localtime')),
+            FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+          );
+        `);
+        
+        // Copy data from old table (only copy columns that exist in old table)
+        const safeInsertCols = ['id', 'customer_id'];
+        if (colNames.includes('amount')) safeInsertCols.push('amount');
+        if (colNames.includes('notes')) safeInsertCols.push('notes');
+        if (colNames.includes('created_at')) safeInsertCols.push('created_at');
+        if (colNames.includes('updated_at')) safeInsertCols.push('updated_at');
+        
+        db.exec(`
+          INSERT INTO old_balances_new (${safeInsertCols.join(', ')})
+          SELECT ${safeInsertCols.join(', ')} FROM old_balances;
+        `);
+        
+        // Drop old table and rename
+        db.exec("DROP TABLE old_balances;");
+        db.exec("ALTER TABLE old_balances_new RENAME TO old_balances;");
+        
+        db.pragma("foreign_keys = ON");
+      })();
+      
+      console.log('Migration completed: old_balances table recreated with all required columns');
+      return;
+    }
+
+    console.log('Migrating database: adding old_balances table');
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS old_balances (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER NOT NULL,
+        amount REAL NOT NULL DEFAULT 0,
+        balance_type TEXT DEFAULT 'Debit' CHECK(balance_type IN ('Debit','Credit')),
+        notes TEXT DEFAULT '',
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        updated_at DATETIME DEFAULT (datetime('now','localtime')),
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+      );
+    `);
+
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_old_balances_customer ON old_balances(customer_id);
+    `);
+
+    console.log('Migration completed: old_balances table added');
+  } catch (err) {
+    console.error('Error adding old_balances table:', err);
+  }
+}
+
 function migrateRemoveBrandIfNeeded() {
   try {
     const row = db.prepare("PRAGMA table_info(products)").all();
@@ -821,6 +919,9 @@ function createIndexes() {
     CREATE INDEX IF NOT EXISTS idx_damage_records_product ON damage_records(product_id);
     CREATE INDEX IF NOT EXISTS idx_damage_records_date ON damage_records(recorded_date);
     CREATE INDEX IF NOT EXISTS idx_damage_records_type ON damage_records(damage_type);
+
+    -- Old balances indexes
+    CREATE INDEX IF NOT EXISTS idx_old_balances_customer ON old_balances(customer_id);
   `);
 }
 

@@ -4,6 +4,7 @@ const dashboardService = require("../services/dashboardService");
 const backupService = require("../services/backupService");
 const settingsService = require("../services/settingsService");
 const ledgerService = require("../services/ledgerService");
+const oldBalanceService = require("../services/oldBalanceService");
 const fs = require("fs");
 
 function registerIpcHandlers() {
@@ -455,6 +456,75 @@ function registerIpcHandlers() {
   ipcMain.handle("ledger:getOutstandingReport", async () => {
     try {
       return { success: true, data: ledgerService.getOutstandingReport() };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // ==================== OLD BALANCE MODULE IPC HANDLERS ====================
+
+  ipcMain.handle("oldBalance:getAll", async (event, filters) => {
+    try {
+      return { success: true, data: oldBalanceService.getAllOldBalances(filters) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("oldBalance:getById", async (event, id) => {
+    try {
+      return { success: true, data: oldBalanceService.getOldBalanceById(id) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("oldBalance:getByCustomer", async (event, customerId) => {
+    try {
+      return { success: true, data: oldBalanceService.getCustomerOldBalances(customerId) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("oldBalance:getCustomerTotal", async (event, customerId) => {
+    try {
+      return { success: true, data: oldBalanceService.getCustomerOldBalanceTotal(customerId) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("oldBalance:getSummary", async () => {
+    try {
+      return { success: true, data: oldBalanceService.getAllOldBalancesSummary() };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("oldBalance:add", async (event, data) => {
+    try {
+      const result = oldBalanceService.addOldBalance(data);
+      return { success: true, data: result };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("oldBalance:update", async (event, id, data) => {
+    try {
+      oldBalanceService.updateOldBalance(id, data);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("oldBalance:delete", async (event, id) => {
+    try {
+      oldBalanceService.deleteOldBalance(id);
+      return { success: true };
     } catch (err) {
       return { success: false, error: err.message };
     }

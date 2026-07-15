@@ -79,4 +79,14 @@ contextBridge.exposeInMainWorld("api", {
   getSalesSummary: () => ipcRenderer.invoke("sale:getSalesSummary"),
   getSalesReport: (filters) => ipcRenderer.invoke("ledger:getSalesReport", filters),
   getOutstandingReport: () => ipcRenderer.invoke("ledger:getOutstandingReport"),
+
+  // Old Balance Management
+  getAllOldBalances: (filters) => ipcRenderer.invoke("oldBalance:getAll", filters),
+  getOldBalanceById: (id) => ipcRenderer.invoke("oldBalance:getById", id),
+  getOldBalancesByCustomer: (customerId) => ipcRenderer.invoke("oldBalance:getByCustomer", customerId),
+  getCustomerOldBalanceTotal: (customerId) => ipcRenderer.invoke("oldBalance:getCustomerTotal", customerId),
+  getOldBalanceSummary: () => ipcRenderer.invoke("oldBalance:getSummary"),
+  addOldBalance: (data) => ipcRenderer.invoke("oldBalance:add", data),
+  updateOldBalance: (id, data) => ipcRenderer.invoke("oldBalance:update", id, data),
+  deleteOldBalance: (id) => ipcRenderer.invoke("oldBalance:delete", id),
 });
