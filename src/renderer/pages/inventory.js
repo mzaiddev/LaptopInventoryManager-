@@ -64,11 +64,11 @@ const InventoryPage = {
             </svg>
             Record Damage
           </button>
-          <button class="btn btn-secondary" onclick="InventoryPage.printInventory('all')">
+          <button class="btn btn-secondary" onclick="InventoryPage.openPrintDialog()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
               <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
             </svg>
-            Print All
+            Print
           </button>
         </div>
       </div>
@@ -953,14 +953,57 @@ const InventoryPage = {
     );
   },
 
-  async openPrintDialog(title, htmlContent) {
-    const printWindow = window.open('', '_blank', 'width=1100,height=800');
-    if (!printWindow) {
-      Toast.error('Please allow pop-ups for printing.');
-      return;
+  async openPrintDialog() {
+    try {
+      // Load all products for the print dialog
+      const result = await window.api.getProducts({ limit: 5000 });
+      if (!result.success) {
+        Toast.error('Failed to load products.');
+        return;
+      }
+      const products = result.data.products || [];
+      if (products.length === 0) {
+        Toast.warning('No products to print.');
+        return;
+      }
+
+      const currency = App.currency || 'PKR';
+      const totalValue = products.reduce((s, p) => s + ((p.purchase_price || 0) * p.quantity), 0);
+      const totalQty = products.reduce((s, p) => s + p.quantity, 0);
+
+      // Get ALL categories - merge default options with actual data categories
+      const allCategories = [...new Set([...DEFAULT_CATEGORY_OPTIONS, ...products.map(p => p.category).filter(Boolean)])];
+
+      PrintService.showPrintDialog({
+        title: 'Inventory Report',
+        data: products,
+        columns: [
+          { field: 'product_name', label: 'Product Name', width: '160px' },
+          { field: 'category', label: 'Category', width: '90px' },
+          { field: 'model', label: 'Model', width: '100px' },
+          { field: 'serial_number', label: 'Serial No.', width: '110px' },
+          { field: 'quantity', label: 'Qty', width: '50px', align: 'center' },
+          { field: 'purchase_price', label: 'Purchase Price', width: '90px', align: 'right', format: 'currency' },
+          { field: 'status', label: 'Status', width: '70px', format: 'status' },
+          { field: 'condition', label: 'Condition', width: '70px', format: 'condition' },
+          { field: 'storage_location', label: 'Location', width: '80px' },
+          { field: 'supplier', label: 'Supplier', width: '90px' },
+        ],
+        filters: {
+          categories: allCategories,
+          categoryLabel: 'Category'
+        },
+        landscape: false,
+        summaryItems: [
+          { label: 'Total Products', value: products.length },
+          { label: 'Total Quantity', value: totalQty },
+          { label: 'Total Value', value: Formatters.formatCurrency(totalValue, currency) },
+        ],
+        getCompanyHeader: () => this.getCompanyHeader()
+      });
+    } catch (err) {
+      Toast.error('Print error: ' + err.message);
     }
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
   },
 
   async getCompanyHeader() {
@@ -977,130 +1020,40 @@ const InventoryPage = {
     } catch(e) {}
     return { shopName: 'Laptop Inventory Manager', address: '', phone: '', email: '' };
   },
-
-  buildPrintHtml(title, bodyContent, options = {}) {
-    const { landscape, dateStr } = options;
-    const dStr = dateStr || new Date().toLocaleDateString();
-    const orientation = landscape ? 'landscape' : 'portrait';
-    return `
-<html>
-<head><title>${this.escapeHtml(title)}</title>
-<style>
-  @page { margin: 12mm; size: A4 ${orientation}; }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; padding: 15px; background: #fff; font-size: 12px; }
-  .print-header { text-align: center; margin-bottom: 16px; border-bottom: 2px solid #2563eb; padding-bottom: 10px; }
-  .print-header h1 { font-size: 18px; color: #1e293b; margin-bottom: 2px; }
-  .print-header .sub { font-size: 11px; color: #64748b; }
-  .print-footer { margin-top: 16px; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
-  table { width: 100%; border-collapse: collapse; font-size: 10px; }
-  th { background: #2563eb; color: #fff; padding: 5px 7px; text-align: left; font-weight: 600; white-space: nowrap; font-size: 10px; }
-  td { padding: 4px 7px; border-bottom: 1px solid #e2e8f0; color: #334155; }
-  tr:nth-child(even) { background: #f8fafc; }
-  .summary-row { display: flex; gap: 14px; margin-bottom: 12px; flex-wrap: wrap; }
-  .summary-item { padding: 5px 12px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0; }
-  .summary-item .label { font-size: 9px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
-  .summary-item .value { font-size: 14px; font-weight: 700; color: #1e293b; }
-  .badge-p { padding: 2px 6px; border-radius: 10px; font-size: 8px; font-weight: 500; display: inline-block; }
-  .b-instock { background: #dcfce7; color: #166534; }
-  .b-reserved { background: #fef3c7; color: #92400e; }
-  .b-sold { background: #dbeafe; color: #1e40af; }
-  .b-damaged { background: #fee2e2; color: #991b1b; }
-  .b-returned { background: #fce7f3; color: #9d174d; }
-  .b-lost { background: #f3f4f6; color: #374151; }
-  .print-actions { text-align: center; margin-bottom: 12px; }
-  .print-actions button { padding: 8px 20px; margin: 0 6px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
-  .btn-print { background: #2563eb; color: #fff; }
-  .btn-pdf { background: #16a34a; color: #fff; }
-  @media print { .print-actions { display: none; } }
-</style>
-</head>
-<body>
-  <div class="print-actions">
-    <button class="btn-print" onclick="window.print()">🖨️ Print</button>
-    <button class="btn-pdf" onclick="window.print()">📥 Download PDF</button>
-  </div>
-  <div class="print-header" id="print-header-el">
-    <h1>${this.escapeHtml(title)}</h1>
-    <div class="sub">${dStr}</div>
-  </div>
-  ${bodyContent}
-  <div class="print-footer">
-    <p>Generated by Laptop Inventory Manager | ${dStr}</p>
-  </div>
-</body>
-</html>`;
-  },
-
-  async printInventory(mode) {
-    try {
-      const company = await this.getCompanyHeader();
-      const title = `${company.shopName} - Complete Inventory Report`;
-      const dateStr = new Date().toLocaleDateString();
-      
-      let products;
-      if (mode === 'single' && this._printSingleProductId) {
-        const result = await window.api.getProduct(this._printSingleProductId);
-        if (!result.success || !result.data) { Toast.error('Product not found.'); return; }
-        products = [result.data];
-      } else {
-        const result = await window.api.getProducts({ limit: 5000 });
-        if (!result.success) { Toast.error('Failed to load products.'); return; }
-        products = result.data.products || [];
-      }
-
-      if (products.length === 0) {
-        Toast.warning('No products to print.');
-        return;
-      }
-
-      const currency = App.currency || 'PKR';
-      const currencyFmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: currency });
-      const totalValue = products.reduce((s, p) => s + ((p.purchase_price || 0) * p.quantity), 0);
-      const damagedValue = products.reduce((s, p) => s + (p.status === 'Damaged' ? ((p.purchase_price || 0) * p.quantity) : 0), 0);
-
-      const summaryHtml = mode !== 'single' ? `
-      <div class="summary-row">
-        <div class="summary-item"><div class="label">Products</div><div class="value">${products.length}</div></div>
-        <div class="summary-item"><div class="label">Total Qty</div><div class="value">${products.reduce((s,p) => s + p.quantity, 0)}</div></div>
-        <div class="summary-item"><div class="label">Total Value</div><div class="value">${currencyFmt.format(totalValue)}</div></div>
-        <div class="summary-item"><div class="label">Damaged Value</div><div class="value" style="color:#ef4444;">${currencyFmt.format(damagedValue)}</div></div>
-      </div>` : '';
-
-      const tableHtml = `
-      <table>
-        <thead><tr>
-          <th>#</th><th>Product Name</th><th>Category</th><th>Model</th><th>Serial No.</th><th>Qty</th><th>Status</th><th>Condition</th><th>Location</th><th>Purchase Price</th>
-        </tr></thead>
-        <tbody>
-          ${products.map((p, i) => {
-            const statusClass = p.status === 'In Stock' ? 'b-instock' : p.status === 'Damaged' ? 'b-damaged' : p.status === 'Reserved' ? 'b-reserved' : p.status === 'Sold' ? 'b-sold' : p.status === 'Returned' ? 'b-returned' : 'b-lost';
-            return `<tr>
-              <td>${i + 1}</td>
-              <td><strong>${this.escapeHtml(p.product_name)}</strong></td>
-              <td>${this.escapeHtml(p.category)}</td>
-              <td>${this.escapeHtml(p.model) || '-'}</td>
-              <td>${this.escapeHtml(p.serial_number) || '-'}</td>
-              <td style="text-align:center;font-weight:600;">${p.quantity}</td>
-              <td><span class="badge-p ${statusClass}">${p.status}</span></td>
-              <td>${this.escapeHtml(p.condition)}</td>
-              <td>${this.escapeHtml(p.storage_location) || '-'}</td>
-              <td style="text-align:right;">${currencyFmt.format(p.purchase_price || 0)}</td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>`;
-
-      const html = this.buildPrintHtml(title, summaryHtml + tableHtml, { landscape: true, dateStr });
-      this.openPrintDialog(title, html);
-    } catch (err) {
-      Toast.error('Print error: ' + err.message);
-    }
-  },
   
   printSingleProduct(productId) {
-    this._printSingleProductId = productId;
-    this.printInventory('single');
+    // Quick print a single product directly without dialog
+    (async () => {
+      try {
+        const result = await window.api.getProduct(productId);
+        if (!result.success || !result.data) {
+          Toast.error('Product not found.');
+          return;
+        }
+        const product = result.data;
+        const company = await this.getCompanyHeader();
+        
+        PrintService.quickPrint(
+          `Product - ${product.product_name}`,
+          [product],
+          [
+            { field: 'product_name', label: 'Product Name' },
+            { field: 'category', label: 'Category' },
+            { field: 'model', label: 'Model' },
+            { field: 'serial_number', label: 'Serial No.' },
+            { field: 'quantity', label: 'Qty', align: 'center' },
+            { field: 'purchase_price', label: 'Purchase Price', align: 'right', format: 'currency' },
+            { field: 'status', label: 'Status', format: 'status' },
+            { field: 'condition', label: 'Condition', format: 'condition' },
+            { field: 'storage_location', label: 'Location' },
+            { field: 'supplier', label: 'Supplier' },
+          ],
+          { getCompanyHeader: () => Promise.resolve(company), landscape: false }
+        );
+      } catch (err) {
+        Toast.error('Print error: ' + err.message);
+      }
+    })();
   },
 
   escapeHtml(str) {

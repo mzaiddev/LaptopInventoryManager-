@@ -21,12 +21,20 @@ const LedgersPage = {
           <h1>Sales & Ledgers</h1>
           <p>View all sales with their payment history</p>
         </div>
-        <button class="btn btn-primary" onclick="App.navigate('sales')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-          New Sale / Issue
-        </button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-secondary" onclick="LedgersPage.openPrintDialog()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+              <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+            </svg>
+            Print
+          </button>
+          <button class="btn btn-primary" onclick="App.navigate('sales')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            New Sale / Issue
+          </button>
+        </div>
       </div>
       <div class="card">
         <div class="card-body">
@@ -409,6 +417,87 @@ const LedgersPage = {
     }, "sm");
   },
 
+  async openPrintDialog() {
+    try {
+      // Load all sales for printing with a large limit
+      const result = await window.api.getAllSales({ limit: 5000 });
+      if (!result.success) {
+        Toast.error('Failed to load sales data.');
+        return;
+      }
+      const sales = result.data?.sales || [];
+      if (sales.length === 0) {
+        Toast.warning('No sales to print.');
+        return;
+      }
+
+      const currency = App.currency || 'PKR';
+      const totalAmount = sales.reduce((s, l) => s + (l.total_amount || 0), 0);
+      const totalPaid = sales.reduce((s, l) => s + (l.paid_amount || 0), 0);
+      const totalRemaining = sales.reduce((s, l) => s + (l.remaining_amount || 0), 0);
+      const paidCount = sales.filter(l => l.status === 'Paid').length;
+      const outstandingCount = sales.filter(l => l.status === 'Outstanding').length;
+      const partialCount = sales.filter(l => l.status === 'Partial').length;
+
+      // Build a combined data array with payment info included
+      const printData = sales.map(sale => {
+        // Build payment summary string
+        let paymentSummary = '';
+        if (sale.payments && sale.payments.length > 0) {
+          paymentSummary = sale.payments.map(p => 
+            `${Formatters.formatDate(p.payment_date)}: ${Formatters.formatCurrency(p.amount, currency)} (${p.payment_method})`
+          ).join('; ');
+        } else {
+          paymentSummary = 'No payments';
+        }
+        
+        return {
+          ...sale,
+          category: sale.ledger_type, // Map ledger_type to category for filter
+          payment_summary: paymentSummary,
+          payment_count: (sale.payments || []).length,
+          display_status: sale.status,
+          display_type: `${sale.ledger_type} (${sale.transaction_type})`,
+        };
+      });
+
+      PrintService.showPrintDialog({
+        title: 'Sales & Ledgers Report',
+        data: printData,
+        columns: [
+          { field: 'sale_reference', label: 'Sale Ref', width: '100px' },
+          { field: 'customer_name', label: 'Customer', width: '120px' },
+          { field: 'transaction_date', label: 'Date', width: '70px', format: 'date' },
+          { field: 'display_type', label: 'Type', width: '80px' },
+          { field: 'total_amount', label: 'Total', width: '70px', align: 'right', format: 'currency' },
+          { field: 'paid_amount', label: 'Paid', width: '70px', align: 'right', format: 'currency' },
+          { field: 'remaining_amount', label: 'Remaining', width: '70px', align: 'right', format: 'currency' },
+          { field: 'display_status', label: 'Status', width: '60px' },
+          { field: 'payment_count', label: 'Payments', width: '50px', align: 'center' },
+          { field: 'items_summary', label: 'Items', width: '120px' },
+        ],
+        filters: {
+          categories: ['Cash', 'Loan'],
+          categoryLabel: 'Ledger Type'
+        },
+        landscape: false,
+        subtitle: 'With full payment history',
+        summaryItems: [
+          { label: 'Total Sales', value: sales.length },
+          { label: 'Paid', value: paidCount },
+          { label: 'Partial', value: partialCount },
+          { label: 'Outstanding', value: outstandingCount },
+          { label: 'Total Amount', value: Formatters.formatCurrency(totalAmount, currency) },
+          { label: 'Total Paid', value: Formatters.formatCurrency(totalPaid, currency) },
+          { label: 'Total Due', value: Formatters.formatCurrency(totalRemaining, currency) },
+        ],
+        getCompanyHeader: () => this.getCompanyHeader()
+      });
+    } catch (err) {
+      Toast.error('Print error: ' + err.message);
+    }
+  },
+
   async printInvoice(saleId) {
     try {
       // Load company info
@@ -505,6 +594,21 @@ const LedgersPage = {
     } catch (err) {
       Toast.error(err.message);
     }
+  },
+
+  async getCompanyHeader() {
+    try {
+      const result = await window.api.getSettings();
+      if (result.success) {
+        return {
+          shopName: result.data.shop_name || 'Laptop Inventory Manager',
+          address: result.data.shop_address || '',
+          phone: result.data.phone_number || '',
+          email: result.data.email || ''
+        };
+      }
+    } catch(e) {}
+    return { shopName: 'Laptop Inventory Manager', address: '', phone: '', email: '' };
   },
 
   escapeHtml(str) {
