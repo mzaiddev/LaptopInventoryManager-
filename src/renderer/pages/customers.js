@@ -109,6 +109,9 @@ const CustomersPage = {
                       <button class="btn btn-sm btn-warning" onclick="CustomersPage.showCustomerStatement(${c.id})" title="View Statement">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                       </button>
+                      <button class="btn btn-sm btn-danger" onclick="CustomersPage.deleteCustomer(${c.id}, '${this.escapeHtml(c.customer_name)}')" title="Delete">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -719,6 +722,26 @@ const CustomersPage = {
     };
   },
 
+  deleteCustomer(id, name) {
+    Modal.showConfirm(
+      'Delete Customer',
+      'Are you sure you want to delete "' + name + '"? This will permanently delete the customer and ALL their data (sales, returns, old balances, payments). Stock will be restored. This action cannot be undone.',
+      async () => {
+        try {
+          const result = await window.api.deleteCustomer(id);
+          if (result.success) {
+            Toast.success('Customer deleted successfully.');
+            this.loadCustomers();
+          } else {
+            Toast.error(result.error || 'Failed to delete customer.');
+          }
+        } catch (err) {
+          Toast.error('Failed to delete customer: ' + err.message);
+        }
+      }
+    );
+  },
+
   escapeHtml(str) {
     if (!str) return "";
     const div = document.createElement("div");
@@ -749,6 +772,7 @@ const CustomersPage = {
           total_paid: balance.total_paid || 0,
           outstanding: balance.total_outstanding || 0,
           old_balance: balance.old_balance_net || 0,
+          total_due: (balance.total_outstanding || 0) + (balance.old_balance_net || 0),
           sales_count: sales.length,
         };
       });
@@ -777,6 +801,7 @@ const CustomersPage = {
           { field: 'outstanding', label: 'Remaining', width: '70px', align: 'right', format: 'currency' },
           { field: 'old_balance', label: 'Old Balance', width: '70px', align: 'right', format: 'currency' },
           { field: 'sales_count', label: 'Transactions', width: '50px', align: 'center' },
+          { field: 'total_due', label: 'Total Due', width: '70px', align: 'right', format: 'currency' },
         ],
         filters: {
           categories: ['Active', 'Inactive'],

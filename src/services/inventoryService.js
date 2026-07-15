@@ -217,7 +217,21 @@ class InventoryService {
 
   deleteProduct(id) {
     const db = getDatabase();
-    db.prepare("DELETE FROM products WHERE id = ?").run(id);
+    
+    return db.transaction(() => {
+      // First delete all related records that have FK constraints
+      // 1. Delete damage records for this product
+      db.prepare("DELETE FROM damage_records WHERE product_id = ?").run(id);
+      // 2. Delete inspection notes
+      db.prepare("DELETE FROM inspection_notes WHERE product_id = ?").run(id);
+      // 3. Delete sale issue items (removes product from sales records)
+      db.prepare("DELETE FROM sale_issue_items WHERE product_id = ?").run(id);
+      // 4. Delete return items
+      db.prepare("DELETE FROM return_items WHERE product_id = ?").run(id);
+      // 5. Now delete the product itself
+      db.prepare("DELETE FROM products WHERE id = ?").run(id);
+    })();
+    
     return { success: true };
   }
 

@@ -113,16 +113,48 @@ class LedgerService {
 
   deleteCustomer(id) {
     const db = getDatabase();
-    // Check if customer has any transactions
-    const hasTransactions = db
-      .prepare(
-        "SELECT COUNT(*) as cnt FROM sale_issues WHERE customer_id = ?",
-      )
-      .get(id);
-    if (hasTransactions?.cnt > 0) {
-      throw new Error("Cannot delete customer with existing transactions. Mark as inactive instead.");
-    }
-    db.prepare("DELETE FROM customers WHERE id = ?").run(id);
+    
+    return db.transaction(() => {
+      // 1. Delete old balances (CASCADE FK, so this is safe)
+      db.prepare("DELETE FROM old_balances WHERE customer_id = ?").run(id);
+      
+      // 2. Restore stock for all items in this customer's sales, then delete sales
+      const sales = db.prepare("SELECT id FROM sale_issues WHERE customer_id = ?").all(id);
+      const restoreItemStock = db.prepare(
+        "UPDATE products SET quantity = quantity + ?, status = CASE WHEN status = 'Sold' THEN 'In Stock' ELSE status END, updated_at = datetime('now','localtime') WHERE id = ?"
+      );
+      const deletePayments = db.prepare("DELETE FROM payments WHERE sale_issue_id = ?");
+      const deleteSaleItems = db.prepare("DELETE FROM sale_issue_items WHERE sale_issue_id = ?");
+      const deleteSale = db.prepare("DELETE FROM sale_issues WHERE id = ?");
+      
+      for (const sale of sales) {
+        const items = db.prepare("SELECT product_id, quantity FROM sale_issue_items WHERE sale_issue_id = ?").all(sale.id);
+        for (const item of items) {
+          restoreItemStock.run(item.quantity, item.product_id);
+        }
+        deletePayments.run(sale.id);
+        deleteSaleItems.run(sale.id);
+        deleteSale.run(sale.id);
+      }
+      
+      // 3. Before deleting returns, deduct the stock that was restored by them
+      const returns = db.prepare("SELECT id FROM returns WHERE customer_id = ?").all(id);
+      const deductReturnStock = db.prepare(
+        "UPDATE products SET quantity = MAX(0, quantity - ?), updated_at = datetime('now','localtime') WHERE id = ?"
+      );
+      for (const ret of returns) {
+        const retItems = db.prepare("SELECT product_id, quantity FROM return_items WHERE return_id = ?").all(ret.id);
+        for (const item of retItems) {
+          deductReturnStock.run(item.quantity, item.product_id);
+        }
+      }
+      // Delete customer's returns (cascades to return_items)
+      db.prepare("DELETE FROM returns WHERE customer_id = ?").run(id);
+      
+      // 4. Now delete the customer itself
+      db.prepare("DELETE FROM customers WHERE id = ?").run(id);
+    })();
+    
     return { success: true };
   }
 
