@@ -24,19 +24,26 @@ const PrintService = {
    * @param {Function} options.getCompanyHeader - Function to get company info
    */
   async showPrintDialog(options) {
-    const company = options.getCompanyHeader ? await options.getCompanyHeader() : { shopName: 'Laptop Inventory Manager', address: '', phone: '', email: '' };
-    
+    const company = options.getCompanyHeader
+      ? await options.getCompanyHeader()
+      : {
+          shopName: "Laptop Inventory Manager",
+          address: "",
+          phone: "",
+          email: "",
+        };
+
     // Store the options on the PrintService instance for later use
     this._currentPrintOptions = options;
     this._currentPrintCompany = company;
-    
+
     // Build the filter/selection dialog HTML
     const dialogHtml = this.buildSelectionDialog(options, company);
-    
+
     Modal.show({
       title: `🖨️ Print ${options.title}`,
       body: dialogHtml,
-      size: 'lg',
+      size: "lg",
       footer: `
         <button class="btn btn-secondary" onclick="window.Modal.close(); PrintService.clearPrintOptions()">Cancel</button>
         <button class="btn btn-primary" onclick="PrintService.executePrint()">
@@ -45,7 +52,7 @@ const PrintService = {
           </svg>
           Print Selected
         </button>
-      `
+      `,
     });
 
     // Initialize category filter after modal is shown
@@ -59,57 +66,42 @@ const PrintService = {
 
   buildSelectionDialog(options, company) {
     const { data, columns, filters } = options;
-    
+
     // Build print options section (for sales printing)
-    let printOptionsSection = '';
-    if (options.showPrintOptions) {
-      printOptionsSection = `
-        <div class="print-options-section" style="margin-bottom:16px;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;">
-          <label style="font-weight:600;font-size:13px;color:#374151;display:block;margin-bottom:8px;">
-            Print Options:
-          </label>
-          <div style="display:flex;flex-wrap:wrap;gap:16px;">
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;cursor:pointer;">
-              <input type="checkbox" id="print-include-customer" ${options.includeCustomer ? 'checked' : ''} onchange="PrintService.updateSelectionCount()">
-              <span>Include Customer Details</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;cursor:pointer;">
-              <input type="checkbox" id="print-include-sales" ${options.includeSales ? '' : ''} onchange="PrintService.updateSelectionCount()">
-              <span>Include Related Sales</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;cursor:pointer;">
-              <input type="checkbox" id="print-include-payment-history" ${options.includePaymentHistory ? '' : ''} onchange="PrintService.updateSelectionCount()">
-              <span>Include Payment History</span>
-            </label>
-          </div>
-        </div>
-      `;
-    }
-    
+    let printOptionsSection = "";
+
     // Build category filter chips + dropdown
-    let categoryChips = '';
-    let categoryDropdown = '';
+    let categoryDropdown = "";
     if (filters && filters.categories && filters.categories.length > 0) {
       const cats = filters.categories;
-      // Always show all categories including ones with 0 count
       categoryDropdown = `
         <div class="print-filter-section">
           <label style="font-weight:600;font-size:13px;color:#374151;display:block;margin-bottom:6px;">
-            Filter by ${filters.categoryLabel || 'Category'}:
+            Filter by ${filters.categoryLabel || "Category"}:
           </label>
           <select id="print-category-select" onchange="PrintService.filterByCategorySelect(this.value)" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;margin-bottom:8px;background:#fff;color:#1e293b;">
             <option value="">All Categories (${data.length})</option>
-            ${cats.map(c => {
-              const count = data.filter(row => (row.category || '').toLowerCase() === c.toLowerCase()).length;
-              return `<option value="${this.escapeHtml(c)}">${this.escapeHtml(c)} (${count} items)</option>`;
-            }).join('')}
+            ${cats
+              .map((c) => {
+                const count = data.filter(
+                  (row) =>
+                    (row.category || "").toLowerCase() === c.toLowerCase(),
+                ).length;
+                return `<option value="${this.escapeHtml(c)}">${this.escapeHtml(c)} (${count} items)</option>`;
+              })
+              .join("")}
           </select>
           <div class="print-category-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">
             <button class="chip active" data-category="" onclick="PrintService.filterByCategory(this, '')">All (${data.length})</button>
-            ${cats.map(c => {
-              const count = data.filter(row => (row.category || '').toLowerCase() === c.toLowerCase()).length;
-              return `<button class="chip" data-category="${this.escapeHtml(c)}" onclick="PrintService.filterByCategory(this, '${this.escapeJsString(c)}')">${this.escapeHtml(c)} (${count})</button>`;
-            }).join('')}
+            ${cats
+              .map((c) => {
+                const count = data.filter(
+                  (row) =>
+                    (row.category || "").toLowerCase() === c.toLowerCase(),
+                ).length;
+                return `<button class="chip" data-category="${this.escapeHtml(c)}" onclick="PrintService.filterByCategory(this, '${this.escapeJsString(c)}')">${this.escapeHtml(c)} (${count})</button>`;
+              })
+              .join("")}
           </div>
         </div>
       `;
@@ -125,7 +117,7 @@ const PrintService = {
           <input type="text" id="print-search-input" placeholder="Search in table..." oninput="PrintService.filterRows()" style="font-size:13px;">
         </div>
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;cursor:pointer;">
-          <input type="checkbox" id="print-select-all" checked onchange="PrintService.toggleSelectAll()">
+          <input type="checkbox" id="print-select-all" checked onchange="PrintService.toggleSelectAll(event)">
           <strong>Select All</strong>
         </label>
         <span style="font-size:12px;color:#64748b;" id="print-selected-count">Selected: ${data.length}/${data.length}</span>
@@ -133,38 +125,63 @@ const PrintService = {
     `;
 
     // Build table with checkboxes
-    const tableHeader = columns.map(col => 
-      `<th style="${col.width ? `width:${col.width};` : ''}${col.align ? `text-align:${col.align};` : ''}">${col.label}</th>`
-    ).join('');
+    const tableHeader = columns
+      .map(
+        (col) =>
+          `<th style="${col.width ? `width:${col.width};` : ""}${col.align ? `text-align:${col.align};` : ""}">${col.label}</th>`,
+      )
+      .join("");
 
-    const tableBody = data.map((row, idx) => {
-      const cells = columns.map(col => {
-        let value = row[col.field];
-        if (col.format === 'currency') {
-          value = Formatters.formatCurrency(value, App.currency || 'PKR');
-        } else if (col.format === 'date') {
-          value = Formatters.formatDate(value);
-        } else if (col.format === 'status') {
-          const cls = value === 'In Stock' ? 'b-instock' : value === 'Damaged' ? 'b-damaged' : value === 'Reserved' ? 'b-reserved' : value === 'Sold' ? 'b-sold' : value === 'Returned' ? 'b-returned' : 'b-lost';
-          value = `<span class="badge-p ${cls}">${this.escapeHtml(value)}</span>`;
-        } else if (col.format === 'condition') {
-          const cls = value === 'Excellent' ? 'b-instock' : value === 'Good' ? 'b-reserved' : value === 'Fair' ? 'b-returned' : 'b-damaged';
-          value = `<span class="badge-p ${cls}">${this.escapeHtml(value)}</span>`;
-        } else {
-          value = this.escapeHtml(value);
-        }
-        return `<td style="${col.align ? `text-align:${col.align};` : ''}">${value || '-'}</td>`;
-      }).join('');
+    const tableBody = data
+      .map((row, idx) => {
+        const cells = columns
+          .map((col) => {
+            let value = row[col.field];
+            if (col.format === "currency") {
+              value = Formatters.formatCurrency(value, App.currency || "PKR");
+            } else if (col.format === "date") {
+              value = Formatters.formatDate(value);
+            } else if (col.format === "status") {
+              const cls =
+                value === "In Stock"
+                  ? "b-instock"
+                  : value === "Damaged"
+                    ? "b-damaged"
+                    : value === "Reserved"
+                      ? "b-reserved"
+                      : value === "Sold"
+                        ? "b-sold"
+                        : value === "Returned"
+                          ? "b-returned"
+                          : "b-lost";
+              value = `<span class="badge-p ${cls}">${this.escapeHtml(value)}</span>`;
+            } else if (col.format === "condition") {
+              const cls =
+                value === "Excellent"
+                  ? "b-instock"
+                  : value === "Good"
+                    ? "b-reserved"
+                    : value === "Fair"
+                      ? "b-returned"
+                      : "b-damaged";
+              value = `<span class="badge-p ${cls}">${this.escapeHtml(value)}</span>`;
+            } else {
+              value = this.escapeHtml(value);
+            }
+            return `<td style="${col.align ? `text-align:${col.align};` : ""}">${value || "-"}</td>`;
+          })
+          .join("");
 
-      return `
-        <tr data-row-idx="${idx}" data-category="${this.escapeHtml(row.category || '')}">
+        return `
+        <tr data-row-idx="${idx}" data-category="${this.escapeHtml(row.category || "")}">
           <td style="width:36px;text-align:center;">
             <input type="checkbox" class="print-row-checkbox" checked onchange="PrintService.updateSelectionCount()">
           </td>
           ${cells}
         </tr>
       `;
-    }).join('');
+      })
+      .join("");
 
     return `
       <div class="print-dialog-content" style="max-height:70vh;overflow-y:auto;">
@@ -175,7 +192,7 @@ const PrintService = {
           <table class="print-selection-table" style="width:100%;border-collapse:collapse;font-size:12px;">
             <thead>
               <tr style="background:#f1f5f9;">
-                <th style="width:36px;text-align:center;"><input type="checkbox" id="print-select-all-header" checked onchange="PrintService.toggleSelectAll()"></th>
+                <th style="width:36px;text-align:center;"><input type="checkbox" id="print-select-all-header" checked onchange="PrintService.toggleSelectAll(event)"></th>
                 ${tableHeader}
               </tr>
             </thead>
@@ -184,33 +201,41 @@ const PrintService = {
             </tbody>
           </table>
         </div>
-        ${options.summaryItems ? `
+        ${
+          options.summaryItems
+            ? `
         <div style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap;">
-          ${options.summaryItems.map(item => `
+          ${options.summaryItems
+            .map(
+              (item) => `
             <div style="padding:6px 14px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;">
               <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">${item.label}</div>
               <div style="font-size:16px;font-weight:700;color:#1e293b;">${item.value}</div>
             </div>
-          `).join('')}
+          `,
+            )
+            .join("")}
         </div>
-        ` : ''}
+        `
+            : ""
+        }
       </div>
     `;
   },
 
   initDialogEvents(options) {
-    // Initialize any custom event handlers
+    this.updateSelectionCount();
   },
 
   filterByCategory(button, category) {
     // Update active state on chips
-    document.querySelectorAll('.print-category-chips .chip').forEach(chip => {
-      chip.classList.remove('active');
+    document.querySelectorAll(".print-category-chips .chip").forEach((chip) => {
+      chip.classList.remove("active");
     });
-    button.classList.add('active');
+    button.classList.add("active");
 
     // Sync dropdown
-    const select = document.getElementById('print-category-select');
+    const select = document.getElementById("print-category-select");
     if (select) select.value = category;
 
     // Filter rows
@@ -219,8 +244,8 @@ const PrintService = {
 
   filterByCategorySelect(category) {
     // Sync chips
-    document.querySelectorAll('.print-category-chips .chip').forEach(chip => {
-      chip.classList.toggle('active', chip.dataset.category === category);
+    document.querySelectorAll(".print-category-chips .chip").forEach((chip) => {
+      chip.classList.toggle("active", chip.dataset.category === category);
     });
 
     // Filter rows
@@ -228,83 +253,138 @@ const PrintService = {
   },
 
   applyCategoryFilter(category) {
-    document.querySelectorAll('.print-selection-table tbody tr').forEach(row => {
-      if (!category) {
-        row.style.display = '';
-      } else {
-        const rowCat = row.dataset.category || '';
-        row.style.display = rowCat.toLowerCase() === category.toLowerCase() ? '' : 'none';
-      }
-    });
+    document
+      .querySelectorAll(".print-selection-table tbody tr")
+      .forEach((row) => {
+        if (!category) {
+          row.style.display = "";
+        } else {
+          const rowCat = row.dataset.category || "";
+          row.style.display =
+            rowCat.toLowerCase() === category.toLowerCase() ? "" : "none";
+        }
+      });
     this.updateSelectionCount();
   },
 
   filterRows() {
-    const search = (document.getElementById('print-search-input')?.value || '').toLowerCase().trim();
-    document.querySelectorAll('.print-selection-table tbody tr').forEach(row => {
-      if (!search) {
-        // Check if this row matches the current category filter
-        const activeChip = document.querySelector('.print-category-chips .chip.active');
-        if (activeChip) {
-          const category = activeChip.dataset.category || '';
-          const rowCat = row.dataset.category || '';
-          row.style.display = category ? (rowCat.toLowerCase() === category.toLowerCase() ? '' : 'none') : '';
-        } else {
-          row.style.display = '';
+    const search = (document.getElementById("print-search-input")?.value || "")
+      .toLowerCase()
+      .trim();
+    document
+      .querySelectorAll(".print-selection-table tbody tr")
+      .forEach((row) => {
+        if (!search) {
+          // Check if this row matches the current category filter
+          const activeChip = document.querySelector(
+            ".print-category-chips .chip.active",
+          );
+          if (activeChip) {
+            const category = activeChip.dataset.category || "";
+            const rowCat = row.dataset.category || "";
+            row.style.display = category
+              ? rowCat.toLowerCase() === category.toLowerCase()
+                ? ""
+                : "none"
+              : "";
+          } else {
+            row.style.display = "";
+          }
+          return;
         }
-        return;
-      }
-      const text = row.textContent.toLowerCase();
-      row.style.display = text.includes(search) ? '' : 'none';
-    });
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(search) ? "" : "none";
+      });
     this.updateSelectionCount();
   },
 
-  toggleSelectAll() {
-    const checked = document.getElementById('print-select-all')?.checked || document.getElementById('print-select-all-header')?.checked || false;
-    // Sync both checkboxes
-    const allCheckbox = document.getElementById('print-select-all');
-    const headerCheckbox = document.getElementById('print-select-all-header');
+  toggleSelectAll(evt) {
+    const clickedElement = evt?.target;
+    const allCheckbox = document.getElementById("print-select-all");
+    const headerCheckbox = document.getElementById("print-select-all-header");
+    const checked = Boolean(clickedElement?.checked);
+
     if (allCheckbox) allCheckbox.checked = checked;
     if (headerCheckbox) headerCheckbox.checked = checked;
-    
-    // Toggle all visible rows - only if checked is true, otherwise uncheck
-    document.querySelectorAll('.print-selection-table tbody tr').forEach(row => {
-      if (row.style.display !== 'none') {
-        const cb = row.querySelector('.print-row-checkbox');
-        if (cb) cb.checked = checked;
-      }
-    });
+
+    document
+      .querySelectorAll(".print-selection-table tbody tr")
+      .forEach((row) => {
+        if (row.style.display !== "none") {
+          const cb = row.querySelector(".print-row-checkbox");
+          if (cb) cb.checked = checked;
+        }
+      });
+
     this.updateSelectionCount();
+  },
+
+  syncSelectAllState() {
+    const visibleRows = document.querySelectorAll(
+      '.print-selection-table tbody tr:not([style*="display: none"])',
+    );
+    const visibleRowCheckboxes = Array.from(visibleRows)
+      .map((row) => row.querySelector(".print-row-checkbox"))
+      .filter(Boolean);
+
+    const checkedCount = visibleRowCheckboxes.filter((cb) => cb.checked).length;
+    const allChecked =
+      visibleRowCheckboxes.length > 0 && checkedCount === visibleRowCheckboxes.length;
+    const someChecked = checkedCount > 0 && checkedCount < visibleRowCheckboxes.length;
+
+    const allCheckbox = document.getElementById("print-select-all");
+    const headerCheckbox = document.getElementById("print-select-all-header");
+
+    if (allCheckbox) {
+      allCheckbox.checked = allChecked;
+      allCheckbox.indeterminate = someChecked;
+    }
+
+    if (headerCheckbox) {
+      headerCheckbox.checked = allChecked;
+      headerCheckbox.indeterminate = someChecked;
+    }
   },
 
   updateSelectionCount() {
-    const total = document.querySelectorAll('.print-selection-table tbody tr:not([style*="display: none"])').length;
-    const selected = document.querySelectorAll('.print-selection-table tbody tr:not([style*="display: none"]) .print-row-checkbox:checked').length;
-    const el = document.getElementById('print-selected-count');
+    const total = document.querySelectorAll(
+      '.print-selection-table tbody tr:not([style*="display: none"])',
+    ).length;
+    const selected = document.querySelectorAll(
+      '.print-selection-table tbody tr:not([style*="display: none"]) .print-row-checkbox:checked',
+    ).length;
+    const el = document.getElementById("print-selected-count");
     if (el) el.textContent = `Selected: ${selected}/${total}`;
+
+    this.syncSelectAllState();
   },
 
   getSelectedRowIndices() {
     const indices = [];
-    document.querySelectorAll('.print-selection-table tbody tr').forEach(tr => {
-      // Only consider VISIBLE rows (not hidden by category filter or search)
-      if (tr.style.display !== 'none') {
-        const cb = tr.querySelector('.print-row-checkbox');
-        if (cb && cb.checked) {
-          const idx = parseInt(tr.dataset.rowIdx);
-          if (!isNaN(idx)) indices.push(idx);
+    document
+      .querySelectorAll(".print-selection-table tbody tr")
+      .forEach((tr) => {
+        // Only consider VISIBLE rows (not hidden by category filter or search)
+        if (tr.style.display !== "none") {
+          const cb = tr.querySelector(".print-row-checkbox");
+          if (cb && cb.checked) {
+            const idx = parseInt(tr.dataset.rowIdx);
+            if (!isNaN(idx)) indices.push(idx);
+          }
         }
-      }
-    });
+      });
     return indices;
   },
 
   getPrintOptions() {
     return {
-      includeCustomer: document.getElementById('print-include-customer')?.checked || false,
-      includeSales: document.getElementById('print-include-sales')?.checked || false,
-      includePaymentHistory: document.getElementById('print-include-payment-history')?.checked || false
+      includeCustomer:
+        document.getElementById("print-include-customer")?.checked || false,
+      includeSales:
+        document.getElementById("print-include-sales")?.checked || false,
+      includePaymentHistory:
+        document.getElementById("print-include-payment-history")?.checked ||
+        false,
     };
   },
 
@@ -312,40 +392,50 @@ const PrintService = {
     try {
       const options = this._currentPrintOptions;
       const company = this._currentPrintCompany;
-      
+
       if (!options) {
-        Toast.error('Print options not found. Please try again.');
+        Toast.error("Print options not found. Please try again.");
         return;
       }
 
       const selectedIndices = this.getSelectedRowIndices();
-      
+
       if (selectedIndices.length === 0) {
-        Toast.warning('No rows selected for printing. Please select at least one row.');
+        Toast.warning(
+          "No rows selected for printing. Please select at least one row.",
+        );
         return;
       }
 
       // Filter data to only selected rows
-      const selectedData = selectedIndices.map(idx => options.data[idx]).filter(Boolean);
-      
+      const selectedData = selectedIndices
+        .map((idx) => options.data[idx])
+        .filter(Boolean);
+
       if (selectedData.length === 0) {
-        Toast.warning('No data to print.');
+        Toast.warning("No data to print.");
         return;
       }
 
       Modal.close();
-      
+
       // Get print options (for sales printing)
       const printOpts = this.getPrintOptions();
-      
+
       // Generate and open print window
-      const html = await this.generatePrintHtml(options.title, selectedData, options, company, printOpts);
+      const html = await this.generatePrintHtml(
+        options.title,
+        selectedData,
+        options,
+        company,
+        printOpts,
+      );
       this.openPrintWindow(options.title, html);
-      
+
       this.clearPrintOptions();
       Toast.success(`Printing ${selectedData.length} record(s)...`);
     } catch (err) {
-      Toast.error('Print error: ' + err.message);
+      Toast.error("Print error: " + err.message);
     }
   },
 
@@ -353,62 +443,98 @@ const PrintService = {
     const { columns, landscape, subtitle, summaryItems } = options;
     const dateStr = new Date().toLocaleDateString();
     const timeStr = new Date().toLocaleTimeString();
-    const orientation = landscape ? 'landscape' : 'portrait';
-    
+    const orientation = landscape ? "landscape" : "portrait";
+
     // Build applied filters summary
     const appliedFilters = [];
-    const activeChip = document.querySelector('.print-category-chips .chip.active');
+    const activeChip = document.querySelector(
+      ".print-category-chips .chip.active",
+    );
     if (activeChip && activeChip.dataset.category) {
-      appliedFilters.push(`${options.filters?.categoryLabel || 'Category'}: ${activeChip.dataset.category}`);
+      appliedFilters.push(
+        `${options.filters?.categoryLabel || "Category"}: ${activeChip.dataset.category}`,
+      );
     }
-    const searchVal = document.getElementById('print-search-input')?.value?.trim();
+    const searchVal = document
+      .getElementById("print-search-input")
+      ?.value?.trim();
     if (searchVal) {
       appliedFilters.push(`Search: "${searchVal}"`);
     }
-    
-    const filterSummary = appliedFilters.length > 0 
-      ? `<div style="font-size:10px;color:#64748b;margin-bottom:8px;">Filters Applied: ${appliedFilters.join(' | ')}</div>`
-      : '';
+
+    const filterSummary =
+      appliedFilters.length > 0
+        ? `<div style="font-size:10px;color:#64748b;margin-bottom:8px;">Filters Applied: ${appliedFilters.join(" | ")}</div>`
+        : "";
 
     // Build table
-    const tableHeader = columns.map(col => 
-      `<th style="${col.width ? `width:${col.width};` : ''}${col.align ? `text-align:${col.align};` : ''}">${col.label}</th>`
-    ).join('');
+    const tableHeader = columns
+      .map(
+        (col) =>
+          `<th style="${col.width ? `width:${col.width};` : ""}${col.align ? `text-align:${col.align};` : ""}">${col.label}</th>`,
+      )
+      .join("");
 
-    const tableBody = data.map((row, idx) => {
-      const cells = columns.map(col => {
-        let value = row[col.field];
-        if (col.format === 'currency') {
-          value = Formatters.formatCurrency(value, App.currency || 'PKR');
-        } else if (col.format === 'date') {
-          value = Formatters.formatDate(value);
-        } else if (col.format === 'datetime') {
-          value = Formatters.formatDateTime(value);
-        } else if (col.format === 'status') {
-          const cls = value === 'In Stock' ? 'b-instock' : value === 'Damaged' ? 'b-damaged' : value === 'Reserved' ? 'b-reserved' : value === 'Sold' ? 'b-sold' : value === 'Returned' ? 'b-returned' : 'b-lost';
-          value = `<span class="badge-p ${cls}">${this.escapeHtml(value)}</span>`;
-        } else if (col.format === 'condition') {
-          const cls = value === 'Excellent' ? 'b-instock' : value === 'Good' ? 'b-reserved' : value === 'Fair' ? 'b-returned' : 'b-damaged';
-          value = `<span class="badge-p ${cls}">${this.escapeHtml(value)}</span>`;
-        } else {
-          value = this.escapeHtml(value);
-        }
-        return `<td style="${col.align ? `text-align:${col.align};` : ''}">${value || '-'}</td>`;
-      }).join('');
-      return `<tr><td style="text-align:center;font-weight:600;color:#94a3b8;">${idx + 1}</td>${cells}</tr>`;
-    }).join('');
+    const tableBody = data
+      .map((row, idx) => {
+        const cells = columns
+          .map((col) => {
+            let value = row[col.field];
+            if (col.format === "currency") {
+              value = Formatters.formatCurrency(value, App.currency || "PKR");
+            } else if (col.format === "date") {
+              value = Formatters.formatDate(value);
+            } else if (col.format === "datetime") {
+              value = Formatters.formatDateTime(value);
+            } else if (col.format === "status") {
+              const cls =
+                value === "In Stock"
+                  ? "b-instock"
+                  : value === "Damaged"
+                    ? "b-damaged"
+                    : value === "Reserved"
+                      ? "b-reserved"
+                      : value === "Sold"
+                        ? "b-sold"
+                        : value === "Returned"
+                          ? "b-returned"
+                          : "b-lost";
+              value = `<span class="badge-p ${cls}">${this.escapeHtml(value)}</span>`;
+            } else if (col.format === "condition") {
+              const cls =
+                value === "Excellent"
+                  ? "b-instock"
+                  : value === "Good"
+                    ? "b-reserved"
+                    : value === "Fair"
+                      ? "b-returned"
+                      : "b-damaged";
+              value = `<span class="badge-p ${cls}">${this.escapeHtml(value)}</span>`;
+            } else {
+              value = this.escapeHtml(value);
+            }
+            return `<td style="${col.align ? `text-align:${col.align};` : ""}">${value || "-"}</td>`;
+          })
+          .join("");
+        return `<tr><td style="text-align:center;font-weight:600;color:#94a3b8;">${idx + 1}</td>${cells}</tr>`;
+      })
+      .join("");
 
     // Summary items
-    let summaryHtml = '';
+    let summaryHtml = "";
     if (summaryItems) {
       summaryHtml = `
         <div class="summary-row" style="margin-bottom:12px;">
-          ${summaryItems.map(item => `
+          ${summaryItems
+            .map(
+              (item) => `
             <div class="summary-item">
               <div class="label">${item.label}</div>
               <div class="value">${item.value}</div>
             </div>
-          `).join('')}
+          `,
+            )
+            .join("")}
         </div>
       `;
     }
@@ -417,10 +543,10 @@ const PrintService = {
     const shopInfo = `
       <div style="text-align:center;margin-bottom:4px;">
         <h1 style="font-size:20px;color:#1e293b;margin-bottom:2px;">${this.escapeHtml(company.shopName)}</h1>
-        ${company.address ? `<p style="font-size:11px;color:#64748b;margin:1px 0;">${this.escapeHtml(company.address)}</p>` : ''}
+        ${company.address ? `<p style="font-size:11px;color:#64748b;margin:1px 0;">${this.escapeHtml(company.address)}</p>` : ""}
         <div style="font-size:10px;color:#94a3b8;">
-          ${company.phone ? `Phone: ${this.escapeHtml(company.phone)} | ` : ''}
-          ${company.email ? `Email: ${this.escapeHtml(company.email)} | ` : ''}
+          ${company.phone ? `Phone: ${this.escapeHtml(company.phone)} | ` : ""}
+          ${company.email ? `Email: ${this.escapeHtml(company.email)} | ` : ""}
           Printed: ${dateStr} ${timeStr}
         </div>
       </div>
@@ -469,7 +595,7 @@ const PrintService = {
   <div class="print-header">
     ${shopInfo}
     <h1>${this.escapeHtml(title)}</h1>
-    ${subtitle ? `<div class="sub">${subtitle}</div>` : ''}
+    ${subtitle ? `<div class="sub">${subtitle}</div>` : ""}
     ${filterSummary}
   </div>
   ${summaryHtml}
@@ -489,9 +615,9 @@ const PrintService = {
   },
 
   openPrintWindow(title, html) {
-    const printWindow = window.open('', '_blank', 'width=1100,height=800');
+    const printWindow = window.open("", "_blank", "width=1100,height=800");
     if (!printWindow) {
-      Toast.error('Please allow pop-ups for printing.');
+      Toast.error("Please allow pop-ups for printing.");
       return;
     }
     printWindow.document.write(html);
@@ -507,16 +633,33 @@ const PrintService = {
   },
 
   escapeJsString(str) {
-    if (!str) return '';
-    return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+    if (!str) return "";
+    return String(str)
+      .replace(/\\/g, "\\\\")
+      .replace(/'/g, "\\'")
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, "\\n")
+      .replace(/\r/g, "\\r");
   },
 
   /**
    * Quick print without dialog - directly prints all data
    */
   async quickPrint(title, data, columns, options = {}) {
-    const company = options.getCompanyHeader ? await options.getCompanyHeader() : { shopName: 'Laptop Inventory Manager', address: '', phone: '', email: '' };
-    const html = this.generatePrintHtml(title, data, { ...options, columns }, company);
+    const company = options.getCompanyHeader
+      ? await options.getCompanyHeader()
+      : {
+          shopName: "Laptop Inventory Manager",
+          address: "",
+          phone: "",
+          email: "",
+        };
+    const html = this.generatePrintHtml(
+      title,
+      data,
+      { ...options, columns },
+      company,
+    );
     this.openPrintWindow(title, html);
-  }
+  },
 };

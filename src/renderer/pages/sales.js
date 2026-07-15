@@ -33,10 +33,6 @@ const SalesPage = {
                 <div id="sale-customer-results" class="customer-search-results"></div>
               </div>
               <div id="sale-selected-customer"></div>
-              <button type="button" class="btn btn-secondary btn-sm" style="margin-top:8px;" onclick="SalesPage.showQuickAddCustomer()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Add New Customer
-              </button>
             </div>
 
             <!-- Section 2: Transaction Details -->
@@ -45,7 +41,7 @@ const SalesPage = {
               <div class="form-row">
                 <div class="form-group">
                   <label>Date</label>
-                  <input type="date" class="form-control" id="sale-date" value="${new Date().toISOString().split('T')[0]}">
+                  <input type="date" class="form-control" id="sale-date" value="${new Date().toISOString().split("T")[0]}">
                 </div>
                 <div class="form-group">
                   <label>Type</label>
@@ -128,7 +124,10 @@ const SalesPage = {
 
   async loadProducts() {
     try {
-      const result = await window.api.getProducts({ limit: 1000, status: "In Stock" });
+      const result = await window.api.getProducts({
+        limit: 1000,
+        status: "In Stock",
+      });
       if (result.success) {
         this.allProducts = result.data.products || [];
       }
@@ -157,7 +156,8 @@ const SalesPage = {
 
   onCustomerSearch() {
     clearTimeout(this.searchTimeout);
-    const query = document.getElementById("sale-customer-search")?.value?.trim() || "";
+    const query =
+      document.getElementById("sale-customer-search")?.value?.trim() || "";
     if (query.length < 1) {
       document.getElementById("sale-customer-results").classList.remove("show");
       return;
@@ -168,15 +168,20 @@ const SalesPage = {
         const result = await window.api.searchCustomers(query);
         const container = document.getElementById("sale-customer-results");
         if (result.success && result.data && result.data.length > 0) {
-          container.innerHTML = result.data.map(c => `
+          container.innerHTML = result.data
+            .map(
+              (c) => `
             <div class="customer-search-item" onclick="SalesPage.selectCustomer(${c.id}, '${this.escapeHtml(c.customer_name)}')">
               <div class="name">${this.escapeHtml(c.customer_name)}</div>
-              <div class="phone">${this.escapeHtml(c.phone) || 'No phone'}</div>
+              <div class="phone">${this.escapeHtml(c.phone) || "No phone"}</div>
             </div>
-          `).join("");
+          `,
+            )
+            .join("");
           container.classList.add("show");
         } else {
-          container.innerHTML = '<div class="customer-search-item" style="color:var(--text-muted);">No customers found. Add a new customer.</div>';
+          container.innerHTML =
+            '<div class="customer-search-item" style="color:var(--text-muted);">No customers found. Add a new customer.</div>';
           container.classList.add("show");
         }
       } catch (err) {
@@ -205,29 +210,35 @@ const SalesPage = {
       </form>
     `;
 
-    Modal.showForm("Add New Customer", formHtml, async () => {
-      const name = document.getElementById("qcf-name")?.value?.trim();
-      if (!name) {
-        Toast.error("Customer name is required.");
-        return;
-      }
-      try {
-        const result = await window.api.addCustomer({
-          customer_name: name,
-          phone: document.getElementById("qcf-phone")?.value?.trim() || "",
-          address: document.getElementById("qcf-address")?.value?.trim() || "",
-        });
-        if (result.success) {
-          Toast.success("Customer added successfully.");
-          Modal.close();
-          this.selectCustomer(result.data.id, name);
-        } else {
-          Toast.error(result.error || "Failed to add customer.");
+    Modal.showForm(
+      "Add New Customer",
+      formHtml,
+      async () => {
+        const name = document.getElementById("qcf-name")?.value?.trim();
+        if (!name) {
+          Toast.error("Customer name is required.");
+          return;
         }
-      } catch (err) {
-        Toast.error(err.message);
-      }
-    }, "sm");
+        try {
+          const result = await window.api.addCustomer({
+            customer_name: name,
+            phone: document.getElementById("qcf-phone")?.value?.trim() || "",
+            address:
+              document.getElementById("qcf-address")?.value?.trim() || "",
+          });
+          if (result.success) {
+            Toast.success("Customer added successfully.");
+            Modal.close();
+            this.selectCustomer(result.data.id, name);
+          } else {
+            Toast.error(result.error || "Failed to add customer.");
+          }
+        } catch (err) {
+          Toast.error(err.message);
+        }
+      },
+      "sm",
+    );
   },
 
   onLedgerTypeChange() {
@@ -243,9 +254,12 @@ const SalesPage = {
   addProductRow(product = null) {
     const container = document.getElementById("sale-products-list");
     const index = this.selectedProducts.length;
-    const options = this.allProducts.map(p =>
-      `<option value="${p.id}" data-price="${p.selling_price}" data-name="${this.escapeHtml(p.product_name)}" ${product && product.id === p.id ? 'selected' : ''}>${this.escapeHtml(p.product_name)} (Qty: ${p.quantity})</option>`
-    ).join("");
+    const options = this.allProducts
+      .map(
+        (p) =>
+          `<option value="${p.id}" data-price="${p.selling_price}" data-name="${this.escapeHtml(p.product_name)}" ${product && product.id === p.id ? "selected" : ""}>${this.escapeHtml(p.product_name)} (Qty: ${p.quantity})</option>`,
+      )
+      .join("");
 
     const row = document.createElement("div");
     row.className = "product-select-row";
@@ -262,7 +276,13 @@ const SalesPage = {
     `;
 
     container.appendChild(row);
-    this.selectedProducts.push({ id: null, name: "", qty: 1, price: 0, subtotal: 0 });
+    this.selectedProducts.push({
+      id: null,
+      name: "",
+      qty: 1,
+      price: 0,
+      subtotal: 0,
+    });
 
     if (product) {
       this.selectedProducts[index] = {
@@ -279,7 +299,9 @@ const SalesPage = {
   },
 
   onProductSelect(index) {
-    const row = document.querySelector(`.product-select-row[data-index="${index}"]`);
+    const row = document.querySelector(
+      `.product-select-row[data-index="${index}"]`,
+    );
     if (!row) return;
     const select = row.querySelector("select");
     const option = select.options[select.selectedIndex];
@@ -298,20 +320,31 @@ const SalesPage = {
         subtotal: (parseInt(qtyInput.value) || 1) * price,
       };
     } else {
-      this.selectedProducts[index] = { id: null, name: "", qty: 1, price: 0, subtotal: 0 };
+      this.selectedProducts[index] = {
+        id: null,
+        name: "",
+        qty: 1,
+        price: 0,
+        subtotal: 0,
+      };
     }
     this.updateRow(index);
     this.updateSummary();
   },
 
   updateRow(index) {
-    const row = document.querySelector(`.product-select-row[data-index="${index}"]`);
+    const row = document.querySelector(
+      `.product-select-row[data-index="${index}"]`,
+    );
     if (!row) return;
     const inputs = row.querySelectorAll("input");
     const qty = parseInt(inputs[0].value) || 0;
     const price = parseFloat(inputs[1].value) || 0;
     const subtotal = qty * price;
-    row.querySelector(".subtotal").textContent = Formatters.formatCurrency(subtotal, App.currency);
+    row.querySelector(".subtotal").textContent = Formatters.formatCurrency(
+      subtotal,
+      App.currency,
+    );
 
     if (this.selectedProducts[index]) {
       this.selectedProducts[index].qty = qty;
@@ -322,20 +355,25 @@ const SalesPage = {
   },
 
   removeProductRow(index) {
-    const row = document.querySelector(`.product-select-row[data-index="${index}"]`);
+    const row = document.querySelector(
+      `.product-select-row[data-index="${index}"]`,
+    );
     if (row) row.remove();
     this.selectedProducts[index] = null;
     this.updateSummary();
   },
 
   updateSummary() {
-    const validItems = this.selectedProducts.filter(p => p && p.id && p.qty > 0);
+    const validItems = this.selectedProducts.filter(
+      (p) => p && p.id && p.qty > 0,
+    );
     const totalQty = validItems.reduce((sum, p) => sum + p.qty, 0);
     const totalAmount = validItems.reduce((sum, p) => sum + p.subtotal, 0);
 
     document.getElementById("sale-total-items").textContent = validItems.length;
     document.getElementById("sale-total-qty").textContent = totalQty;
-    document.getElementById("sale-total-amount").textContent = Formatters.formatCurrency(totalAmount, App.currency);
+    document.getElementById("sale-total-amount").textContent =
+      Formatters.formatCurrency(totalAmount, App.currency);
   },
 
   async submitSale() {
@@ -345,25 +383,31 @@ const SalesPage = {
       return;
     }
 
-    const validItems = this.selectedProducts.filter(p => p && p.id && p.qty > 0);
+    const validItems = this.selectedProducts.filter(
+      (p) => p && p.id && p.qty > 0,
+    );
     if (validItems.length === 0) {
       Toast.error("Please add at least one product.");
       return;
     }
 
-    const ledgerType = document.getElementById("sale-ledger-type")?.value || "Cash";
-    const paidAmount = ledgerType === "Cash"
-      ? validItems.reduce((sum, p) => sum + p.subtotal, 0)
-      : parseFloat(document.getElementById("sale-paid-amount")?.value) || 0;
+    const ledgerType =
+      document.getElementById("sale-ledger-type")?.value || "Cash";
+    const paidAmount =
+      ledgerType === "Cash"
+        ? validItems.reduce((sum, p) => sum + p.subtotal, 0)
+        : parseFloat(document.getElementById("sale-paid-amount")?.value) || 0;
 
     const data = {
       customer_id: this.selectedCustomer.id,
-      issue_date: document.getElementById("sale-date")?.value || new Date().toISOString().split('T')[0],
+      issue_date:
+        document.getElementById("sale-date")?.value ||
+        new Date().toISOString().split("T")[0],
       transaction_type: document.getElementById("sale-type")?.value || "Sale",
       ledger_type: ledgerType,
       paid_amount: paidAmount,
       notes: document.getElementById("sale-notes")?.value?.trim() || "",
-      items: validItems.map(p => ({
+      items: validItems.map((p) => ({
         product_id: p.id,
         quantity: p.qty,
         unit_price: p.price,
@@ -372,12 +416,15 @@ const SalesPage = {
 
     const btn = document.getElementById("sale-submit-btn");
     btn.disabled = true;
-    btn.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div> Saving...';
+    btn.innerHTML =
+      '<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div> Saving...';
 
     try {
       const result = await window.api.createSale(data);
       if (result.success) {
-        Toast.success(`Transaction saved successfully! Reference: ${result.data.referenceNo}`);
+        Toast.success(
+          `Transaction saved successfully! Reference: ${result.data.referenceNo}`,
+        );
         // Show the ledger details
         Modal.close();
         App.navigate("ledgers");
@@ -392,7 +439,8 @@ const SalesPage = {
       Toast.error(err.message);
     } finally {
       btn.disabled = false;
-      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><polyline points="20 6 9 17 4 12"/></svg> Save Transaction';
+      btn.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><polyline points="20 6 9 17 4 12"/></svg> Save Transaction';
     }
   },
 

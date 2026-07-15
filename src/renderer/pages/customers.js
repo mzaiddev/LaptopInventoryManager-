@@ -15,12 +15,20 @@ const CustomersPage = {
           <h1>Customers</h1>
           <p>Manage your customers and track balances</p>
         </div>
-        <button class="btn btn-primary" onclick="CustomersPage.showAddCustomer()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-          Add Customer
-        </button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-secondary" onclick="CustomersPage.openPrintDialog()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+              <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+            </svg>
+            Print
+          </button>
+          <button class="btn btn-primary" onclick="CustomersPage.showAddCustomer()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Add Customer
+          </button>
+        </div>
       </div>
       <div class="card">
         <div class="card-body">
@@ -678,5 +686,76 @@ const CustomersPage = {
     const div = document.createElement("div");
     div.textContent = str;
     return div.innerHTML;
+  },
+
+  async openPrintDialog() {
+    try {
+      // Load all customers with their sales data
+      const result = await window.api.getAllCustomers({ limit: 5000 });
+      if (!result.success) {
+        Toast.error('Failed to load customers data.');
+        return;
+      }
+      const customers = result.data?.customers || [];
+      if (customers.length === 0) {
+        Toast.warning('No customers to print.');
+        return;
+      }
+
+      // Get sales data for each customer
+      const customerPromises = customers.map(async c => {
+        const salesResult = await window.api.getCustomerFullProfile(c.id);
+        const sales = salesResult.success ? salesResult.data.sales || [] : [];
+        const balance = salesResult.success ? salesResult.data.balance || {} : {};
+        return {
+          ...c,
+          total_sales: balance.total_sales || 0,
+          total_paid: balance.total_paid || 0,
+          outstanding: balance.total_outstanding || 0,
+          sales_count: sales.length,
+        };
+      });
+
+      const customerData = await Promise.all(customerPromises);
+
+      const currency = App.currency || 'PKR';
+      const totalCustomers = customerData.length;
+      const activeCount = customerData.filter(c => c.status === 'Active').length;
+      const totalSales = customerData.reduce((s, c) => s + (c.total_sales || 0), 0);
+      const totalPaid = customerData.reduce((s, c) => s + (c.total_paid || 0), 0);
+      const totalOutstanding = customerData.reduce((s, c) => s + (c.outstanding || 0), 0);
+
+      PrintService.showPrintDialog({
+        title: 'Customers Report',
+        data: customerData,
+        columns: [
+          { field: 'customer_name', label: 'Customer', width: '120px' },
+          { field: 'phone', label: 'Phone', width: '100px' },
+          { field: 'address', label: 'Address', width: '120px' },
+          { field: 'status', label: 'Status', width: '60px' },
+          { field: 'total_sales', label: 'Total Sales', width: '70px', align: 'right', format: 'currency' },
+          { field: 'total_paid', label: 'Total Paid', width: '70px', align: 'right', format: 'currency' },
+          { field: 'outstanding', label: 'Outstanding', width: '70px', align: 'right', format: 'currency' },
+          { field: 'sales_count', label: 'Transactions', width: '50px', align: 'center' },
+        ],
+        filters: {
+          categories: ['Active', 'Inactive'],
+          categoryLabel: 'Status'
+        },
+        landscape: false,
+        showPrintOptions: true,
+        subtitle: 'With related sales and payment history',
+        summaryItems: [
+          { label: 'Total Customers', value: totalCustomers },
+          { label: 'Active Customers', value: activeCount },
+          { label: 'Total Sales', value: Formatters.formatCurrency(totalSales, currency) },
+          { label: 'Total Collected', value: Formatters.formatCurrency(totalPaid, currency) },
+          { label: 'Total Outstanding', value: Formatters.formatCurrency(totalOutstanding, currency) },
+        ],
+        getCompanyHeader: () => LedgersPage.getCompanyHeader()
+      });
+    } catch (err) {
+      Toast.error('Print error: ' + err.message);
+    }
   },
 };
