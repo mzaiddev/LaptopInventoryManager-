@@ -62,7 +62,10 @@ const App = {
         case "customers":
           await CustomersPage.load();
           break;
-        case "sales":
+        case "sales-history":
+          await SalesHistoryPage.load();
+          break;
+        case "create-sale":
           await SalesPage.load();
           break;
         case "ledgers":
@@ -76,9 +79,6 @@ const App = {
           break;
         case "backup":
           await BackupPage.load();
-          break;
-        case "old-balances":
-          await OldBalancesPage.load();
           break;
         case "settings":
           await SettingsPage.load();
@@ -115,9 +115,6 @@ const App = {
         break;
       case "backup":
         await BackupPage.refresh();
-        break;
-      case "old-balances":
-        await OldBalancesPage.refresh();
         break;
       case "settings":
         await SettingsPage.refresh();

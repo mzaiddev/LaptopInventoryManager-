@@ -1,4 +1,6 @@
-// Sales / Issue Page
+// Sales Page - Create New Sale/Issue (Products only, no payment tracking here)
+// When a sale is created, the ledger is auto-generated in the backend.
+// All payment/balance management happens in the Ledger module.
 const SalesPage = {
   selectedCustomer: null,
   selectedProducts: [],
@@ -6,7 +8,6 @@ const SalesPage = {
   searchTimeout: null,
 
   async load() {
-    // Reset state to prevent stale data from carrying over
     this.selectedCustomer = null;
     this.selectedProducts = [];
     const content = document.getElementById("page-content");
@@ -14,7 +15,7 @@ const SalesPage = {
       <div class="page-header">
         <div>
           <h1>New Sale / Issue</h1>
-          <p>Create a new sale or issue transaction</p>
+          <p>Record products sold or issued to a customer. Ledger is created automatically.</p>
         </div>
       </div>
       <div class="card">
@@ -33,6 +34,10 @@ const SalesPage = {
                 <div id="sale-customer-results" class="customer-search-results"></div>
               </div>
               <div id="sale-selected-customer"></div>
+              <button type="button" class="btn btn-sm btn-secondary" onclick="SalesPage.showQuickAddCustomer()" style="margin-top:8px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Quick Add Customer
+              </button>
             </div>
 
             <!-- Section 2: Transaction Details -->
@@ -53,35 +58,39 @@ const SalesPage = {
               </div>
               <div class="form-row">
                 <div class="form-group">
-                  <label>Ledger Type</label>
+                  <label>Payment Method</label>
                   <select class="form-control" id="sale-ledger-type" onchange="SalesPage.onLedgerTypeChange()">
                     <option value="Cash">Cash (Full Payment)</option>
-                    <option value="Loan">Loan (Partial/Remaining)</option>
+                    <option value="Loan">Loan (Remaining Balance)</option>
                   </select>
                 </div>
                 <div class="form-group" id="sale-paid-amount-group" style="display:none;">
-                  <label>Paid Amount</label>
-                  <input type="number" step="0.01" min="0" class="form-control" id="sale-paid-amount" value="0">
+                  <label>Initial Payment</label>
+                  <input type="number" step="0.01" min="0" class="form-control" id="sale-paid-amount" value="0" placeholder="Amount paid now">
                 </div>
               </div>
-              <div class="form-group">
-                <label>Notes</label>
-                <input type="text" class="form-control" id="sale-notes" placeholder="Optional notes...">
+              <div class="form-row">
+                <div class="form-group" style="flex:2;">
+                  <label>Notes (Optional)</label>
+                  <input type="text" class="form-control" id="sale-notes" placeholder="Any notes about this transaction...">
+                </div>
               </div>
             </div>
 
             <!-- Section 3: Products -->
             <div class="form-section">
               <h3>3. Select Products</h3>
-              <div class="product-select-row header">
-                <span>Product</span>
-                <span>Qty</span>
-                <span>Unit Price</span>
-                <span>Subtotal</span>
-                <span></span>
+              <div id="sale-products-container">
+                <div class="product-row-header">
+                  <span class="prd-col">Product</span>
+                  <span class="qty-col">Qty</span>
+                  <span class="price-col">Unit Price</span>
+                  <span class="sub-col">Subtotal</span>
+                  <span class="act-col"></span>
+                </div>
+                <div id="sale-products-list"></div>
               </div>
-              <div id="sale-products-list"></div>
-              <button type="button" class="btn btn-secondary btn-sm add-product-btn" onclick="SalesPage.addProductRow()">
+              <button type="button" class="btn btn-sm btn-secondary add-product-btn" onclick="SalesPage.addProductRow()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Add Product
               </button>
@@ -105,7 +114,7 @@ const SalesPage = {
 
             <!-- Submit -->
             <div style="margin-top:20px;display:flex;gap:12px;justify-content:flex-end;">
-              <button type="button" class="btn btn-secondary" onclick="App.navigate('ledgers')">Cancel</button>
+              <button type="button" class="btn btn-secondary" onclick="App.navigate('sales-history')">Cancel</button>
               <button type="button" class="btn btn-primary" onclick="SalesPage.submitSale()" id="sale-submit-btn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><polyline points="20 6 9 17 4 12"/></svg>
                 Save Transaction
@@ -116,9 +125,7 @@ const SalesPage = {
       </div>
     `;
 
-    // Load products for selection
     await this.loadProducts();
-    // Add first empty product row
     this.addProductRow();
   },
 
@@ -141,11 +148,35 @@ const SalesPage = {
     document.getElementById("sale-selected-customer").innerHTML = `
       <div class="selected-customer">
         <span class="name">${this.escapeHtml(name)}</span>
+        <span id="sale-customer-balance" style="font-size:12px;margin-left:12px;font-weight:600;"></span>
         <button type="button" class="remove-btn" onclick="SalesPage.removeCustomer()">&times;</button>
       </div>
     `;
     document.getElementById("sale-customer-search").value = name;
     document.getElementById("sale-customer-results").classList.remove("show");
+    
+    // Load customer's current balance
+    this.loadCustomerBalance(id);
+  },
+
+  async loadCustomerBalance(customerId) {
+    try {
+      const result = await window.api.getCustomerLedgerSummary(customerId);
+      if (!result.success) return;
+      const data = result.data;
+      const currency = App.currency || 'USD';
+      const balanceEl = document.getElementById("sale-customer-balance");
+      if (balanceEl) {
+        const totalDue = data.total_due || 0;
+        if (totalDue > 0) {
+          balanceEl.innerHTML = `<span style="color:var(--danger);">Balance Due: ${Formatters.formatCurrency(totalDue, currency)}</span>`;
+        } else if (totalDue === 0) {
+          balanceEl.innerHTML = `<span style="color:var(--success);">Balance: ${Formatters.formatCurrency(0, currency)}</span>`;
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
   },
 
   removeCustomer() {
@@ -156,8 +187,7 @@ const SalesPage = {
 
   onCustomerSearch() {
     clearTimeout(this.searchTimeout);
-    const query =
-      document.getElementById("sale-customer-search")?.value?.trim() || "";
+    const query = document.getElementById("sale-customer-search")?.value?.trim() || "";
     if (query.length < 1) {
       document.getElementById("sale-customer-results").classList.remove("show");
       return;
@@ -181,7 +211,7 @@ const SalesPage = {
           container.classList.add("show");
         } else {
           container.innerHTML =
-            '<div class="customer-search-item" style="color:var(--text-muted);">No customers found. Add a new customer.</div>';
+            '<div class="customer-search-item" style="color:var(--text-muted);">No customers found.</div>';
           container.classList.add("show");
         }
       } catch (err) {
@@ -223,8 +253,7 @@ const SalesPage = {
           const result = await window.api.addCustomer({
             customer_name: name,
             phone: document.getElementById("qcf-phone")?.value?.trim() || "",
-            address:
-              document.getElementById("qcf-address")?.value?.trim() || "",
+            address: document.getElementById("qcf-address")?.value?.trim() || "",
           });
           if (result.success) {
             Toast.success("Customer added successfully.");
@@ -262,17 +291,27 @@ const SalesPage = {
       .join("");
 
     const row = document.createElement("div");
-    row.className = "product-select-row";
+    row.className = "product-row";
     row.dataset.index = index;
     row.innerHTML = `
-      <select class="form-control" onchange="SalesPage.onProductSelect(${index})" style="font-size:13px;">
-        <option value="">-- Select Product --</option>
-        ${options}
-      </select>
-      <input type="number" min="1" value="${product ? product.qty : 1}" class="form-control" onchange="SalesPage.updateRow(${index})" style="font-size:13px;text-align:center;">
-      <input type="number" step="0.01" min="0" value="${product ? product.price : 0}" class="form-control" onchange="SalesPage.updateRow(${index})" style="font-size:13px;text-align:right;">
-      <span class="subtotal" style="font-size:14px;font-weight:500;text-align:right;">0</span>
-      <button type="button" class="remove-item-btn" onclick="SalesPage.removeProductRow(${index})">&times;</button>
+      <div class="product-row-fields">
+        <div class="prd-col">
+          <select class="form-control" onchange="SalesPage.onProductSelect(${index})" style="font-size:13px;width:100%;">
+            <option value="">-- Select Product --</option>
+            ${options}
+          </select>
+        </div>
+        <div class="qty-col">
+          <input type="number" min="1" value="${product ? product.qty : 1}" class="form-control" onchange="SalesPage.updateRow(${index})" style="font-size:13px;text-align:center;width:100%;">
+        </div>
+        <div class="price-col">
+          <input type="number" step="0.01" min="0" value="${product ? product.price : 0}" class="form-control" onchange="SalesPage.updateRow(${index})" style="font-size:13px;text-align:right;width:100%;">
+        </div>
+        <div class="sub-col" style="font-size:14px;font-weight:600;text-align:right;padding:8px 4px;">0</div>
+        <div class="act-col">
+          <button type="button" class="remove-item-btn" onclick="SalesPage.removeProductRow(${index})" title="Remove">&times;</button>
+        </div>
+      </div>
     `;
 
     container.appendChild(row);
@@ -299,14 +338,13 @@ const SalesPage = {
   },
 
   onProductSelect(index) {
-    const row = document.querySelector(
-      `.product-select-row[data-index="${index}"]`,
-    );
+    const row = document.querySelector(`.product-row[data-index="${index}"]`);
     if (!row) return;
     const select = row.querySelector("select");
     const option = select.options[select.selectedIndex];
-    const priceInput = row.querySelectorAll("input")[1];
-    const qtyInput = row.querySelectorAll("input")[0];
+    const inputs = row.querySelectorAll("input");
+    const priceInput = inputs[1];
+    const qtyInput = inputs[0];
 
     if (option && option.value) {
       const price = parseFloat(option.dataset.price) || 0;
@@ -333,18 +371,16 @@ const SalesPage = {
   },
 
   updateRow(index) {
-    const row = document.querySelector(
-      `.product-select-row[data-index="${index}"]`,
-    );
+    const row = document.querySelector(`.product-row[data-index="${index}"]`);
     if (!row) return;
     const inputs = row.querySelectorAll("input");
     const qty = parseInt(inputs[0].value) || 0;
     const price = parseFloat(inputs[1].value) || 0;
     const subtotal = qty * price;
-    row.querySelector(".subtotal").textContent = Formatters.formatCurrency(
-      subtotal,
-      App.currency,
-    );
+    const subEl = row.querySelector(".sub-col");
+    if (subEl) {
+      subEl.textContent = Formatters.formatCurrency(subtotal, App.currency);
+    }
 
     if (this.selectedProducts[index]) {
       this.selectedProducts[index].qty = qty;
@@ -355,9 +391,7 @@ const SalesPage = {
   },
 
   removeProductRow(index) {
-    const row = document.querySelector(
-      `.product-select-row[data-index="${index}"]`,
-    );
+    const row = document.querySelector(`.product-row[data-index="${index}"]`);
     if (row) row.remove();
     this.selectedProducts[index] = null;
     this.updateSummary();
@@ -377,7 +411,6 @@ const SalesPage = {
   },
 
   async submitSale() {
-    // Validate
     if (!this.selectedCustomer) {
       Toast.error("Please select a customer.");
       return;
@@ -393,9 +426,10 @@ const SalesPage = {
 
     const ledgerType =
       document.getElementById("sale-ledger-type")?.value || "Cash";
+    const totalAmount = validItems.reduce((sum, p) => sum + p.subtotal, 0);
     const paidAmount =
       ledgerType === "Cash"
-        ? validItems.reduce((sum, p) => sum + p.subtotal, 0)
+        ? totalAmount
         : parseFloat(document.getElementById("sale-paid-amount")?.value) || 0;
 
     const data = {
@@ -416,22 +450,16 @@ const SalesPage = {
 
     const btn = document.getElementById("sale-submit-btn");
     btn.disabled = true;
-    btn.innerHTML =
-      '<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div> Saving...';
+    btn.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div> Saving...';
 
     try {
       const result = await window.api.createSale(data);
       if (result.success) {
-        Toast.success(
-          `Transaction saved successfully! Reference: ${result.data.referenceNo}`,
-        );
-        // Show the ledger details
-        Modal.close();
+        Toast.success(`Sale saved! Reference: ${result.data.referenceNo}`);
+        // Navigate to Ledger page - the auto-created ledger entry will be visible
+        // Automatically select this customer in the ledger view
+        LedgersPage.currentCustomerId = this.selectedCustomer.id;
         App.navigate("ledgers");
-        // Open the ledger detail after a short delay
-        setTimeout(() => {
-          LedgersPage.viewLedger(result.data.ledgerId);
-        }, 500);
       } else {
         Toast.error(result.error || "Failed to save transaction.");
       }
@@ -439,8 +467,7 @@ const SalesPage = {
       Toast.error(err.message);
     } finally {
       btn.disabled = false;
-      btn.innerHTML =
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><polyline points="20 6 9 17 4 12"/></svg> Save Transaction';
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><polyline points="20 6 9 17 4 12"/></svg> Save Transaction';
     }
   },
 

@@ -1,409 +1,331 @@
-// Ledgers Page
+// Ledgers Page - PURE LEDGER MODULE
+// Shows empty state by default. Search for a customer to view their ledger.
 const LedgersPage = {
-  currentFilters: {
-    search: "",
-    status: "",
-    ledger_type: "",
-    customer_id: "",
-    date_from: "",
-    date_to: "",
-    sortBy: "si.created_at",
-    sortOrder: "desc",
-    page: 1,
-    limit: 50,
-  },
+  currentCustomerId: null,
+  currentCustomerName: null,
 
   async load() {
     const content = document.getElementById("page-content");
     content.innerHTML = `
       <div class="page-header">
         <div>
-          <h1>Sales & Ledgers</h1>
-          <p>View all sales with their payment history</p>
+          <h1>Customer Ledger</h1>
+          <p>Track customer payments, sales, and running balances</p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-secondary" onclick="LedgersPage.openPrintDialog()">
+          <button class="btn btn-secondary" onclick="LedgersPage.printCustomerLedgerReport()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
               <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
             </svg>
-            Print
-          </button>
-          <button class="btn btn-primary" onclick="App.navigate('sales')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-            New Sale / Issue
+            Print Report
           </button>
         </div>
       </div>
-      <div class="card">
+
+      <!-- Customer Search & Selection -->
+      <div class="card" style="margin-bottom:16px;">
         <div class="card-body">
-          <div class="filters-bar">
-            <div class="search-box">
+          <div class="filters-bar" style="margin-bottom:12px;">
+            <div class="search-box" style="flex:1;max-width:100%;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
-              <input type="text" id="ledger-search" placeholder="Search by customer, sale reference..." oninput="LedgersPage.onSearch()">
+              <input type="text" id="ledger-customer-search" placeholder="🔍 Search customer by name or phone to view their ledger..." oninput="LedgersPage.onCustomerSearch()" autofocus>
             </div>
-            <div class="filter-group">
-              <select id="filter-ledger-status" onchange="LedgersPage.onFilter()">
-                <option value="">All Status</option>
-                <option value="Paid">Paid</option>
-                <option value="Partial">Partial</option>
-                <option value="Outstanding">Remaining</option>
-              </select>
-              <select id="filter-ledger-type" onchange="LedgersPage.onFilter()">
-                <option value="">All Types</option>
-                <option value="Cash">Cash</option>
-                <option value="Loan">Loan</option>
-              </select>
-              <input type="date" id="filter-date-from" onchange="LedgersPage.onFilter()" title="Date From" style="padding:8px;border:1px solid var(--border-color);border-radius:var(--radius);font-size:13px;background:var(--card-bg);color:var(--text-primary);">
-              <input type="date" id="filter-date-to" onchange="LedgersPage.onFilter()" title="Date To" style="padding:8px;border:1px solid var(--border-color);border-radius:var(--radius);font-size:13px;background:var(--card-bg);color:var(--text-primary);">
+            <button class="btn btn-success" onclick="LedgersPage.showAddPaymentModal()" title="Add Payment to Ledger">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><polyline points="20 6 9 17 4 12"/></svg>
+              Add Payment
+            </button>
+            <button class="btn btn-warning" onclick="LedgersPage.showAddOldBalanceModal()" title="Add Old Balance">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Old Balance
+            </button>
+          </div>
+
+          <!-- Customer Search Results Dropdown -->
+          <div id="ledger-customer-results" class="customer-search-results" style="position:relative;display:none;"></div>
+
+          <!-- Selected Customer Info -->
+          <div id="ledger-selected-customer-info" style="display:none;">
+            <div class="selected-customer" style="margin-bottom:12px;">
+              <span class="name" id="ledger-selected-customer-name"></span>
+              <button class="remove-btn" onclick="LedgersPage.clearCustomerSelection()">&times;</button>
+            </div>
+            <!-- Balance Summary Cards - Clear Formula -->
+            <div id="ledger-balance-cards" class="profile-balance-cards" style="margin-bottom:12px;">
+              <div class="profile-balance-card success">
+                <div class="pbc-value" id="ledger-total-sales">$0</div>
+                <div class="pbc-label">Total Sales</div>
+              </div>
+              <div class="profile-balance-card">
+                <div class="pbc-value" id="ledger-total-paid">$0</div>
+                <div class="pbc-label">Total Paid</div>
+              </div>
+              <div class="profile-balance-card danger">
+                <div class="pbc-value" id="ledger-sale-outstanding">$0</div>
+                <div class="pbc-label">Sale Outstanding</div>
+              </div>
+              <div class="profile-balance-card warning">
+                <div class="pbc-value" id="ledger-old-balance">$0</div>
+                <div class="pbc-label">Old Balance</div>
+              </div>
+              <div class="profile-balance-card danger" style="border:2px solid var(--danger);">
+                <div class="pbc-value" id="ledger-total-due" style="font-size:18px;font-weight:800;">$0</div>
+                <div class="pbc-label">Total Balance Due</div>
+              </div>
+            </div>
+            <div style="margin-top:4px;font-size:11px;color:var(--text-muted);text-align:center;padding:4px;background:var(--bg-secondary);border-radius:var(--radius);">
+              <strong>Formula:</strong> Total Sales − Total Paid + Old Balance = Total Due
             </div>
           </div>
-          <div id="ledgers-table-container"><div class="loading"><div class="spinner"></div></div></div>
-          <div id="ledgers-pagination"></div>
+        </div>
+      </div>
+
+      <!-- Ledger Entries Table -->
+      <div class="card">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border-color);">
+          <h3 style="margin:0;font-size:15px;">Ledger Entries <span id="ledger-entries-subtitle" style="font-weight:400;font-size:13px;color:var(--text-muted);"></span></h3>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-sm btn-success" onclick="LedgersPage.showAddPaymentModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><polyline points="20 6 9 17 4 12"/></svg>
+              Add Payment
+            </button>
+            <button class="btn btn-sm btn-warning" onclick="LedgersPage.showAddOldBalanceModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Old Balance
+            </button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="ledger-entries-table-container">
+            <div class="empty-state">
+              <h3>🔍 Search for a Customer</h3>
+              <p>Use the search box above to find a customer and view their complete ledger with all transactions, payments, and running balance.</p>
+            </div>
+          </div>
         </div>
       </div>
     `;
-    await this.refresh();
+    
+    // If a customer was pre-selected (e.g., from Sales page), load their data
+    if (this.currentCustomerId) {
+      await this.selectCustomerById(this.currentCustomerId, this.currentCustomerName);
+    }
   },
 
   async refresh() {
-    await this.loadLedgers();
+    if (this.currentCustomerId) {
+      await this.loadCustomerBalance();
+      await this.loadCustomerLedgerEntries();
+    }
   },
 
-  async loadLedgers() {
-    const container = document.getElementById("ledgers-table-container");
-    if (!container) return;
-    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  onCustomerSearch() {
+    clearTimeout(this._searchTimeout);
+    const query = document.getElementById("ledger-customer-search")?.value?.trim() || "";
+    
+    if (query.length < 1) {
+      document.getElementById("ledger-customer-results").style.display = "none";
+      return;
+    }
 
+    this._searchTimeout = setTimeout(async () => {
+      try {
+        const result = await window.api.searchCustomers(query);
+        const container = document.getElementById("ledger-customer-results");
+        if (result.success && result.data && result.data.length > 0) {
+          container.innerHTML = result.data.map(c => `
+            <div class="customer-search-item" onclick="LedgersPage.selectCustomerById(${c.id}, '${LedgersPage.escapeHtml(c.customer_name)}')">
+              <div class="name">${LedgersPage.escapeHtml(c.customer_name)}</div>
+              <div class="phone">${LedgersPage.escapeHtml(c.phone) || "No phone"}</div>
+            </div>
+          `).join("");
+          container.style.display = "block";
+        } else {
+          container.innerHTML = '<div class="customer-search-item" style="color:var(--text-muted);">No customers found. <a href="#" onclick="App.navigate(\'customers\');return false;">Add a customer first</a></div>';
+          container.style.display = "block";
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }, 300);
+  },
+
+  async selectCustomerById(customerId, customerName) {
+    this.currentCustomerId = customerId;
+    this.currentCustomerName = customerName;
+    
+    // Hide search results
+    document.getElementById("ledger-customer-results").style.display = "none";
+    
+    // Show selected customer info
+    const infoDiv = document.getElementById("ledger-selected-customer-info");
+    infoDiv.style.display = "block";
+    document.getElementById("ledger-selected-customer-name").textContent = customerName || 'Customer';
+    document.getElementById("ledger-customer-search").value = customerName || '';
+    
+    // Update subtitle
+    document.getElementById("ledger-entries-subtitle").textContent = `- ${this.escapeHtml(customerName || 'Customer')}`;
+    
+    // Show loading in table
+    const container = document.getElementById("ledger-entries-table-container");
+    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    
+    // Load balance and ledger entries
+    await this.loadCustomerBalance();
+    await this.loadCustomerLedgerEntries();
+  },
+
+  clearCustomerSelection() {
+    this.currentCustomerId = null;
+    this.currentCustomerName = null;
+    document.getElementById("ledger-selected-customer-info").style.display = "none";
+    document.getElementById("ledger-customer-search").value = "";
+    document.getElementById("ledger-entries-subtitle").textContent = "";
+    document.getElementById("ledger-entries-table-container").innerHTML = `
+      <div class="empty-state">
+        <h3>🔍 Search for a Customer</h3>
+        <p>Use the search box above to find a customer and view their complete ledger.</p>
+      </div>
+    `;
+  },
+
+  async loadCustomerBalance() {
+    if (!this.currentCustomerId) return;
+    
     try {
-      const result = await window.api.getAllSales(this.currentFilters);
+      const result = await window.api.getCustomerLedgerSummary(this.currentCustomerId);
+      if (!result.success) return;
+      
+      const data = result.data;
+      const currency = App.currency || 'USD';
+      
+      document.getElementById("ledger-total-sales").textContent = Formatters.formatCurrency(data.total_sales || 0, currency);
+      document.getElementById("ledger-total-paid").textContent = Formatters.formatCurrency(data.total_paid || 0, currency);
+      
+      const outstandingEl = document.getElementById("ledger-sale-outstanding");
+      outstandingEl.textContent = Formatters.formatCurrency(data.total_outstanding || 0, currency);
+      outstandingEl.style.color = (data.total_outstanding || 0) > 0 ? 'var(--danger)' : 'var(--success)';
+      
+      const oldBalEl = document.getElementById("ledger-old-balance");
+      oldBalEl.textContent = Formatters.formatCurrency(data.old_balance_net || 0, currency);
+      oldBalEl.style.color = (data.old_balance_net || 0) > 0 ? 'var(--danger)' : (data.old_balance_net || 0) < 0 ? 'var(--success)' : 'var(--text-muted)';
+      
+      // Total Due = ledger_balance (SINGLE SOURCE OF TRUTH)
+      const totalDue = data.total_due || 0;
+      const totalEl = document.getElementById("ledger-total-due");
+      totalEl.textContent = Formatters.formatCurrency(totalDue, currency);
+      totalEl.style.color = totalDue > 0 ? 'var(--danger)' : 'var(--success)';
+    } catch (err) {
+      console.error(err);
+    }
+  },
+
+  async loadCustomerLedgerEntries() {
+    const container = document.getElementById("ledger-entries-table-container");
+    if (!container || !this.currentCustomerId) return;
+    
+    try {
+      const result = await window.api.getCustomerLedger(this.currentCustomerId);
       if (!result.success) {
         container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${result.error}</p></div>`;
         return;
       }
-
-      const data = result.data;
-      if (!data.sales || data.sales.length === 0) {
-        container.innerHTML = '<div class="empty-state"><h3>No transactions found</h3><p>Create a sale or issue to see entries.</p></div>';
+      
+      const entries = result.data || [];
+      if (entries.length === 0) {
+        container.innerHTML = '<div class="empty-state"><h3>No ledger entries</h3><p>Create a sale or add a payment to see ledger entries for this customer.</p></div>';
         return;
       }
-
-      container.innerHTML = `
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th style="width:30px;"></th>
-                <th>Sale Ref</th>
-                <th>Customer</th>
-                <th>Date</th>
-                <th>Type</th>
-                <th>Items</th>
-                <th>Total</th>
-                <th>Paid</th>
-                <th>Remaining</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${data.sales.map((l, idx) => `
-                <tr style="cursor:pointer;" onclick="LedgersPage.toggleSaleDetails('${l.sale_id}')">
-                  <td><span class="ledger-toggle-icon" id="toggle-icon-${l.sale_id}">&#9654;</span></td>
-                  <td><strong>${this.escapeHtml(l.sale_reference)}</strong></td>
-                  <td>${this.escapeHtml(l.customer_name) || 'N/A'}</td>
-                  <td>${Formatters.formatDate(l.transaction_date)}</td>
-                  <td>
-                    <span class="badge ${l.ledger_type === 'Cash' ? 'badge-cash' : 'badge-loan'}">${l.ledger_type}</span>
-                    <span style="font-size:11px;color:var(--text-muted);margin-left:4px;">${this.escapeHtml(l.transaction_type)}</span>
-                  </td>
-                  <td style="font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${this.escapeHtml(l.items_summary || '')}">${this.escapeHtml(l.items_summary) || '-'}</td>
-                  <td>${Formatters.formatCurrency(l.total_amount, App.currency)}</td>
-                  <td>${Formatters.formatCurrency(l.paid_amount, App.currency)}</td>
-                  <td style="font-weight:600;color:${l.remaining_amount > 0 ? 'var(--danger)' : 'var(--success)'};">${Formatters.formatCurrency(l.remaining_amount, App.currency)}</td>
-                  <td><span class="badge ${l.status === 'Paid' ? 'badge-paid' : l.status === 'Partial' ? 'badge-partial' : 'badge-outstanding'}">${l.status}</span></td>
-                  <td onclick="event.stopPropagation();">
-                    <div class="action-buttons">
-                      <button class="btn btn-sm btn-primary" onclick="LedgersPage.viewSale(${l.sale_id})" title="View Full Details">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                      </button>
-                      ${l.remaining_amount > 0 ? `
-                        <button class="btn btn-sm btn-success" onclick="LedgersPage.showAddPayment(${l.sale_id})" title="Add Payment">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="20 6 9 17 4 12"/></svg>
-                        </button>
-                      ` : ''}
-                      <button class="btn btn-sm btn-secondary" onclick="LedgersPage.printInvoice(${l.sale_id})" title="Print Invoice">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                      </button>
-                      <button class="btn btn-sm btn-warning" onclick="LedgersPage.editSale(${l.sale_id})" title="Edit Sale">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 0-3 0L12 9l4 11 4.5-4.5z"/></svg>
-                      </button>
-                      <button class="btn btn-sm btn-danger" onclick="LedgersPage.deleteSaleConfirm(${l.sale_id})" title="Delete Sale">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="3 6 5 6 21 0"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-                <tr id="sale-details-row-${l.sale_id}" style="display:none;">
-                  <td colspan="11" style="padding:0;">
-                    <div style="padding:12px 16px;background:var(--bg-secondary);border-top:1px solid var(--border-color);">
-                      <div style="margin-bottom:10px;">
-                        <strong style="font-size:13px;color:#475569;">Products in this Sale:</strong>
-                        <div style="font-size:12px;color:#64748b;margin-top:4px;">${this.escapeHtml(l.items_summary) || 'N/A'}</div>
-                      </div>
-                      <div>
-                        <strong style="font-size:13px;color:#475569;">Payment History:</strong>
-                        ${l.payments && l.payments.length > 0 ? `
-                          <table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12px;">
-                            <thead>
-                              <tr style="background:#f1f5f9;">
-                                <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:left;color:#64748b;font-size:10px;text-transform:uppercase;">Date</th>
-                                <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:left;color:#64748b;font-size:10px;text-transform:uppercase;">Method</th>
-                                <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:right;color:#64748b;font-size:10px;text-transform:uppercase;">Paid</th>
-                                <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:right;color:#64748b;font-size:10px;text-transform:uppercase;">Remaining</th>
-                                <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:left;color:#64748b;font-size:10px;text-transform:uppercase;">Note</th>
-                                <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:center;color:#64748b;font-size:10px;text-transform:uppercase;">Actions</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              ${l.payments.map(p => `
-                                <tr>
-                                  <td style="padding:4px 8px;border:1px solid #e2e8f0;">${Formatters.formatDate(p.payment_date)}</td>
-                                  <td style="padding:4px 8px;border:1px solid #e2e8f0;">${this.escapeHtml(p.payment_method)}</td>
-                                  <td style="padding:4px 8px;border:1px solid #e2e8f0;text-align:right;font-weight:600;color:#22c55e;">${Formatters.formatCurrency(p.amount, App.currency)}</td>
-                                  <td style="padding:4px 8px;border:1px solid #e2e8f0;text-align:right;color:${p.remaining_after > 0 ? '#ef4444' : '#22c55e'};font-weight:600;">${Formatters.formatCurrency(p.remaining_after, App.currency)}</td>
-                                  <td style="padding:4px 8px;border:1px solid #e2e8f0;">${this.escapeHtml(p.note) || '-'}</td>
-                                  <td style="padding:4px 8px;border:1px solid #e2e8f0;text-align:center;">
-                                    <button class="btn btn-sm btn-warning" onclick="LedgersPage.editPayment(${p.id}, ${l.sale_id})" title="Edit Payment" style="padding:2px 6px;font-size:10px;">
-                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 0-3 0L12 9l4 11 4.5-4.5z"/></svg>
-                                    </button>
-                                    <button class="btn btn-sm btn-danger" onclick="LedgersPage.deletePaymentConfirm(${p.id}, ${l.sale_id})" title="Delete Payment" style="padding:2px 6px;font-size:10px;margin-left:4px;">
-                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px;"><polyline points="3 6 5 6 21 0"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                                    </button>
-                                  </td>
-                                </tr>
-                              `).join('')}
-                            </tbody>
-                          </table>
-                        ` : '<div style="font-size:12px;color:#94a3b8;padding:6px 0;">No payments recorded.</div>'}
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      `;
-
-      const paginationContainer = document.getElementById("ledgers-pagination");
-      if (paginationContainer && data.totalPages > 1) {
-        paginationContainer.innerHTML = this.renderPagination(data);
-      } else if (paginationContainer) {
-        paginationContainer.innerHTML = '';
-      }
+      
+      this.renderLedgerTable(entries);
     } catch (err) {
       container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${err.message}</p></div>`;
     }
   },
 
-  renderPagination(data) {
-    const pages = [];
-    for (let i = 1; i <= data.totalPages; i++) pages.push(i);
-    return `
-      <div class="pagination">
-        <button ${data.page <= 1 ? 'disabled' : ''} onclick="LedgersPage.goToPage(${data.page - 1})">Prev</button>
-        ${pages.map(p => `<button class="${p === data.page ? 'active' : ''}" onclick="LedgersPage.goToPage(${p})">${p}</button>`).join('')}
-        <button ${data.page >= data.totalPages ? 'disabled' : ''} onclick="LedgersPage.goToPage(${data.page + 1})">Next</button>
-        <span class="pagination-info">${data.total} total</span>
+  renderLedgerTable(entries) {
+    const container = document.getElementById("ledger-entries-table-container");
+    if (!container) return;
+
+    const currency = App.currency || 'USD';
+
+    container.innerHTML = `
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th style="text-align:right;">Debit (Owes)</th>
+              <th style="text-align:right;">Credit (Paid)</th>
+              <th style="text-align:right;" title="Running balance after this entry">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${entries.map(e => {
+              const typeBadge = this.getLedgerTypeBadge(e.reference_type);
+              return `
+                <tr>
+                  <td>${Formatters.formatDate(e.entry_date)}</td>
+                  <td><span class="badge ${typeBadge}">${this.escapeHtml(e.reference_type)}</span></td>
+                  <td style="font-size:13px;">${this.escapeHtml(e.description)}</td>
+                  <td style="text-align:right;font-weight:600;color:var(--danger);">${e.debit > 0 ? Formatters.formatCurrency(e.debit, currency) : '-'}</td>
+                  <td style="text-align:right;font-weight:600;color:var(--success);">${e.credit > 0 ? Formatters.formatCurrency(e.credit, currency) : '-'}</td>
+                  <td style="text-align:right;font-weight:700;${e.running_balance > 0 ? 'color:var(--danger);' : 'color:var(--success);'}">${Formatters.formatCurrency(e.running_balance, currency)}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
       </div>
     `;
   },
 
-  goToPage(page) {
-    this.currentFilters.page = page;
-    this.loadLedgers();
+  getLedgerTypeBadge(type) {
+    const badges = {
+      'Sale': 'badge-outstanding',
+      'Payment': 'badge-paid',
+      'Return': 'badge-partial',
+      'OldBalanceDebit': 'badge-damaged',
+      'OldBalanceCredit': 'badge-in-stock',
+      'Adjustment': 'badge-reserved'
+    };
+    return badges[type] || 'badge-outstanding';
   },
 
-  onSearch() {
-    clearTimeout(this._searchTimeout);
-    this._searchTimeout = setTimeout(() => {
-      this.currentFilters.search = document.getElementById("ledger-search")?.value?.trim() || "";
-      this.currentFilters.page = 1;
-      this.loadLedgers();
-    }, 300);
-  },
-
-  onFilter() {
-    this.currentFilters.status = document.getElementById("filter-ledger-status")?.value || "";
-    this.currentFilters.ledger_type = document.getElementById("filter-ledger-type")?.value || "";
-    this.currentFilters.date_from = document.getElementById("filter-date-from")?.value || "";
-    this.currentFilters.date_to = document.getElementById("filter-date-to")?.value || "";
-    this.currentFilters.page = 1;
-    this.loadLedgers();
-  },
-
-  toggleSaleDetails(saleId) {
-    const row = document.getElementById(`sale-details-row-${saleId}`);
-    const icon = document.getElementById(`toggle-icon-${saleId}`);
-    if (row) {
-      const isVisible = row.style.display !== 'none';
-      row.style.display = isVisible ? 'none' : 'table-row';
-      if (icon) {
-        icon.style.transform = isVisible ? 'rotate(0deg)' : 'rotate(90deg)';
-        icon.style.display = 'inline-block';
-        icon.style.transition = 'transform 0.2s ease';
-      }
-    }
-  },
-
-  async viewSale(id) {
-    try {
-      const result = await window.api.getSaleById(id);
-      if (!result.success || !result.data) {
-        Toast.error("Failed to load sale details.");
-        return;
-      }
-
-      const l = result.data;
-      const currency = App.currency || "USD";
-
-      const itemsHtml = l.items && l.items.length > 0 ? `
-        <div style="margin-top:16px;">
-          <h4 style="margin-bottom:8px;font-size:14px;">Products in Sale</h4>
-          <table class="report-table">
-            <thead>
-              <tr><th>Product</th><th>Qty</th><th>Price</th><th>Subtotal</th></tr>
-            </thead>
-            <tbody>
-              ${l.items.map(item => `
-                <tr>
-                  <td>${this.escapeHtml(item.product_name)}</td>
-                  <td>${item.quantity}</td>
-                  <td>${Formatters.formatCurrency(item.unit_price, currency)}</td>
-                  <td>${Formatters.formatCurrency(item.subtotal, currency)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      ` : '';
-
-      const paymentsHtml = l.payments && l.payments.length > 0 ? `
-        <div style="margin-top:16px;">
-          <h4 style="margin-bottom:8px;font-size:14px;">Payment History</h4>
-          <table class="report-table">
-            <thead>
-              <tr><th>Date</th><th>Method</th><th style="text-align:right;">Amount</th><th>Note</th><th>Actions</th></tr>
-            </thead>
-            <tbody>
-              ${l.payments.map(p => `
-                <tr>
-                  <td>${Formatters.formatDate(p.payment_date)}</td>
-                  <td>${this.escapeHtml(p.payment_method)}</td>
-                  <td style="text-align:right;font-weight:600;color:var(--success);">${Formatters.formatCurrency(p.amount, currency)}</td>
-                  <td>${this.escapeHtml(p.note) || '-'}</td>
-                  <td>
-                    <button class="btn btn-sm btn-warning" onclick="LedgersPage.editPayment(${p.id}, ${l.id})" title="Edit Payment" style="padding:2px 6px;font-size:10px;">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 0-3 0L12 9l4 11 4.5-4.5z"/></svg>
-                    </button>
-                    <button class="btn btn-sm btn-danger" onclick="LedgersPage.deletePaymentConfirm(${p.id}, ${l.id})" title="Delete Payment" style="padding:2px 6px;font-size:10px;margin-left:4px;">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px;"><polyline points="3 6 5 6 21 0"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                    </button>
-                  </td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      ` : '<div style="margin-top:16px;"><p style="color:var(--text-muted);">No payments recorded yet.</p></div>';
-
-      const returnsHtml = l.returns && l.returns.length > 0 ? `
-        <div style="margin-top:16px;">
-          <h4 style="margin-bottom:8px;font-size:14px;">Returns</h4>
-          ${l.returns.map(r => `
-            <div class="payment-item">
-              <div class="payment-info">
-                <div class="payment-date">${Formatters.formatDate(r.return_date)}</div>
-                <div class="payment-method">${this.escapeHtml(r.reason) || 'No reason'}</div>
-              </div>
-              <div class="payment-amount" style="color:var(--warning);">-${Formatters.formatCurrency(r.total_return_amount, currency)}</div>
-            </div>
-          `).join('')}
-        </div>
-      ` : '';
-
-      const body = `
-        <div class="ledger-details-grid">
-          <div class="detail-field">
-            <div class="detail-label">Sale Reference</div>
-            <div class="detail-value">${this.escapeHtml(l.reference_no)}</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-label">Customer</div>
-            <div class="detail-value">${this.escapeHtml(l.customer_name)}</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-label">Date</div>
-            <div class="detail-value">${Formatters.formatDate(l.issue_date || l.transaction_date)}</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-label">Type</div>
-            <div class="detail-value"><span class="badge ${l.ledger_type === 'Cash' ? 'badge-cash' : 'badge-loan'}">${l.ledger_type}</span></div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-label">Total Amount</div>
-            <div class="detail-value">${Formatters.formatCurrency(l.total_amount, currency)}</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-label">Paid Amount</div>
-            <div class="detail-value" style="color:var(--success);">${Formatters.formatCurrency(l.paid_amount, currency)}</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-label">Remaining</div>
-            <div class="detail-value" style="color:${l.remaining_amount > 0 ? 'var(--danger)' : 'var(--success)'};font-weight:700;">${Formatters.formatCurrency(l.remaining_amount, currency)}</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-label">Status</div>
-            <div class="detail-value"><span class="badge ${l.payment_status === 'Paid' ? 'badge-paid' : l.payment_status === 'Partial' ? 'badge-partial' : 'badge-outstanding'}">${l.payment_status}</span></div>
-          </div>
-        </div>
-        ${itemsHtml}
-        ${paymentsHtml}
-        ${returnsHtml}
-      `;
-
-      const footer = `
-        <button class="btn btn-secondary" onclick="window.Modal.close()">Close</button>
-        ${l.remaining_amount > 0 ? `<button class="btn btn-success" onclick="window.Modal.close(); LedgersPage.showAddPayment(${l.id})">Add Payment</button>` : ''}
-        <button class="btn btn-warning" onclick="window.Modal.close(); LedgersPage.editSale(${l.id})">Edit Sale</button>
-        <button class="btn btn-danger" onclick="window.Modal.close(); LedgersPage.deleteSaleConfirm(${l.id})">Delete Sale</button>
-        <button class="btn btn-primary" onclick="window.Modal.close(); LedgersPage.printInvoice(${l.id})">Print Invoice</button>
-      `;
-
-      Modal.show({ title: `Sale - ${l.reference_no}`, body, footer, size: "lg" });
-    } catch (err) {
-      Toast.error(err.message);
-    }
-  },
-
-  showAddPayment(saleId) {
+  // ==================== ADD PAYMENT (with balance display) ====================
+  
+  showAddPaymentModal() {
     const formHtml = `
-      <form id="payment-form" onsubmit="return false;">
+      <form id="ledger-payment-form" onsubmit="return false;">
+        <div class="form-group">
+          <label>Customer *</label>
+          <select class="form-control" id="ledger-pay-customer" required onchange="LedgersPage.onPaymentCustomerChange()">
+            <option value="">-- Select Customer --</option>
+          </select>
+        </div>
+        <div id="ledger-pay-balance-info" style="display:none;margin-bottom:12px;padding:10px;background:var(--bg-secondary);border-radius:var(--radius);border:1px solid var(--border-color);">
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;font-size:11px;">
+            <div><span style="color:var(--text-muted);">Total Sales:</span> <span id="pay-info-sales" style="font-weight:700;">$0</span></div>
+            <div><span style="color:var(--text-muted);">Total Paid:</span> <span id="pay-info-paid" style="font-weight:700;color:var(--success);">$0</span></div>
+            <div><span style="color:var(--text-muted);">Sale Outstanding:</span> <span id="pay-info-outstanding" style="font-weight:700;color:var(--danger);">$0</span></div>
+            <div><span style="color:var(--text-muted);">Old Balance:</span> <span id="pay-info-old" style="font-weight:700;">$0</span></div>
+            <div><span style="color:var(--text-muted);">Total Due:</span> <span id="pay-info-due" style="font-weight:700;color:var(--danger);font-size:13px;">$0</span></div>
+          </div>
+        </div>
         <div class="form-group">
           <label>Payment Date</label>
-          <input type="date" class="form-control" id="pmt-date" value="${new Date().toISOString().split('T')[0]}">
+          <input type="date" class="form-control" id="ledger-pay-date" value="${new Date().toISOString().split('T')[0]}">
         </div>
         <div class="form-group">
           <label>Amount *</label>
-          <input type="number" step="0.01" min="0.01" class="form-control" id="pmt-amount" required>
+          <input type="number" step="0.01" min="0.01" class="form-control" id="ledger-pay-amount" required>
         </div>
         <div class="form-group">
           <label>Payment Method</label>
-          <select class="form-control" id="pmt-method">
+          <select class="form-control" id="ledger-pay-method">
             <option value="Cash">Cash</option>
             <option value="Bank">Bank</option>
             <option value="Online">Online</option>
@@ -411,391 +333,297 @@ const LedgersPage = {
           </select>
         </div>
         <div class="form-group">
-          <label>Note</label>
-          <input type="text" class="form-control" id="pmt-note" placeholder="Optional note...">
+          <label>Description</label>
+          <input type="text" class="form-control" id="ledger-pay-desc" placeholder="e.g. Payment received">
         </div>
       </form>
     `;
 
-    Modal.showForm("Add Payment", formHtml, async () => {
-      const amount = parseFloat(document.getElementById("pmt-amount")?.value);
+    Modal.showForm("Add Payment to Ledger", formHtml, async () => {
+      const customerId = parseInt(document.getElementById("ledger-pay-customer")?.value);
+      if (!customerId) {
+        Toast.error("Please select a customer.");
+        return;
+      }
+      const amount = parseFloat(document.getElementById("ledger-pay-amount")?.value);
       if (!amount || amount <= 0) {
         Toast.error("Please enter a valid amount.");
         return;
       }
       try {
-        const result = await window.api.addPayment({
-          sale_issue_id: saleId,
-          payment_date: document.getElementById("pmt-date")?.value || new Date().toISOString().split('T')[0],
+        const result = await window.api.addLedgerPayment({
+          customer_id: customerId,
           amount: amount,
-          payment_method: document.getElementById("pmt-method")?.value || "Cash",
-          note: document.getElementById("pmt-note")?.value?.trim() || "",
+          payment_date: document.getElementById("ledger-pay-date")?.value || new Date().toISOString().split('T')[0],
+          payment_method: document.getElementById("ledger-pay-method")?.value || "Cash",
+          description: document.getElementById("ledger-pay-desc")?.value?.trim() || `Payment received - ${document.getElementById("ledger-pay-method")?.value || "Cash"}`
         });
         if (result.success) {
-          Toast.success("Payment added successfully.");
+          Toast.success("Payment recorded in ledger successfully.");
           Modal.close();
-          this.loadLedgers();
+          // If viewing this customer, refresh
+          if (this.currentCustomerId === customerId) {
+            await this.loadCustomerBalance();
+            await this.loadCustomerLedgerEntries();
+          } else {
+            // Select this customer
+            const customerName = document.getElementById("ledger-pay-customer").options[document.getElementById("ledger-pay-customer").selectedIndex]?.text?.split(' - ')[0] || 'Customer';
+            await this.selectCustomerById(customerId, customerName);
+          }
         } else {
-          Toast.error(result.error || "Failed to add payment.");
+          Toast.error(result.error || "Failed to record payment.");
         }
       } catch (err) {
         Toast.error(err.message);
       }
     }, "sm");
-  },
-
-  // ==================== DELETE SALE ====================
-  async deleteSaleConfirm(saleId) {
-    const confirmed = confirm("Are you sure you want to delete this sale? This will restore all products to inventory and remove all payment records. This action cannot be undone.");
-    if (!confirmed) return;
     
-    try {
-      const result = await window.api.deleteSale(saleId);
-      if (result.success) {
-        Toast.success("Sale deleted successfully.");
-        this.loadLedgers();
-      } else {
-        Toast.error(result.error || "Failed to delete sale.");
-      }
-    } catch (err) {
-      Toast.error(err.message);
+    // Load customers into the dropdown
+    setTimeout(async () => {
+      try {
+        const result = await window.api.getAllCustomers({ limit: 5000 });
+        if (!result.success) return;
+        const customers = result.data?.customers || [];
+        const select = document.getElementById("ledger-pay-customer");
+        if (select) {
+          select.innerHTML = '<option value="">-- Select Customer --</option>' +
+            customers.map(c => `<option value="${c.id}" ${this.currentCustomerId === c.id ? 'selected' : ''}>${this.escapeHtml(c.customer_name)}${c.phone ? ' - ' + this.escapeHtml(c.phone) : ''}</option>`).join('');
+        }
+        // If a customer is already selected, load their balance info
+        if (this.currentCustomerId) {
+          await this.loadPaymentBalanceInfo(this.currentCustomerId);
+        }
+      } catch (err) {}
+    }, 100);
+  },
+
+  async onPaymentCustomerChange() {
+    const select = document.getElementById("ledger-pay-customer");
+    const customerId = select?.value ? parseInt(select.value) : null;
+    if (customerId) {
+      await this.loadPaymentBalanceInfo(customerId);
+    } else {
+      document.getElementById("ledger-pay-balance-info").style.display = "none";
     }
   },
 
-  // ==================== EDIT SALE ====================
-  async editSale(saleId) {
+  async loadPaymentBalanceInfo(customerId) {
     try {
-      const result = await window.api.getSaleById(saleId);
-      if (!result.success || !result.data) {
-        Toast.error("Failed to load sale details.");
-        return;
+      const result = await window.api.getCustomerLedgerSummary(customerId);
+      if (!result.success) return;
+      
+      const data = result.data;
+      const currency = App.currency || 'USD';
+      
+      document.getElementById("pay-info-sales").textContent = Formatters.formatCurrency(data.total_sales || 0, currency);
+      document.getElementById("pay-info-paid").textContent = Formatters.formatCurrency(data.total_paid || 0, currency);
+      
+      const outstandingEl = document.getElementById("pay-info-outstanding");
+      if (outstandingEl) {
+        outstandingEl.textContent = Formatters.formatCurrency(data.total_outstanding || 0, currency);
+        outstandingEl.style.color = (data.total_outstanding || 0) > 0 ? 'var(--danger)' : 'var(--success)';
       }
       
-      const l = result.data;
-      const customersResult = await window.api.getAllCustomers({});
-      const customers = customersResult.success ? customersResult.data.customers || [] : [];
+      const oldBalEl = document.getElementById("pay-info-old");
+      if (oldBalEl) {
+        oldBalEl.textContent = Formatters.formatCurrency(data.old_balance_net || 0, currency);
+        oldBalEl.style.color = (data.old_balance_net || 0) > 0 ? 'var(--danger)' : (data.old_balance_net || 0) < 0 ? 'var(--success)' : 'var(--text-muted)';
+      }
       
-      const formHtml = `
-        <form id="edit-sale-form" onsubmit="return false;">
-          <div class="form-group">
-            <label>Customer</label>
-            <select class="form-control" id="edit-sale-customer">
-              ${customers.map(c => `<option value="${c.id}" ${c.id === l.customer_id ? 'selected' : ''}>${this.escapeHtml(c.customer_name)}</option>`).join('')}
-            </select>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Date</label>
-              <input type="date" class="form-control" id="edit-sale-date" value="${l.issue_date || new Date().toISOString().split('T')[0]}">
-            </div>
-            <div class="form-group">
-              <label>Transaction Type</label>
-              <select class="form-control" id="edit-sale-type">
-                <option value="Sale" ${l.transaction_type === 'Sale' ? 'selected' : ''}>Sale</option>
-                <option value="Issue" ${l.transaction_type === 'Issue' ? 'selected' : ''}>Issue</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Notes</label>
-            <input type="text" class="form-control" id="edit-sale-notes" value="${this.escapeHtml(l.notes || '')}">
-          </div>
-        </form>
-      `;
+      const totalDue = data.total_due || 0;
+      const totalEl = document.getElementById("pay-info-due");
+      totalEl.textContent = Formatters.formatCurrency(totalDue, currency);
+      totalEl.style.color = totalDue > 0 ? 'var(--danger)' : 'var(--success)';
+      
+      document.getElementById("ledger-pay-balance-info").style.display = "block";
+    } catch (err) {
+      console.error(err);
+    }
+  },
 
-      Modal.showForm("Edit Sale", formHtml, async () => {
-        try {
-          const updateResult = await window.api.updateSale(saleId, {
-            customer_id: parseInt(document.getElementById("edit-sale-customer")?.value),
-            issue_date: document.getElementById("edit-sale-date")?.value,
-            transaction_type: document.getElementById("edit-sale-type")?.value,
-            notes: document.getElementById("edit-sale-notes")?.value?.trim() || ""
-          });
-          
-          if (updateResult.success) {
-            Toast.success("Sale updated successfully.");
-            Modal.close();
-            this.loadLedgers();
+  // ==================== ADD OLD BALANCE ====================
+  
+  showAddOldBalanceModal() {
+    const formHtml = `
+      <form id="ledger-old-balance-form" onsubmit="return false;">
+        <div class="form-group">
+          <label>Customer *</label>
+          <select class="form-control" id="ledger-ob-customer" required onchange="LedgersPage.onOldBalanceCustomerChange()">
+            <option value="">-- Select Customer --</option>
+          </select>
+        </div>
+        <div id="ledger-ob-balance-info" style="display:none;margin-bottom:12px;padding:10px;background:var(--bg-secondary);border-radius:var(--radius);border:1px solid var(--border-color);">
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;font-size:11px;">
+            <div><span style="color:var(--text-muted);">Total Sales:</span> <span id="ob-info-sales" style="font-weight:700;">$0</span></div>
+            <div><span style="color:var(--text-muted);">Total Paid:</span> <span id="ob-info-paid" style="font-weight:700;color:var(--success);">$0</span></div>
+            <div><span style="color:var(--text-muted);">Sale Outstanding:</span> <span id="ob-info-outstanding" style="font-weight:700;color:var(--danger);">$0</span></div>
+            <div><span style="color:var(--text-muted);">Old Balance:</span> <span id="ob-info-old" style="font-weight:700;">$0</span></div>
+            <div><span style="color:var(--text-muted);">Total Due:</span> <span id="ob-info-due" style="font-weight:700;color:var(--danger);font-size:13px;">$0</span></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Amount *</label>
+          <input type="number" step="0.01" class="form-control" id="ledger-ob-amount" required placeholder="Enter amount">
+        </div>
+        <div class="form-group">
+          <label>Balance Type</label>
+          <select class="form-control" id="ledger-ob-type">
+            <option value="Debit">Debit (Customer Owes)</option>
+            <option value="Credit">Credit (You Owe Customer)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" class="form-control" id="ledger-ob-date" value="${new Date().toISOString().split('T')[0]}">
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea class="form-control" id="ledger-ob-notes" rows="2" placeholder="Optional notes about this old balance..."></textarea>
+        </div>
+      </form>
+    `;
+
+    Modal.showForm("Add Old Balance", formHtml, async () => {
+      const customerId = parseInt(document.getElementById("ledger-ob-customer")?.value);
+      if (!customerId) {
+        Toast.error("Please select a customer.");
+        return;
+      }
+      const amount = Math.abs(parseFloat(document.getElementById("ledger-ob-amount")?.value) || 0);
+      if (amount <= 0) {
+        Toast.error("Please enter a valid amount.");
+        return;
+      }
+      const balanceType = document.getElementById("ledger-ob-type")?.value || "Debit";
+      try {
+        const result = await window.api.addLedgerOldBalance({
+          customer_id: customerId,
+          amount: amount,
+          balance_type: balanceType,
+          notes: document.getElementById("ledger-ob-notes")?.value?.trim() || "",
+          entry_date: document.getElementById("ledger-ob-date")?.value || new Date().toISOString().split('T')[0]
+        });
+        if (result.success) {
+          Toast.success("Old balance added to ledger successfully.");
+          Modal.close();
+          if (this.currentCustomerId === customerId) {
+            await this.loadCustomerBalance();
+            await this.loadCustomerLedgerEntries();
           } else {
-            Toast.error(updateResult.error || "Failed to update sale.");
+            const customerName = document.getElementById("ledger-ob-customer").options[document.getElementById("ledger-ob-customer").selectedIndex]?.text?.split(' - ')[0] || 'Customer';
+            await this.selectCustomerById(customerId, customerName);
           }
-        } catch (err) {
-          Toast.error(err.message);
+        } else {
+          Toast.error(result.error || "Failed to add old balance.");
         }
-      }, "sm");
-    } catch (err) {
-      Toast.error(err.message);
-    }
-  },
-
-  // ==================== EDIT PAYMENT ====================
-  async editPayment(paymentId, saleId) {
-    try {
-      const result = await window.api.getSaleById(saleId);
-      if (!result.success || !result.data) {
-        Toast.error("Failed to load sale details.");
-        return;
+      } catch (err) {
+        Toast.error(err.message);
       }
-      
-      const l = result.data;
-      const payment = l.payments?.find(p => p.id === paymentId);
-      if (!payment) {
-        Toast.error("Payment not found.");
-        return;
-      }
-      
-      const formHtml = `
-        <form id="edit-payment-form" onsubmit="return false;">
-          <div class="form-group">
-            <label>Payment Date</label>
-            <input type="date" class="form-control" id="edit-pmt-date" value="${payment.payment_date}">
-          </div>
-          <div class="form-group">
-            <label>Amount *</label>
-            <input type="number" step="0.01" min="0.01" class="form-control" id="edit-pmt-amount" value="${payment.amount}" required>
-          </div>
-          <div class="form-group">
-            <label>Payment Method</label>
-            <select class="form-control" id="edit-pmt-method">
-              <option value="Cash" ${payment.payment_method === 'Cash' ? 'selected' : ''}>Cash</option>
-              <option value="Bank" ${payment.payment_method === 'Bank' ? 'selected' : ''}>Bank</option>
-              <option value="Online" ${payment.payment_method === 'Online' ? 'selected' : ''}>Online</option>
-              <option value="Other" ${payment.payment_method === 'Other' ? 'selected' : ''}>Other</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Note</label>
-            <input type="text" class="form-control" id="edit-pmt-note" value="${this.escapeHtml(payment.note || '')}">
-          </div>
-        </form>
-      `;
-
-      Modal.showForm("Edit Payment", formHtml, async () => {
-        const amount = parseFloat(document.getElementById("edit-pmt-amount")?.value);
-        if (!amount || amount <= 0) {
-          Toast.error("Please enter a valid amount.");
-          return;
-        }
-        
-        try {
-          const updateResult = await window.api.updatePayment(paymentId, {
-            payment_date: document.getElementById("edit-pmt-date")?.value,
-            amount: amount,
-            payment_method: document.getElementById("edit-pmt-method")?.value,
-            note: document.getElementById("edit-pmt-note")?.value?.trim() || ""
-          });
-          
-          if (updateResult.success) {
-            Toast.success("Payment updated successfully.");
-            Modal.close();
-            this.loadLedgers();
-          } else {
-            Toast.error(updateResult.error || "Failed to update payment.");
-          }
-        } catch (err) {
-          Toast.error(err.message);
-        }
-      }, "sm");
-    } catch (err) {
-      Toast.error(err.message);
-    }
-  },
-
-  // ==================== DELETE PAYMENT ====================
-  async deletePaymentConfirm(paymentId, saleId) {
-    const confirmed = confirm("Are you sure you want to delete this payment? This will recalculate the sale balance. This action cannot be undone.");
-    if (!confirmed) return;
+    }, "sm");
     
-    try {
-      const result = await window.api.deletePayment(paymentId);
-      if (result.success) {
-        Toast.success("Payment deleted successfully.");
-        this.loadLedgers();
-      } else {
-        Toast.error(result.error || "Failed to delete payment.");
-      }
-    } catch (err) {
-      Toast.error(err.message);
+    setTimeout(async () => {
+      try {
+        const result = await window.api.getAllCustomers({ limit: 5000 });
+        if (!result.success) return;
+        const customers = result.data?.customers || [];
+        const select = document.getElementById("ledger-ob-customer");
+        if (select) {
+          select.innerHTML = '<option value="">-- Select Customer --</option>' +
+            customers.map(c => `<option value="${c.id}" ${this.currentCustomerId === c.id ? 'selected' : ''}>${this.escapeHtml(c.customer_name)}${c.phone ? ' - ' + this.escapeHtml(c.phone) : ''}</option>`).join('');
+        }
+        // If a customer is already selected, load their balance info
+        if (this.currentCustomerId) {
+          await this.loadOldBalanceInfo(this.currentCustomerId);
+        }
+      } catch (err) {}
+    }, 100);
+  },
+
+  async onOldBalanceCustomerChange() {
+    const select = document.getElementById("ledger-ob-customer");
+    const customerId = select?.value ? parseInt(select.value) : null;
+    if (customerId) {
+      await this.loadOldBalanceInfo(customerId);
+    } else {
+      document.getElementById("ledger-ob-balance-info").style.display = "none";
     }
   },
 
-  async openPrintDialog() {
+  async loadOldBalanceInfo(customerId) {
     try {
-      // Load all sales for printing with a large limit
-      const result = await window.api.getAllSales({ limit: 5000 });
+      const result = await window.api.getCustomerLedgerSummary(customerId);
+      if (!result.success) return;
+      
+      const data = result.data;
+      const currency = App.currency || 'USD';
+      
+      document.getElementById("ob-info-sales").textContent = Formatters.formatCurrency(data.total_sales || 0, currency);
+      document.getElementById("ob-info-paid").textContent = Formatters.formatCurrency(data.total_paid || 0, currency);
+      
+      const outstandingEl = document.getElementById("ob-info-outstanding");
+      if (outstandingEl) {
+        outstandingEl.textContent = Formatters.formatCurrency(data.total_outstanding || 0, currency);
+        outstandingEl.style.color = (data.total_outstanding || 0) > 0 ? 'var(--danger)' : 'var(--success)';
+      }
+      
+      const oldBalEl = document.getElementById("ob-info-old");
+      if (oldBalEl) {
+        oldBalEl.textContent = Formatters.formatCurrency(data.old_balance_net || 0, currency);
+        oldBalEl.style.color = (data.old_balance_net || 0) > 0 ? 'var(--danger)' : (data.old_balance_net || 0) < 0 ? 'var(--success)' : 'var(--text-muted)';
+      }
+      
+      const totalDue = data.total_due || 0;
+      const totalEl = document.getElementById("ob-info-due");
+      totalEl.textContent = Formatters.formatCurrency(totalDue, currency);
+      totalEl.style.color = totalDue > 0 ? 'var(--danger)' : 'var(--success)';
+      
+      document.getElementById("ledger-ob-balance-info").style.display = "block";
+    } catch (err) {
+      console.error(err);
+    }
+  },
+
+  // ==================== PRINT FUNCTIONS ====================
+
+  async printCustomerLedgerReport() {
+    try {
+      const result = await window.api.getCustomerLedgerReport();
       if (!result.success) {
-        Toast.error('Failed to load sales data.');
+        Toast.error('Failed to load ledger data.');
         return;
       }
-      const sales = result.data?.sales || [];
-      if (sales.length === 0) {
-        Toast.warning('No sales to print.');
+      const data = result.data || [];
+      if (data.length === 0) {
+        Toast.warning('No customer ledger data to print.');
         return;
       }
 
       const currency = App.currency || 'PKR';
-      const totalAmount = sales.reduce((s, l) => s + (l.total_amount || 0), 0);
-      const totalPaid = sales.reduce((s, l) => s + (l.paid_amount || 0), 0);
-      const totalRemaining = sales.reduce((s, l) => s + (l.remaining_amount || 0), 0);
-      const paidCount = sales.filter(l => l.status === 'Paid').length;
-      const outstandingCount = sales.filter(l => l.status === 'Outstanding').length;
-      const partialCount = sales.filter(l => l.status === 'Partial').length;
-
-      // Build a combined data array with payment info included
-      const printData = sales.map(sale => {
-        // Build payment summary string
-        let paymentSummary = '';
-        if (sale.payments && sale.payments.length > 0) {
-          paymentSummary = sale.payments.map(p => 
-            `${Formatters.formatDate(p.payment_date)}: ${Formatters.formatCurrency(p.amount, currency)} (${p.payment_method})`
-          ).join('; ');
-        } else {
-          paymentSummary = 'No payments';
-        }
-        
-        return {
-          ...sale,
-          category: sale.ledger_type, // Map ledger_type to category for filter
-          payment_summary: paymentSummary,
-          payment_count: (sale.payments || []).length,
-          display_status: sale.status,
-          display_type: `${sale.ledger_type} (${sale.transaction_type})`,
-        };
-      });
+      const totalBalance = data.reduce((s, c) => s + (c.ledger_balance || 0), 0);
+      const totalOutstanding = data.reduce((s, c) => s + (c.sale_outstanding || 0), 0);
 
       PrintService.showPrintDialog({
-        title: 'Sales & Ledgers Report',
-        data: printData,
+        title: 'Customer Ledger Report',
+        data: data,
         columns: [
-          { field: 'sale_reference', label: 'Sale Ref', width: '100px' },
-          { field: 'customer_name', label: 'Customer', width: '120px' },
-          { field: 'transaction_date', label: 'Date', width: '70px', format: 'date' },
-          { field: 'display_type', label: 'Type', width: '80px' },
-          { field: 'total_amount', label: 'Total', width: '70px', align: 'right', format: 'currency' },
-          { field: 'paid_amount', label: 'Paid', width: '70px', align: 'right', format: 'currency' },
-          { field: 'remaining_amount', label: 'Remaining', width: '70px', align: 'right', format: 'currency' },
-          { field: 'display_status', label: 'Status', width: '60px' },
-          { field: 'payment_count', label: 'Payments', width: '50px', align: 'center' },
-          { field: 'items_summary', label: 'Items', width: '120px' },
+          { field: 'customer_name', label: 'Customer', width: '150px' },
+          { field: 'phone', label: 'Phone', width: '100px' },
+          { field: 'ledger_balance', label: 'Ledger Balance', width: '80px', align: 'right', format: 'currency' },
+          { field: 'sale_outstanding', label: 'Sale Outstanding', width: '80px', align: 'right', format: 'currency' },
         ],
-        filters: {
-          categories: ['Cash', 'Loan'],
-          categoryLabel: 'Ledger Type'
-        },
-        landscape: false,
+        landscape: true,
         showPrintOptions: true,
-        subtitle: 'With full payment history',
+        subtitle: 'Complete ledger summary for all customers',
         summaryItems: [
-          { label: 'Total Sales', value: sales.length },
-          { label: 'Paid', value: paidCount },
-          { label: 'Partial', value: partialCount },
-          { label: 'Remaining', value: outstandingCount },
-          { label: 'Total Amount', value: Formatters.formatCurrency(totalAmount, currency) },
-          { label: 'Total Paid', value: Formatters.formatCurrency(totalPaid, currency) },
-          { label: 'Total Due', value: Formatters.formatCurrency(totalRemaining, currency) },
+          { label: 'Total Customers', value: data.length },
+          { label: 'Total Ledger Balance', value: Formatters.formatCurrency(totalBalance, currency) },
+          { label: 'Total Outstanding', value: Formatters.formatCurrency(totalOutstanding, currency) },
+          { label: 'Grand Total Due', value: Formatters.formatCurrency(totalBalance + totalOutstanding, currency) },
         ],
         getCompanyHeader: () => this.getCompanyHeader()
       });
     } catch (err) {
       Toast.error('Print error: ' + err.message);
-    }
-  },
-
-  async printInvoice(saleId) {
-    try {
-      // Load company info
-      const settingsResult = await window.api.getSettings();
-      const company = settingsResult.success ? settingsResult.data : {};
-      const shopName = company.shop_name || 'Laptop Inventory Manager';
-      const shopAddress = company.shop_address || '';
-      const shopPhone = company.phone_number || '';
-
-      const result = await window.api.getSaleById(saleId);
-      if (!result.success || !result.data) {
-        Toast.error("Failed to load sale for printing.");
-        return;
-      }
-      const l = result.data;
-      const currency = App.currency || "USD";
-
-      const printWindow = window.open('', '_blank', 'width=800,height=600');
-      printWindow.document.write(`
-        <html>
-        <head>
-          <title>Invoice - ${l.reference_no}</title>
-          <style>
-            @page { margin: 10mm; }
-            body { font-family: 'Courier New', monospace; padding: 20px; color: #333; }
-            .shop-header { text-align: center; margin-bottom: 12px; }
-            .shop-header h1 { font-size: 20px; margin-bottom: 2px; }
-            .shop-header p { font-size: 12px; color: #555; margin: 1px 0; }
-            .invoice-header { text-align: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #333; }
-            .invoice-header h2 { font-size: 22px; margin-bottom: 4px; }
-            .invoice-info { display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 13px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 13px; }
-            table th { background: #f5f5f5; padding: 8px 10px; text-align: left; border: 1px solid #ddd; font-size: 12px; text-transform: uppercase; }
-            table td { padding: 6px 10px; border: 1px solid #ddd; }
-            .invoice-totals { text-align: right; font-size: 14px; margin-top: 10px; }
-            .invoice-totals .total-line { padding: 4px 0; }
-            .invoice-totals .grand-total { font-size: 18px; font-weight: 700; border-top: 2px solid #333; padding-top: 8px; margin-top: 4px; }
-            .invoice-footer { text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 12px; color: #666; }
-            @media print { body { padding: 0; } }
-          </style>
-        </head>
-        <body>
-          <div class="shop-header">
-            <h1>${this.escapeHtml(shopName)}</h1>
-            ${shopAddress ? `<p>${this.escapeHtml(shopAddress)}</p>` : ''}
-            ${shopPhone ? `<p>Phone: ${this.escapeHtml(shopPhone)}</p>` : ''}
-          </div>
-          <div class="invoice-header">
-            <h2>INVOICE</h2>
-            <p>${this.escapeHtml(l.reference_no)}</p>
-          </div>
-          <div class="invoice-info">
-            <div>
-              <strong>Customer:</strong> ${this.escapeHtml(l.customer_name)}<br>
-              <strong>Phone:</strong> ${this.escapeHtml(l.phone) || 'N/A'}<br>
-              <strong>Address:</strong> ${this.escapeHtml(l.address) || 'N/A'}
-            </div>
-            <div style="text-align:right;">
-              <strong>Date:</strong> ${Formatters.formatDate(l.issue_date || l.transaction_date)}<br>
-              <strong>Type:</strong> ${l.ledger_type}<br>
-              <strong>Status:</strong> ${l.payment_status}
-            </div>
-          </div>
-          <table>
-            <thead>
-              <tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr>
-            </thead>
-            <tbody>
-              ${(l.items || []).map(item => `
-                <tr>
-                  <td>${this.escapeHtml(item.product_name)}</td>
-                  <td>${item.quantity}</td>
-                  <td>${Formatters.formatCurrency(item.unit_price, currency)}</td>
-                  <td>${Formatters.formatCurrency(item.subtotal, currency)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          <div class="invoice-totals">
-            <div class="total-line">Total: ${Formatters.formatCurrency(l.total_amount, currency)}</div>
-            <div class="total-line">Paid: ${Formatters.formatCurrency(l.paid_amount, currency)}</div>
-            <div class="grand-total">${l.remaining_amount > 0 ? 'Due: ' + Formatters.formatCurrency(l.remaining_amount, currency) : 'PAID'}</div>
-          </div>
-          <div class="invoice-footer">
-            <p>Thank you for your business!</p>
-          </div>
-          <script>
-            window.onload = function() { setTimeout(function() { window.print(); }, 300); }
-          <\/script>
-        </body>
-        </html>
-      `);
-      printWindow.document.close();
-    } catch (err) {
-      Toast.error(err.message);
     }
   },
 

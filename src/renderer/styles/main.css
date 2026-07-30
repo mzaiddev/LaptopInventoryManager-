@@ -837,6 +837,205 @@ body.dark-mode .badge-for-parts { background: #374151; color: #d1d5db; }
   gap: 12px;
 }
 
+/* ==================== SALES FORM STYLES ==================== */
+.sale-form .form-section {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sale-form .form-section:last-of-type {
+  border-bottom: none;
+}
+
+.sale-form .form-section h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--primary);
+  display: inline-block;
+}
+
+/* Customer Search */
+.customer-search-container {
+  position: relative;
+}
+
+.customer-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow);
+  z-index: 100;
+  max-height: 200px;
+  overflow-y: auto;
+  display: none;
+}
+
+.customer-search-results.show {
+  display: block;
+}
+
+.customer-search-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-color);
+  transition: background var(--transition);
+}
+
+.customer-search-item:last-child {
+  border-bottom: none;
+}
+
+.customer-search-item:hover {
+  background: var(--bg-secondary);
+}
+
+.customer-search-item .name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.customer-search-item .phone {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.selected-customer {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--primary-light);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  margin-top: 8px;
+}
+
+.selected-customer .name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary);
+}
+
+.selected-customer .remove-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--danger);
+  padding: 0 4px;
+  line-height: 1;
+}
+
+/* Product Rows */
+#sale-products-container {
+  margin-bottom: 8px;
+}
+
+.product-row-header {
+  display: grid;
+  grid-template-columns: 1fr 70px 100px 100px 40px;
+  gap: 8px;
+  padding: 8px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid var(--border-color);
+  margin-bottom: 4px;
+}
+
+.product-row-header .sub-col {
+  text-align: right;
+}
+
+.product-row {
+  margin-bottom: 6px;
+}
+
+.product-row-fields {
+  display: grid;
+  grid-template-columns: 1fr 70px 100px 100px 40px;
+  gap: 8px;
+  align-items: center;
+}
+
+.product-row-fields .form-control {
+  padding: 8px;
+  font-size: 13px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  color: var(--text-primary);
+  width: 100%;
+}
+
+.product-row-fields .form-control:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.remove-item-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--danger);
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  opacity: 0.6;
+  transition: opacity var(--transition);
+}
+
+.remove-item-btn:hover {
+  opacity: 1;
+}
+
+.add-product-btn {
+  margin-top: 8px;
+}
+
+/* Sale Summary */
+.sale-summary {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.summary-row.total {
+  border-top: 2px solid var(--border-color);
+  margin-top: 6px;
+  padding-top: 10px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.summary-row.total span:last-child {
+  color: var(--primary);
+}
+
 /* Responsive */
 /* Text utilities */
 .text-success { color: var(--success); }

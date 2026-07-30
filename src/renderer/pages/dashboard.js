@@ -51,13 +51,64 @@ const DashboardPage = {
     const damage = data.damageSummary;
     const activity = data.recentActivity;
     const oldBalance = data.oldBalanceSummary;
+    const ledgerData = data.ledgerSummary;
 
     return `
       ${this.renderFinancialOverview(fin, ledger, sales, damage)}
+      ${ledgerData ? this.renderLedgerOverview(ledgerData) : ''}
       ${oldBalance && oldBalance.totalRecords > 0 ? this.renderOldBalanceOverview(oldBalance) : ''}
       ${this.renderInventorySummary(inv, fin, damage)}
       ${this.renderConditionSummary(cond)}
       ${this.renderActivity(activity)}
+    `;
+  },
+
+  renderLedgerOverview(ledgerData) {
+    const currency = App.currency || 'USD';
+    return `
+      <div class="dashboard-section">
+        <h2>Customer Ledger Summary</h2>
+        <div class="stats-grid">
+          <div class="stat-card clickable" onclick="App.navigate('ledgers')" title="View ledger">
+            <div class="stat-icon blue">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+              </svg>
+            </div>
+            <div class="stat-value">${ledgerData.customersWithLedger}</div>
+            <div class="stat-label">Customers on Ledger</div>
+            <div class="stat-trend">${ledgerData.totalEntries} total entries</div>
+          </div>
+          <div class="stat-card clickable" onclick="App.navigate('ledgers')" title="View ledger">
+            <div class="stat-icon green">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+            <div class="stat-value">${Formatters.formatCurrency(ledgerData.totalDebits, currency)}</div>
+            <div class="stat-label">Total Debits (Sales)</div>
+          </div>
+          <div class="stat-card clickable" onclick="App.navigate('ledgers')" title="View ledger">
+            <div class="stat-icon green">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
+            <div class="stat-value">${Formatters.formatCurrency(ledgerData.totalCredits, currency)}</div>
+            <div class="stat-label">Total Credits (Payments)</div>
+          </div>
+          <div class="stat-card clickable" onclick="App.navigate('ledgers')" title="View ledger">
+            <div class="stat-icon ${ledgerData.netLedgerBalance > 0 ? 'red' : 'green'}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            </div>
+            <div class="stat-value" style="color:${ledgerData.netLedgerBalance > 0 ? 'var(--danger)' : 'var(--success)'};">${Formatters.formatCurrency(ledgerData.netLedgerBalance, currency)}</div>
+            <div class="stat-label">Net Ledger Balance</div>
+            <div class="stat-trend">${ledgerData.customersOwing} customers owing</div>
+          </div>
+        </div>
+      </div>
     `;
   },
 

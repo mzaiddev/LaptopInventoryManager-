@@ -13,6 +13,7 @@ class DashboardService {
     const recentActivity = this.getRecentActivity(db);
     const damageSummary = this.getDamageSummary(db);
     const oldBalanceSummary = this.getOldBalanceSummary(db);
+    const ledgerSummary = this.getLedgerSummary(db);
 
     return {
       inventorySummary,
@@ -22,23 +23,21 @@ class DashboardService {
       saleSummary,
       damageSummary,
       oldBalanceSummary,
+      ledgerSummary,
       recentActivity,
       currency
     };
   }
 
   getInventorySummary(db) {
-    // Damaged count comes from damage_records, not from products table
     const damagedCount = db.prepare(`
       SELECT COALESCE(SUM(quantity), 0) as total FROM damage_records WHERE damage_type IN ('Damaged', 'Disposed')
     `).get();
 
-    // Actual sold quantity from sale_issue_items (products sold via transactions)
     const soldFromSales = db.prepare(`
       SELECT COALESCE(SUM(quantity), 0) as total FROM sale_issue_items
     `).get();
 
-    // Actual returned quantity from return_items (products returned via returns)
     const returnedFromReturns = db.prepare(`
       SELECT COALESCE(SUM(ri.quantity), 0) as total
       FROM return_items ri
@@ -71,7 +70,6 @@ class DashboardService {
   }
 
   getFinancialSummary(db) {
-    // Financial data from actual sales transactions
     const salesFinancials = db.prepare(`
       SELECT
         COALESCE(SUM(sii.subtotal), 0) as total_sales_value,
@@ -81,7 +79,6 @@ class DashboardService {
       LEFT JOIN products p ON sii.product_id = p.id
     `).get();
 
-    // Current inventory value from stock
     const inventoryValues = db.prepare(`
       SELECT
         COALESCE(SUM(purchase_price * quantity), 0) as total_purchase_value,
@@ -90,7 +87,6 @@ class DashboardService {
       FROM products
     `).get();
 
-    // Damaged stock value from damage_records
     const damagedValue = db.prepare(`
       SELECT COALESCE(SUM(dr.quantity * p.purchase_price), 0) as total
       FROM damage_records dr
@@ -260,8 +256,43 @@ class DashboardService {
         netOldBalance: (stats.total_debit || 0) - (stats.total_credit || 0)
       };
     } catch (err) {
-      console.error("Error in getOldBalanceSummary (table might not exist yet):", err.message);
+      console.error("Error in getOldBalanceSummary:", err.message);
       return { totalDebit: 0, totalCredit: 0, totalCustomers: 0, totalRecords: 0, netOldBalance: 0 };
+    }
+  }
+
+  getLedgerSummary(db) {
+    try {
+      const stats = db.prepare(`
+        SELECT
+          COALESCE(SUM(debit), 0) as total_debits,
+          COALESCE(SUM(credit), 0) as total_credits,
+          COUNT(DISTINCT customer_id) as customers_with_ledger,
+          COUNT(*) as total_entries
+        FROM customer_ledger
+      `).get();
+
+      // Get customers with positive balance (they owe money)
+      const customersOwing = db.prepare(`
+        SELECT COUNT(*) as cnt FROM (
+          SELECT customer_id, running_balance
+          FROM customer_ledger
+          WHERE id IN (SELECT MAX(id) FROM customer_ledger GROUP BY customer_id)
+          HAVING running_balance > 0
+        )
+      `).get();
+
+      return {
+        totalDebits: stats.total_debits || 0,
+        totalCredits: stats.total_credits || 0,
+        netLedgerBalance: (stats.total_debits || 0) - (stats.total_credits || 0),
+        customersWithLedger: stats.customers_with_ledger || 0,
+        totalEntries: stats.total_entries || 0,
+        customersOwing: customersOwing?.cnt || 0
+      };
+    } catch (err) {
+      console.error("Error in getLedgerSummary:", err.message);
+      return { totalDebits: 0, totalCredits: 0, netLedgerBalance: 0, customersWithLedger: 0, totalEntries: 0, customersOwing: 0 };
     }
   }
 

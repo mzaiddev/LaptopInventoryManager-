@@ -17,6 +17,138 @@ class LedgerService {
     return `${prefix}-${dateStr}-${num}`;
   }
 
+  // ==================== LEDGER ENTRY METHODS ====================
+
+  _addLedgerEntry(customerId, referenceType, referenceId, description, debit, credit, entryDate) {
+    const db = getDatabase();
+    // Get the last running balance for this customer
+    const lastEntry = db.prepare(
+      "SELECT running_balance FROM customer_ledger WHERE customer_id = ? ORDER BY entry_date DESC, id DESC LIMIT 1"
+    ).get(customerId);
+    const lastBalance = lastEntry ? lastEntry.running_balance : 0;
+    const runningBalance = lastBalance + debit - credit;
+    
+    const result = db.prepare(`
+      INSERT INTO customer_ledger (customer_id, reference_type, reference_id, description, debit, credit, running_balance, entry_date)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(customerId, referenceType, referenceId, description, debit, credit, runningBalance, entryDate);
+    
+    return { ledgerId: result.lastInsertRowid, runningBalance };
+  }
+
+  _updateLedgerRunningBalances(customerId) {
+    const db = getDatabase();
+    const entries = db.prepare(
+      "SELECT id FROM customer_ledger WHERE customer_id = ? ORDER BY entry_date ASC, id ASC"
+    ).all(customerId);
+    
+    let runningBalance = 0;
+    const updateStmt = db.prepare("UPDATE customer_ledger SET running_balance = ? WHERE id = ?");
+    
+    for (const entry of entries) {
+      const e = db.prepare("SELECT debit, credit FROM customer_ledger WHERE id = ?").get(entry.id);
+      runningBalance = runningBalance + e.debit - e.credit;
+      updateStmt.run(runningBalance, entry.id);
+    }
+  }
+
+  // ==================== CUSTOMER LEDGER QUERIES ====================
+
+  getCustomerLedger(customerId, filters = {}) {
+    const db = getDatabase();
+    let query = "SELECT * FROM customer_ledger WHERE customer_id = ?";
+    const params = [customerId];
+
+    if (filters.reference_type) {
+      query += " AND reference_type = ?";
+      params.push(filters.reference_type);
+    }
+
+    if (filters.date_from) {
+      query += " AND entry_date >= ?";
+      params.push(filters.date_from);
+    }
+
+    if (filters.date_to) {
+      query += " AND entry_date <= ?";
+      params.push(filters.date_to);
+    }
+
+    query += " ORDER BY entry_date ASC, id ASC";
+    
+    const entries = db.prepare(query).all(...params);
+    
+    // Get running balance progress
+    let runningBalance = 0;
+    for (const entry of entries) {
+      // Recalculate to ensure accuracy
+      // Use the stored running_balance
+    }
+    
+    return entries;
+  }
+
+  getCustomerLedgerSummary(customerId) {
+    const db = getDatabase();
+    
+    // Get last running balance from ledger - THIS IS THE SINGLE SOURCE OF TRUTH
+    const lastEntry = db.prepare(
+      "SELECT running_balance FROM customer_ledger WHERE customer_id = ? ORDER BY entry_date DESC, id DESC LIMIT 1"
+    ).get(customerId);
+    
+    const ledgerBalance = lastEntry ? lastEntry.running_balance : 0;
+    
+    // Get sale-specific stats from sale_issues table
+    const saleStats = db.prepare(
+      "SELECT COALESCE(SUM(total_amount), 0) as ts, COALESCE(SUM(paid_amount), 0) as tp, COALESCE(SUM(remaining_amount), 0) as tr FROM sale_issues WHERE customer_id = ?"
+    ).get(customerId);
+    
+    // Get old balance stats
+    const oldData = this._getCustomerOldBalanceData(db, customerId);
+    
+    // Get ledger entry summary (for detailed breakdown)
+    const ledgerSummary = db.prepare(`
+      SELECT
+        COALESCE(SUM(CASE WHEN reference_type = 'Sale' THEN debit ELSE 0 END), 0) as total_sale_debits,
+        COALESCE(SUM(CASE WHEN reference_type = 'Payment' THEN credit ELSE 0 END), 0) as total_payment_credits,
+        COALESCE(SUM(CASE WHEN reference_type IN ('OldBalanceDebit') THEN debit ELSE 0 END), 0) as total_old_debits,
+        COALESCE(SUM(CASE WHEN reference_type IN ('OldBalanceCredit') THEN credit ELSE 0 END), 0) as total_old_credits,
+        COALESCE(SUM(CASE WHEN reference_type = 'Return' THEN credit ELSE 0 END), 0) as total_return_credits
+      FROM customer_ledger WHERE customer_id = ?
+    `).get(customerId);
+    
+    // Total paid from ledger (sum of all Payment type credits)
+    const totalPaidFromLedger = db.prepare(
+      "SELECT COALESCE(SUM(credit), 0) as total FROM customer_ledger WHERE customer_id = ? AND reference_type = 'Payment'"
+    ).get(customerId);
+    
+    const ls = ledgerSummary || { total_sale_debits: 0, total_payment_credits: 0, total_old_debits: 0, total_old_credits: 0, total_return_credits: 0 };
+    const totalDebits = (ls.total_sale_debits || 0) + (ls.total_old_debits || 0);
+    const totalCredits = (ls.total_payment_credits || 0) + (ls.total_old_credits || 0) + (ls.total_return_credits || 0);
+    
+    return {
+      // Sale-specific stats
+      total_sales: saleStats.ts,
+      total_paid_from_sales: saleStats.tp,
+      total_outstanding: saleStats.tr,
+      
+      // Old balance stats
+      old_balance_net: oldData.net,
+      old_balance_debit: oldData.debit,
+      old_balance_credit: oldData.credit,
+      
+      // Ledger stats (SINGLE SOURCE OF TRUTH for what customer owes)
+      ledger_balance: ledgerBalance,
+      total_paid: totalPaidFromLedger?.total || 0,
+      total_debits: totalDebits,
+      total_credits: totalCredits,
+      
+      // Simple formula for display: Total Due = ledger_balance
+      // ledger_balance already accounts for: sales + payments + returns + old balances
+      total_due: Math.max(0, ledgerBalance)
+    };
+  }
+
   // ==================== CUSTOMER MANAGEMENT ====================
 
   getAllCustomers(filters = {}) {
@@ -25,8 +157,7 @@ class LedgerService {
     const params = [];
 
     if (filters.search) {
-      query +=
-        " AND (customer_name LIKE ? OR phone LIKE ? OR address LIKE ? OR email LIKE ?)";
+      query += " AND (customer_name LIKE ? OR phone LIKE ? OR address LIKE ? OR email LIKE ?)";
       const s = `%${filters.search}%`;
       params.push(s, s, s, s);
     }
@@ -40,10 +171,7 @@ class LedgerService {
 
     if (filters.limit) {
       const offset = filters.page ? (filters.page - 1) * filters.limit : 0;
-      const countQuery = query.replace(
-        "SELECT *",
-        "SELECT COUNT(*) as total",
-      );
+      const countQuery = query.replace("SELECT *", "SELECT COUNT(*) as total");
       const totalResult = db.prepare(countQuery).get(...params);
       query += " LIMIT ? OFFSET ?";
       params.push(filters.limit, offset);
@@ -115,10 +243,13 @@ class LedgerService {
     const db = getDatabase();
     
     return db.transaction(() => {
-      // 1. Delete old balances (CASCADE FK, so this is safe)
+      // 1. Delete ledger entries
+      db.prepare("DELETE FROM customer_ledger WHERE customer_id = ?").run(id);
+      
+      // 2. Delete old balances (CASCADE FK, so this is safe)
       db.prepare("DELETE FROM old_balances WHERE customer_id = ?").run(id);
       
-      // 2. Restore stock for all items in this customer's sales, then delete sales
+      // 3. Restore stock for all items in this customer's sales, then delete sales
       const sales = db.prepare("SELECT id FROM sale_issues WHERE customer_id = ?").all(id);
       const restoreItemStock = db.prepare(
         "UPDATE products SET quantity = quantity + ?, status = CASE WHEN status = 'Sold' THEN 'In Stock' ELSE status END, updated_at = datetime('now','localtime') WHERE id = ?"
@@ -137,7 +268,7 @@ class LedgerService {
         deleteSale.run(sale.id);
       }
       
-      // 3. Before deleting returns, deduct the stock that was restored by them
+      // 4. Before deleting returns, deduct the stock that was restored by them
       const returns = db.prepare("SELECT id FROM returns WHERE customer_id = ?").all(id);
       const deductReturnStock = db.prepare(
         "UPDATE products SET quantity = MAX(0, quantity - ?), updated_at = datetime('now','localtime') WHERE id = ?"
@@ -148,10 +279,9 @@ class LedgerService {
           deductReturnStock.run(item.quantity, item.product_id);
         }
       }
-      // Delete customer's returns (cascades to return_items)
       db.prepare("DELETE FROM returns WHERE customer_id = ?").run(id);
       
-      // 4. Now delete the customer itself
+      // 5. Now delete the customer itself
       db.prepare("DELETE FROM customers WHERE id = ?").run(id);
     })();
     
@@ -178,7 +308,16 @@ class LedgerService {
     const db = getDatabase();
     const s = db.prepare("SELECT COALESCE(SUM(total_amount), 0) as ts, COALESCE(SUM(paid_amount), 0) as tp FROM sale_issues WHERE customer_id = ?").get(id);
     const oldData = this._getCustomerOldBalanceData(db, id);
-    return { opening_balance: oldData.net, total_sales: s.ts, total_paid: s.tp, outstanding_balance: s.ts - s.tp, old_balance_debit: oldData.debit, old_balance_credit: oldData.credit, old_balance_net: oldData.net };
+    return { 
+      opening_balance: oldData.net, 
+      total_sales: s.ts, 
+      total_paid: s.tp, 
+      outstanding_balance: s.ts - s.tp, 
+      old_balance_debit: oldData.debit, 
+      old_balance_credit: oldData.credit, 
+      old_balance_net: oldData.net,
+      combined_total: (s.ts - s.tp) + oldData.net
+    };
   }
 
   // ==================== SALE / ISSUE CREATION ====================
@@ -203,7 +342,7 @@ class LedgerService {
     const paymentStatus = remainingAmount <= 0 ? "Paid" : paidAmount > 0 ? "Partial" : "Outstanding";
 
     return db.transaction(() => {
-      // Create sale issue directly (no separate ledger)
+      // Create sale issue directly
       const saleResult = db.prepare("INSERT INTO sale_issues (customer_id, reference_no, issue_date, transaction_type, total_amount, paid_amount, remaining_amount, payment_status, ledger_type, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
         data.customer_id, referenceNo, data.issue_date, data.transaction_type || "Sale",
         totalAmount, paidAmount, remainingAmount, paymentStatus, ledgerType, data.notes || ""
@@ -218,12 +357,37 @@ class LedgerService {
         db.prepare("UPDATE products SET quantity = quantity - ?, status = CASE WHEN quantity - ? <= 0 THEN 'Sold' ELSE status END, updated_at = datetime('now','localtime') WHERE id = ?").run(item.quantity, item.quantity, item.product_id);
       }
 
-      // If paid, create payment record directly linked to sale
+      // Create payment record FIRST (to get the reference ID for ledger entries)
+      let paymentId = null;
       if (paidAmount > 0) {
-        db.prepare("INSERT INTO payments (sale_issue_id, payment_date, amount, payment_method, note) VALUES (?, ?, ?, ?, ?)").run(
+        const paymentResult = db.prepare("INSERT INTO payments (sale_issue_id, payment_date, amount, payment_method, note) VALUES (?, ?, ?, ?, ?)").run(
           saleId, data.issue_date, paidAmount, data.payment_method || "Cash", `Payment for ${referenceNo}`
         );
+        paymentId = paymentResult.lastInsertRowid;
       }
+
+      // Create ledger entries using the unified 2-entries system:
+      // ALWAYS: 1 DEBIT entry for the sale amount
+      // IF PAID: 1 CREDIT entry for the payment amount
+      // This ensures the sale amount ALWAYS shows as a DEBIT in the ledger
+      // and the running balance is always accurate.
+      
+      // DEBIT entry: the sale (customer owes this amount)
+      this._addLedgerEntry(
+        data.customer_id, 'Sale', saleId,
+        `Sale ${referenceNo}`,
+        totalAmount, 0, data.issue_date
+      );
+      
+      // CREDIT entry: any payment made (reduces what customer owes)
+      if (paidAmount > 0) {
+        this._addLedgerEntry(
+          data.customer_id, 'Payment', paymentId,
+          `Payment for ${referenceNo} - ${data.payment_method || 'Cash'}`,
+          0, paidAmount, data.issue_date
+        );
+      }
+      
       return { saleId, referenceNo };
     })();
   }
@@ -298,12 +462,93 @@ class LedgerService {
     const db = getDatabase();
     const sale = db.prepare("SELECT * FROM sale_issues WHERE id = ?").get(data.sale_issue_id);
     if (!sale) throw new Error("Sale not found");
+    
     const newPaid = sale.paid_amount + data.amount;
     const newRemaining = sale.total_amount - newPaid;
     const newStatus = newRemaining <= 0 ? "Paid" : "Partial";
-    db.prepare("INSERT INTO payments (sale_issue_id, payment_date, amount, payment_method, note) VALUES (?, ?, ?, ?, ?)").run(data.sale_issue_id, data.payment_date, data.amount, data.payment_method || "Cash", data.note || "");
-    db.prepare("UPDATE sale_issues SET paid_amount = ?, remaining_amount = ?, payment_status = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(newPaid, newRemaining, newStatus, data.sale_issue_id);
-    return { success: true };
+    
+    const result = db.transaction(() => {
+      // Insert payment
+      const paymentResult = db.prepare("INSERT INTO payments (sale_issue_id, payment_date, amount, payment_method, note) VALUES (?, ?, ?, ?, ?)").run(
+        data.sale_issue_id, data.payment_date, data.amount, data.payment_method || "Cash", data.note || ""
+      );
+      
+      // Update sale
+      db.prepare("UPDATE sale_issues SET paid_amount = ?, remaining_amount = ?, payment_status = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(
+        newPaid, newRemaining, newStatus, data.sale_issue_id
+      );
+      
+      // Create ledger CREDIT entry for payment
+      this._addLedgerEntry(
+        sale.customer_id, 
+        'Payment', 
+        paymentResult.lastInsertRowid, 
+        `Payment for ${sale.reference_no} - ${data.payment_method}`, 
+        0, 
+        data.amount, 
+        data.payment_date
+      );
+      
+      return { success: true, paymentId: paymentResult.lastInsertRowid };
+    })();
+    
+    return result;
+  }
+
+  // ==================== DIRECT LEDGER PAYMENT (not tied to a specific sale) ====================
+
+  addLedgerPayment(data) {
+    const db = getDatabase();
+    const customer = db.prepare("SELECT id, customer_name FROM customers WHERE id = ?").get(data.customer_id);
+    if (!customer) throw new Error("Customer not found");
+    
+    return db.transaction(() => {
+      // Create a ledger entry directly as a payment credit
+      const result = this._addLedgerEntry(
+        data.customer_id,
+        'Payment',
+        null,
+        data.description || `Payment received - ${data.payment_method || 'Cash'}`,
+        0,
+        data.amount,
+        data.payment_date
+      );
+      
+      return { success: true, ledgerId: result.ledgerId, runningBalance: result.runningBalance };
+    })();
+  }
+
+  // ==================== LEDGER OLD BALANCE ENTRY ====================
+
+  addLedgerOldBalance(data) {
+    const db = getDatabase();
+    const customer = db.prepare("SELECT id, customer_name FROM customers WHERE id = ?").get(data.customer_id);
+    if (!customer) throw new Error("Customer not found");
+    
+    return db.transaction(() => {
+      // First add to old_balances table for legacy support
+      const obResult = db.prepare("INSERT INTO old_balances (customer_id, amount, balance_type, notes) VALUES (?, ?, ?, ?)").run(
+        data.customer_id, data.amount, data.balance_type, data.notes || ""
+      );
+      
+      // Then add to ledger
+      const refType = data.balance_type === 'Debit' ? 'OldBalanceDebit' : 'OldBalanceCredit';
+      const debit = data.balance_type === 'Debit' ? data.amount : 0;
+      const credit = data.balance_type === 'Credit' ? data.amount : 0;
+      const description = data.notes || `${data.balance_type === 'Debit' ? 'Old Debit' : 'Old Credit'} Balance`;
+      
+      const result = this._addLedgerEntry(
+        data.customer_id,
+        refType,
+        obResult.lastInsertRowid,
+        description,
+        debit,
+        credit,
+        data.entry_date || new Date().toISOString().split('T')[0]
+      );
+      
+      return { success: true, oldBalanceId: obResult.lastInsertRowid, ledgerId: result.ledgerId, runningBalance: result.runningBalance };
+    })();
   }
 
   // ==================== RETURNS ====================
@@ -311,7 +556,6 @@ class LedgerService {
   createReturn(data) {
     const db = getDatabase();
 
-    // Validate customer exists
     const customer = db
       .prepare("SELECT id, customer_name FROM customers WHERE id = ?")
       .get(data.customer_id);
@@ -319,7 +563,6 @@ class LedgerService {
       throw new Error("Customer not found. Please select a valid customer.");
     }
 
-    // Validate the sale exists
     const sale = db
       .prepare("SELECT * FROM sale_issues WHERE id = ?")
       .get(data.sale_issue_id);
@@ -329,17 +572,13 @@ class LedgerService {
 
     const errors = [];
     for (const item of data.items) {
-      // Check if the item was in the original sale
       const originalItem = db
-        .prepare(
-          "SELECT * FROM sale_issue_items WHERE sale_issue_id = ? AND product_id = ?",
-        )
+        .prepare("SELECT * FROM sale_issue_items WHERE sale_issue_id = ? AND product_id = ?")
         .get(data.sale_issue_id, item.product_id);
       if (!originalItem) {
         errors.push(`Product ID ${item.product_id} was not in the original sale`);
         continue;
       }
-      // Check return quantity doesn't exceed sold quantity minus already returned
       const alreadyReturned = db
         .prepare(
           `SELECT COALESCE(SUM(quantity), 0) as returned_qty
@@ -366,11 +605,10 @@ class LedgerService {
       0,
     );
 
-    // Validate each product exists before starting transaction
     for (const item of data.items) {
       const prodExists = db.prepare("SELECT id FROM products WHERE id = ?").get(item.product_id);
       if (!prodExists) {
-        throw new Error(`Product ID ${item.product_id} no longer exists in inventory. It may have been deleted.`);
+        throw new Error(`Product ID ${item.product_id} no longer exists in inventory.`);
       }
     }
 
@@ -382,12 +620,11 @@ class LedgerService {
         returnId = returnResult.lastInsertRowid;
       } catch (insErr) {
         if (insErr.message.includes("FOREIGN KEY")) {
-          throw new Error(`Cannot create return: the sale or customer reference is invalid. Please verify the sale (ID: ${data.sale_issue_id}) and customer (ID: ${data.customer_id}) still exist.`);
+          throw new Error(`Cannot create return: the sale or customer reference is invalid.`);
         }
         throw insErr;
       }
 
-      // Add return items and restore stock
       const itemStmt = db.prepare(`
         INSERT INTO return_items (return_id, product_id, product_name, quantity, unit_price, subtotal)
         VALUES (?, ?, ?, ?, ?, ?)
@@ -420,6 +657,19 @@ class LedgerService {
         restoreStockStmt.run(item.quantity, item.product_id);
       }
 
+      // Add ledger entry for return (credit - reduces customer's debt)
+      if (totalReturnAmount > 0) {
+        this._addLedgerEntry(
+          data.customer_id,
+          'Return',
+          returnId,
+          `Return ${returnRef}`,
+          0,
+          totalReturnAmount,
+          data.return_date
+        );
+      }
+
       if (totalReturnAmount > 0) {
         const newTotal = Math.max(0, sale.total_amount - totalReturnAmount);
         const newPaid = Math.min(sale.paid_amount, newTotal);
@@ -446,8 +696,7 @@ class LedgerService {
     const params = [];
 
     if (filters.search) {
-      query +=
-        " AND (c.customer_name LIKE ? OR si.reference_no LIKE ? OR r.reason LIKE ?)";
+      query += " AND (c.customer_name LIKE ? OR si.reference_no LIKE ? OR r.reason LIKE ?)";
       const s = `%${filters.search}%`;
       params.push(s, s, s);
     }
@@ -488,21 +737,11 @@ class LedgerService {
 
     const returns = db.prepare(query).all(...params);
 
-    // Get items for each return
     for (const ret of returns) {
-      ret.items = db
-        .prepare(
-          "SELECT * FROM return_items WHERE return_id = ?",
-        )
-        .all(ret.id);
+      ret.items = db.prepare("SELECT * FROM return_items WHERE return_id = ?").all(ret.id);
     }
 
-    return {
-      returns,
-      total: totalResult?.total || 0,
-      page: filters.page || 1,
-      limit,
-    };
+    return { returns, total: totalResult?.total || 0, page: filters.page || 1, limit };
   }
 
   // ==================== DAMAGE MANAGEMENT ====================
@@ -527,7 +766,6 @@ class LedgerService {
     const referenceNo = `DMG-${dateStr}-${String((countRef?.cnt || 0) + 1).padStart(4, "0")}`;
 
     const result = db.transaction(() => {
-      // Record the damage
       const stmt = db.prepare(`
         INSERT INTO damage_records (product_id, quantity, damage_type, reason, reference_no, recorded_by, recorded_date, notes)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -543,7 +781,6 @@ class LedgerService {
         data.notes || ''
       );
 
-      // Reduce product quantity directly
       const newQty = product.quantity - data.quantity;
       const newStatus = newQty <= 0 ? 'Damaged' : product.status;
       db.prepare(
@@ -592,7 +829,6 @@ class LedgerService {
     const limit = filters.limit || 50;
     const offset = filters.page ? (filters.page - 1) * limit : 0;
 
-    // Build a proper count query by extracting the WHERE clause
     const whereMatch = query.match(/WHERE[\s\S]*/);
     const whereClause = whereMatch ? whereMatch[0] : '';
     let totalResult;
@@ -607,7 +843,6 @@ class LedgerService {
 
     const damages = db.prepare(query).all(...params);
 
-    // Get current product quantities for each damage record
     for (const dmg of damages) {
       const product = db.prepare("SELECT quantity, status FROM products WHERE id = ?").get(dmg.product_id);
       if (product) {
@@ -619,12 +854,7 @@ class LedgerService {
       }
     }
 
-    return {
-      damages,
-      total: totalResult?.total || 0,
-      page: filters.page || 1,
-      limit
-    };
+    return { damages, total: totalResult?.total || 0, page: filters.page || 1, limit };
   }
 
   correctDamage(id, correctionData) {
@@ -635,12 +865,9 @@ class LedgerService {
     }
 
     const result = db.transaction(() => {
-      // If quantity is explicitly provided (including 0), use it; otherwise keep existing
       const newQuantity = correctionData.quantity !== undefined ? correctionData.quantity : existing.quantity;
-      // How many units are being restored?
       const restoreQty = existing.quantity - newQuantity;
 
-      // Update the damage record
       db.prepare(`
         UPDATE damage_records SET
           damage_type = 'Corrected',
@@ -654,7 +881,6 @@ class LedgerService {
         id
       );
 
-      // If restoring stock, add quantity back to product
       if (restoreQty > 0) {
         const product = db.prepare("SELECT * FROM products WHERE id = ?").get(existing.product_id);
         if (product) {
@@ -693,12 +919,18 @@ class LedgerService {
 
     const balance = db.prepare("SELECT COALESCE(SUM(total_amount), 0) as ts, COALESCE(SUM(paid_amount), 0) as tp, COALESCE(SUM(remaining_amount), 0) as to_ FROM sale_issues WHERE customer_id = ?").get(customerId);
 
-    // Get old balance data via shared helper
     const oldData = this._getCustomerOldBalanceData(db, customerId);
+
+    // Get ledger entries
+    const ledgerEntries = db.prepare("SELECT * FROM customer_ledger WHERE customer_id = ? ORDER BY entry_date ASC, id ASC").all(customerId);
+
+    // Get ledger summary
+    const ledgerSummary = this.getCustomerLedgerSummary(customerId);
 
     return {
       customer, sales, returns, damages,
       old_balances: oldData.records,
+      ledger_entries: ledgerEntries,
       balance: {
         opening_balance: 0,
         total_sales: balance.ts || 0,
@@ -707,6 +939,10 @@ class LedgerService {
         old_balance_debit: oldData.debit,
         old_balance_credit: oldData.credit,
         old_balance_net: oldData.net,
+        ledger_balance: ledgerSummary.ledger_balance,
+        total_due: ledgerSummary.total_due,
+        total_debits: ledgerSummary.total_debits,
+        total_credits: ledgerSummary.total_credits
       }
     };
   }
@@ -731,8 +967,8 @@ class LedgerService {
       customer: profile.customer,
       sales: profile.sales,
       returns: profile.returns,
-
       damages: profile.damages,
+      ledger_entries: profile.ledger_entries,
       balance: profile.balance,
       generatedAt: new Date().toISOString()
     };
@@ -749,7 +985,23 @@ class LedgerService {
     const tds = db.prepare("SELECT COALESCE(SUM(total_amount), 0) FROM sale_issues WHERE date(issue_date)=date('now','localtime')").get()['COALESCE(SUM(total_amount), 0)'];
     const tdp = db.prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE date(payment_date)=date('now','localtime')").get()['COALESCE(SUM(amount), 0)'];
     const sc = db.prepare("SELECT payment_status, COUNT(*) as cnt FROM sale_issues GROUP BY payment_status").all();
-    return { total_outstanding: to, total_sales: ts, total_collected: tc, active_customers: ac, today_sales: tds, today_payments: tdp, sale_counts: sc };
+    
+    // Get ledger totals
+    const ledgerTotalDebit = db.prepare("SELECT COALESCE(SUM(debit), 0) FROM customer_ledger").get()['COALESCE(SUM(debit), 0)'];
+    const ledgerTotalCredit = db.prepare("SELECT COALESCE(SUM(credit), 0) FROM customer_ledger").get()['COALESCE(SUM(credit), 0)'];
+    
+    return { 
+      total_outstanding: to, 
+      total_sales: ts, 
+      total_collected: tc, 
+      active_customers: ac, 
+      today_sales: tds, 
+      today_payments: tdp, 
+      sale_counts: sc,
+      ledger_total_debit: ledgerTotalDebit,
+      ledger_total_credit: ledgerTotalCredit,
+      ledger_net: ledgerTotalDebit - ledgerTotalCredit
+    };
   }
 
   getSalesReport(filters = {}) {
@@ -789,6 +1041,28 @@ class LedgerService {
     return db.prepare("SELECT c.id as customer_id, c.customer_name, c.phone, COALESCE(SUM(si.total_amount), 0) as total_sales, COALESCE(SUM(si.paid_amount), 0) as total_paid, COALESCE(SUM(si.remaining_amount), 0) as total_outstanding, COUNT(si.id) as invoice_count FROM customers c LEFT JOIN sale_issues si ON c.id = si.customer_id AND si.remaining_amount > 0 WHERE c.status = 'Active' GROUP BY c.id HAVING total_outstanding > 0 ORDER BY total_outstanding DESC").all();
   }
 
+  getCustomerLedgerReport() {
+    const db = getDatabase();
+    // Get all customers with their ledger balances
+    const customers = db.prepare("SELECT id, customer_name, phone FROM customers WHERE status = 'Active' ORDER BY customer_name ASC").all();
+    
+    const result = [];
+    for (const c of customers) {
+      const lastEntry = db.prepare("SELECT running_balance FROM customer_ledger WHERE customer_id = ? ORDER BY entry_date DESC, id DESC LIMIT 1").get(c.id);
+      const saleOutstanding = db.prepare("SELECT COALESCE(SUM(remaining_amount), 0) as total FROM sale_issues WHERE customer_id = ?").get(c.id);
+      
+      result.push({
+        customer_id: c.id,
+        customer_name: c.customer_name,
+        phone: c.phone,
+        ledger_balance: lastEntry ? lastEntry.running_balance : 0,
+        sale_outstanding: saleOutstanding.total || 0
+      });
+    }
+    
+    return result;
+  }
+
   // ==================== DELETE SALE ====================
   deleteSale(saleId) {
     const db = getDatabase();
@@ -805,6 +1079,15 @@ class LedgerService {
         db.prepare("UPDATE products SET quantity = quantity + ?, status = CASE WHEN status = 'Sold' THEN 'In Stock' WHEN quantity + ? > 0 THEN status ELSE status END, updated_at = datetime('now','localtime') WHERE id = ?").run(item.quantity, item.quantity, item.product_id);
       }
       
+      // Delete ledger entries for this sale
+      db.prepare("DELETE FROM customer_ledger WHERE customer_id = ? AND reference_type = 'Sale' AND reference_id = ?").run(sale.customer_id, saleId);
+      
+      // Delete payments and their ledger entries
+      const payments = db.prepare("SELECT id FROM payments WHERE sale_issue_id = ?").all(saleId);
+      for (const p of payments) {
+        db.prepare("DELETE FROM customer_ledger WHERE customer_id = ? AND reference_type = 'Payment' AND reference_id = ?").run(sale.customer_id, p.id);
+      }
+      
       // Delete payments
       db.prepare("DELETE FROM payments WHERE sale_issue_id = ?").run(saleId);
       
@@ -813,6 +1096,9 @@ class LedgerService {
       
       // Delete the sale itself
       db.prepare("DELETE FROM sale_issues WHERE id = ?").run(saleId);
+      
+      // Recalculate running balances
+      this._updateLedgerRunningBalances(sale.customer_id);
       
       return { success: true };
     })();
@@ -833,13 +1119,12 @@ class LedgerService {
     }
     
     return db.transaction(() => {
-      // Get all payments for this sale to recalculate totals
-      const allPayments = db.prepare("SELECT * FROM payments WHERE sale_issue_id = ? ORDER BY payment_date ASC, id ASC").all(payment.sale_issue_id);
+      // Delete ledger entry for this payment
+      db.prepare("DELETE FROM customer_ledger WHERE customer_id = ? AND reference_type = 'Payment' AND reference_id = ?").run(sale.customer_id, paymentId);
       
-      // Find and remove the deleted payment
+      const allPayments = db.prepare("SELECT * FROM payments WHERE sale_issue_id = ? ORDER BY payment_date ASC, id ASC").all(payment.sale_issue_id);
       const remainingPayments = allPayments.filter(p => p.id !== paymentId);
       
-      // Recalculate paid amount
       let newPaid = 0;
       for (const p of remainingPayments) {
         newPaid += p.amount;
@@ -853,6 +1138,9 @@ class LedgerService {
       
       // Update sale totals
       db.prepare("UPDATE sale_issues SET paid_amount = ?, remaining_amount = ?, payment_status = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(newPaid, newRemaining, newStatus, payment.sale_issue_id);
+      
+      // Recalculate running balances
+      this._updateLedgerRunningBalances(sale.customer_id);
       
       return { success: true, newPaid, newRemaining, newStatus };
     })();
@@ -868,7 +1156,6 @@ class LedgerService {
     }
     
     return db.transaction(() => {
-      // Update sale basic info
       if (data.customer_id !== undefined) {
         db.prepare("UPDATE sale_issues SET customer_id = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(data.customer_id, saleId);
       }
@@ -882,7 +1169,6 @@ class LedgerService {
         db.prepare("UPDATE sale_issues SET notes = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(data.notes || "", saleId);
       }
       
-      // Update payment method if provided
       if (data.payment_method !== undefined) {
         const existingPayment = db.prepare("SELECT id FROM payments WHERE sale_issue_id = ? LIMIT 1").get(saleId);
         if (existingPayment) {
@@ -918,14 +1204,25 @@ class LedgerService {
         paymentId
       );
       
-      // Recalculate total paid amount
+      // Update ledger entry for this payment
+      db.prepare("UPDATE customer_ledger SET credit = ?, entry_date = ?, description = ? WHERE customer_id = ? AND reference_type = 'Payment' AND reference_id = ?").run(
+        data.amount !== undefined ? data.amount : payment.amount,
+        data.payment_date || payment.payment_date,
+        `Payment for ${sale.reference_no} - ${data.payment_method || payment.payment_method}`,
+        sale.customer_id,
+        paymentId
+      );
+      
+      // Recalculate
       const allPayments = db.prepare("SELECT * FROM payments WHERE sale_issue_id = ?").all(payment.sale_issue_id);
       const newPaid = allPayments.reduce((sum, p) => sum + p.amount, 0);
       const newRemaining = Math.max(0, sale.total_amount - newPaid);
       const newStatus = newRemaining <= 0 ? "Paid" : newPaid > 0 ? "Partial" : "Outstanding";
       
-      // Update sale totals
       db.prepare("UPDATE sale_issues SET paid_amount = ?, remaining_amount = ?, payment_status = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(newPaid, newRemaining, newStatus, payment.sale_issue_id);
+      
+      // Recalculate running balances
+      this._updateLedgerRunningBalances(sale.customer_id);
       
       return { success: true, newPaid, newRemaining, newStatus };
     })();

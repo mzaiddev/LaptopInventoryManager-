@@ -461,6 +461,53 @@ function registerIpcHandlers() {
     }
   });
 
+  // ==================== NEW LEDGER SYSTEM IPC HANDLERS ====================
+
+  // Customer Ledger
+  ipcMain.handle("ledger:getCustomerLedger", async (event, customerId, filters) => {
+    try {
+      return { success: true, data: ledgerService.getCustomerLedger(customerId, filters) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("ledger:getCustomerLedgerSummary", async (event, customerId) => {
+    try {
+      return { success: true, data: ledgerService.getCustomerLedgerSummary(customerId) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("ledger:getCustomerLedgerReport", async () => {
+    try {
+      return { success: true, data: ledgerService.getCustomerLedgerReport() };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // Direct Ledger Payment (not tied to a specific sale)
+  ipcMain.handle("ledger:addLedgerPayment", async (event, data) => {
+    try {
+      const result = ledgerService.addLedgerPayment(data);
+      return { success: true, data: result };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // Ledger Old Balance Entry
+  ipcMain.handle("ledger:addLedgerOldBalance", async (event, data) => {
+    try {
+      const result = ledgerService.addLedgerOldBalance(data);
+      return { success: true, data: result };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
   // ==================== OLD BALANCE MODULE IPC HANDLERS ====================
 
   ipcMain.handle("oldBalance:getAll", async (event, filters) => {
@@ -546,7 +593,6 @@ function validateProduct(data) {
   ) {
     errors.push("Purchase price cannot be negative.");
   }
-  // Selling price validation removed - managed from Sales module
   if (
     data.quantity === undefined ||
     data.quantity === null ||

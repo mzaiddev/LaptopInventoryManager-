@@ -38,6 +38,9 @@ function initDatabase() {
   // Fix returns table - remove any stale FK constraints referencing ledgers
   migrateFixReturnsFK();
 
+  // Add customer_ledger table for the new ledger system
+  migrateAddCustomerLedger();
+
   createTables();
   createIndexes();
   seedDefaults();
@@ -226,6 +229,21 @@ function createTables() {
       notes TEXT DEFAULT '',
       created_at DATETIME DEFAULT (datetime('now','localtime')),
       updated_at DATETIME DEFAULT (datetime('now','localtime')),
+      FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+    );
+
+    -- Customer Ledger table - unified ledger for all customer transactions
+    CREATE TABLE IF NOT EXISTS customer_ledger (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_id INTEGER NOT NULL,
+      reference_type TEXT NOT NULL CHECK(reference_type IN ('Sale','Payment','OldBalanceDebit','OldBalanceCredit','Return','Adjustment')),
+      reference_id INTEGER DEFAULT NULL,
+      description TEXT DEFAULT '',
+      debit REAL NOT NULL DEFAULT 0,
+      credit REAL NOT NULL DEFAULT 0,
+      running_balance REAL NOT NULL DEFAULT 0,
+      entry_date TEXT NOT NULL,
+      created_at DATETIME DEFAULT (datetime('now','localtime')),
       FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
     );
   `);
@@ -651,7 +669,6 @@ function migrateRemoveLedgersTable() {
       }
 
       // 5. Migrate returns (remove ledger_id reference - already have sale_issue_id)
-      // Drop ledger_id column from returns - need to recreate the table
       const returnsCols = db.prepare("PRAGMA table_info(returns)").all();
       const hasLedgerIdInReturns = returnsCols.some(
         (r) => r && r.name === "ledger_id",
@@ -679,7 +696,6 @@ function migrateRemoveLedgersTable() {
           SELECT id, customer_id, sale_issue_id, reference_no, return_date, reason, total_return_amount, status, created_at, updated_at FROM returns
         `);
 
-        // Drop old returns and rename
         db.pragma("foreign_keys = OFF");
         db.exec("DROP TABLE IF EXISTS returns_old_backup");
         db.exec("ALTER TABLE returns RENAME TO returns_old_backup");
@@ -691,7 +707,6 @@ function migrateRemoveLedgersTable() {
       db.exec("DROP TABLE IF EXISTS ledgers");
 
       // 7. Drop ledger_id from sale_issues
-      // Recreate sale_issues without ledger_id
       db.exec(`
         CREATE TABLE IF NOT EXISTS sale_issues_new (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -732,26 +747,22 @@ function migrateRemoveLedgersTable() {
 
 function migrateAddOldBalancesTable() {
   try {
-    // Check if old_balances table exists
     const tableExists = db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='old_balances'"
     ).get();
     
     if (tableExists) {
-      // Table exists - verify ALL required columns exist
       const cols = db.prepare("PRAGMA table_info(old_balances)").all();
       const colNames = cols.map(c => c.name);
       const requiredCols = ['id', 'customer_id', 'amount', 'balance_type', 'notes', 'created_at', 'updated_at'];
       const allColsExist = requiredCols.every(col => colNames.includes(col));
       
-      if (allColsExist) return; // Table already has correct schema
+      if (allColsExist) return;
       
-      // Table exists but missing some columns - drop and recreate
       console.log('Migrating database: recreating old_balances table with correct columns');
       db.transaction(() => {
         db.pragma("foreign_keys = OFF");
         
-        // Create new table with correct schema
         db.exec(`
           CREATE TABLE IF NOT EXISTS old_balances_new (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -765,7 +776,6 @@ function migrateAddOldBalancesTable() {
           );
         `);
         
-        // Copy data from old table (only copy columns that exist in old table)
         const safeInsertCols = ['id', 'customer_id'];
         if (colNames.includes('amount')) safeInsertCols.push('amount');
         if (colNames.includes('notes')) safeInsertCols.push('notes');
@@ -777,7 +787,6 @@ function migrateAddOldBalancesTable() {
           SELECT ${safeInsertCols.join(', ')} FROM old_balances;
         `);
         
-        // Drop old table and rename
         db.exec("DROP TABLE old_balances;");
         db.exec("ALTER TABLE old_balances_new RENAME TO old_balances;");
         
@@ -813,6 +822,52 @@ function migrateAddOldBalancesTable() {
   }
 }
 
+function migrateAddCustomerLedger() {
+  try {
+    const tableExists = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='customer_ledger'"
+    ).get();
+    
+    if (tableExists) {
+      // Check if table has correct columns
+      const cols = db.prepare("PRAGMA table_info(customer_ledger)").all();
+      const colNames = cols.map(c => c.name);
+      const requiredCols = ['id', 'customer_id', 'reference_type', 'reference_id', 'description', 'debit', 'credit', 'running_balance', 'entry_date', 'created_at'];
+      const allColsExist = requiredCols.every(col => colNames.includes(col));
+      
+      if (allColsExist) return;
+    }
+
+    console.log('Migrating database: adding customer_ledger table');
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS customer_ledger (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER NOT NULL,
+        reference_type TEXT NOT NULL CHECK(reference_type IN ('Sale','Payment','OldBalanceDebit','OldBalanceCredit','Return','Adjustment')),
+        reference_id INTEGER DEFAULT NULL,
+        description TEXT DEFAULT '',
+        debit REAL NOT NULL DEFAULT 0,
+        credit REAL NOT NULL DEFAULT 0,
+        running_balance REAL NOT NULL DEFAULT 0,
+        entry_date TEXT NOT NULL,
+        created_at DATETIME DEFAULT (datetime('now','localtime')),
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+      );
+    `);
+
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_customer_ledger_customer ON customer_ledger(customer_id);
+      CREATE INDEX IF NOT EXISTS idx_customer_ledger_date ON customer_ledger(entry_date);
+      CREATE INDEX IF NOT EXISTS idx_customer_ledger_type ON customer_ledger(reference_type);
+    `);
+
+    console.log('Migration completed: customer_ledger table added');
+  } catch (err) {
+    console.error('Error adding customer_ledger table:', err);
+  }
+}
+
 function migrateRemoveBrandIfNeeded() {
   try {
     const row = db.prepare("PRAGMA table_info(products)").all();
@@ -824,10 +879,8 @@ function migrateRemoveBrandIfNeeded() {
     );
 
     db.transaction(() => {
-      // Disable foreign keys during migration
       db.pragma("foreign_keys = OFF");
 
-      // Create new table without brand
       db.exec(`
         CREATE TABLE IF NOT EXISTS products_new (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -850,24 +903,20 @@ function migrateRemoveBrandIfNeeded() {
         );
       `);
 
-      // Copy data from old table to new table (skip brand)
       db.exec(`
         INSERT INTO products_new (id, product_name, category, model, serial_number, supplier, purchase_price, selling_price, quantity, purchase_date, warranty, storage_location, notes, status, condition, created_at, updated_at)
         SELECT id, product_name, category, model, serial_number, supplier, purchase_price, selling_price, quantity, purchase_date, warranty, storage_location, notes, status, condition, created_at, updated_at FROM products;
       `);
 
-      // Drop old table and rename
       db.exec("DROP TABLE products;");
       db.exec("ALTER TABLE products_new RENAME TO products;");
 
-      // Re-enable foreign keys
       db.pragma("foreign_keys = ON");
     })();
 
     console.log("Migration completed: brand column removed");
   } catch (err) {
     console.error("Error migrating database to remove brand column:", err);
-    // If migration fails, continue without throwing to avoid blocking app start
   }
 }
 
@@ -922,6 +971,11 @@ function createIndexes() {
 
     -- Old balances indexes
     CREATE INDEX IF NOT EXISTS idx_old_balances_customer ON old_balances(customer_id);
+
+    -- Customer ledger indexes
+    CREATE INDEX IF NOT EXISTS idx_customer_ledger_customer ON customer_ledger(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_customer_ledger_date ON customer_ledger(entry_date);
+    CREATE INDEX IF NOT EXISTS idx_customer_ledger_type ON customer_ledger(reference_type);
   `);
 }
 

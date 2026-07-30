@@ -121,7 +121,6 @@ const CustomersPage = {
         </div>
       `;
 
-      // Pagination
       const paginationContainer = document.getElementById("customers-pagination");
       if (paginationContainer && data.totalPages > 1) {
         paginationContainer.innerHTML = this.renderPagination(data);
@@ -226,27 +225,24 @@ const CustomersPage = {
       const balance = profile.balance;
       const currency = App.currency || 'USD';
       const oldBalances = profile.old_balances || [];
+      const ledgerEntries = profile.ledger_entries || [];
 
       // Sales history
       const salesHtml = profile.sales && profile.sales.length > 0
         ? profile.sales.map(sale => `
           <div class="profile-sale-item">
-            <div class="profile-sale-header" onclick="CustomersPage.toggleSalePayments(${sale.id})">
+            <div class="profile-sale-header">
               <div class="profile-sale-ref">
                 <strong>${this.escapeHtml(sale.reference_no)}</strong>
                 <span class="profile-sale-meta">${Formatters.formatDate(sale.issue_date)} - ${this.escapeHtml(sale.transaction_type)}</span>
               </div>
               <div class="profile-sale-amounts">
                 <span class="profile-sale-total">${Formatters.formatCurrency(sale.total_amount, currency)}</span>
-                <span class="profile-sale-paid">Paid: ${Formatters.formatCurrency(sale.paid_amount, currency)}</span>
-                <span class="profile-sale-remaining ${sale.remaining_amount > 0 ? 'text-danger' : 'text-success'}">Rem: ${Formatters.formatCurrency(sale.remaining_amount, currency)}</span>
-                <span class="badge ${sale.payment_status === 'Paid' ? 'badge-paid' : sale.payment_status === 'Partial' ? 'badge-partial' : 'badge-outstanding'}">${sale.payment_status}</span>
               </div>
-              <span class="profile-toggle-icon">&#9654;</span>
             </div>
-            <div class="profile-sale-details" id="sale-details-${sale.id}" style="display:none;">
+            <div class="profile-sale-details" style="padding:10px 12px;">
               ${sale.items && sale.items.length > 0 ? `
-                <table class="report-table" style="margin-top:8px;">
+                <table class="report-table" style="margin-top:4px;">
                   <thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
                   <tbody>
                     ${sale.items.map(item => `
@@ -259,33 +255,45 @@ const CustomersPage = {
                     `).join('')}
                   </tbody>
                 </table>
-              ` : ''}
-              ${sale.payments && sale.payments.length > 0 ? `
-                <div class="profile-payments">
-                  <strong style="font-size:13px;">Payment History:</strong>
-                  ${sale.payments.map(p => `
-                    <div class="profile-payment-item">
-                      <span>${Formatters.formatDate(p.payment_date)}</span>
-                      <span>${this.escapeHtml(p.payment_method)}</span>
-                      <span style="font-weight:600;color:var(--success);">${Formatters.formatCurrency(p.amount, currency)}</span>
-                      ${p.note ? '<span style="color:var(--text-muted);font-size:12px;">' + this.escapeHtml(p.note) + '</span>' : ''}
-                    </div>
-                  `).join('')}
-                </div>
-              ` : '<p style="color:var(--text-muted);font-size:12px;margin-top:8px;">No payments recorded.</p>'}
+              ` : '<p style="color:var(--text-muted);font-size:12px;">No products listed.</p>'}
             </div>
           </div>
         `).join('')
         : '<p style="color:var(--text-muted);padding:10px;">No sales yet.</p>';
 
-      // Build combined total card (remaining + old balance)
-      const combinedTotal = balance.total_outstanding + (balance.old_balance_net || 0);
-      const combinedCardClass = combinedTotal > 0 ? 'danger' : 'success';
-      const combinedTotalCardHtml = '<div class="profile-balance-card ' + combinedCardClass + '">' +
-        '<div class="pbc-value" style="font-size:18px;font-weight:800;">' + Formatters.formatCurrency(combinedTotal, currency) + '</div>' +
-        '<div class="pbc-label">Total Balance Due</div></div>';
+      // Ledger Entries HTML
+      const ledgerHtml = ledgerEntries.length > 0 ? `
+        <div style="margin-top:12px;">
+          <table class="report-table" style="font-size:12px;">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Description</th>
+                <th style="text-align:right;">Debit</th>
+                <th style="text-align:right;">Credit</th>
+                <th style="text-align:right;">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${ledgerEntries.map(e => `
+                <tr>
+                  <td>${Formatters.formatDate(e.entry_date)}</td>
+                  <td><span class="badge ${e.reference_type === 'Sale' ? 'badge-outstanding' : e.reference_type === 'Payment' ? 'badge-paid' : e.reference_type === 'Return' ? 'badge-partial' : 'badge-damaged'}">${this.escapeHtml(e.reference_type)}</span></td>
+                  <td>${this.escapeHtml(e.description)}</td>
+                  <td style="text-align:right;font-weight:600;color:var(--danger);">${e.debit > 0 ? Formatters.formatCurrency(e.debit, currency) : '-'}</td>
+                  <td style="text-align:right;font-weight:600;color:var(--success);">${e.credit > 0 ? Formatters.formatCurrency(e.credit, currency) : '-'}</td>
+                  <td style="text-align:right;font-weight:700;${e.running_balance > 0 ? 'color:var(--danger);' : 'color:var(--success);'}">${Formatters.formatCurrency(e.running_balance, currency)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : '<p style="color:var(--text-muted);font-size:12px;margin-top:8px;">No ledger entries yet.</p>';
 
-      // Build old balance card HTML (using string concat to avoid deep template nesting)
+      const totalDue = balance.total_due || (balance.total_outstanding + (balance.old_balance_net || 0));
+      const combinedCardClass = totalDue > 0 ? 'danger' : 'success';
+
       let oldBalanceCardHtml = '';
       if (balance.old_balance_net !== undefined) {
         const cardClass = balance.old_balance_net > 0 ? 'danger' : 'success';
@@ -297,7 +305,6 @@ const CustomersPage = {
           '<div class="pbc-label" style="font-size:10px;">Old Balance (' + labelText + ')</div></div>';
       }
 
-      // Build old balance items list HTML (using string concat to avoid deep template nesting)
       let oldBalancesSectionHtml = '';
       if (oldBalances.length > 0) {
         let itemsHtml = '';
@@ -336,23 +343,35 @@ const CustomersPage = {
           </div>
 
           <div class="profile-balance-cards">
-            <div class="profile-balance-card success">
-              <div class="pbc-value">${Formatters.formatCurrency(balance.total_sales, currency)}</div>
-              <div class="pbc-label">Total Sales</div>
+            <div class="profile-balance-card danger">
+              <div class="pbc-value">${Formatters.formatCurrency(balance.total_debits || balance.total_sales, currency)}</div>
+              <div class="pbc-label">Total Debit (Sales)</div>
             </div>
             <div class="profile-balance-card">
-              <div class="pbc-value">${Formatters.formatCurrency(balance.total_paid, currency)}</div>
-              <div class="pbc-label">Total Paid</div>
+              <div class="pbc-value">${Formatters.formatCurrency(balance.total_credits || balance.total_paid, currency)}</div>
+              <div class="pbc-label">Total Paid (Credits)</div>
             </div>
-            <div class="profile-balance-card ${balance.total_outstanding > 0 ? 'danger' : 'success'}">
-              <div class="pbc-value">${Formatters.formatCurrency(balance.total_outstanding, currency)}</div>
-              <div class="pbc-label">Remaining Balance</div>
+            <div class="profile-balance-card ${totalDue > 0 ? 'danger' : 'success'}">
+              <div class="pbc-value">${Formatters.formatCurrency(balance.total_outstanding || 0, currency)}</div>
+              <div class="pbc-label">Sale Outstanding</div>
             </div>
             ${oldBalanceCardHtml}
-            ${combinedTotalCardHtml}
+            <div class="profile-balance-card ${totalDue > 0 ? 'danger' : 'success'}" style="border:2px solid ${totalDue > 0 ? 'var(--danger)' : 'var(--success)'};">
+              <div class="pbc-value" style="font-size:18px;font-weight:800;">${Formatters.formatCurrency(totalDue, currency)}</div>
+              <div class="pbc-label" style="font-size:10px;">Total Balance Due</div>
+            </div>
+          </div>
+          <div style="margin-top:6px;font-size:10px;color:var(--text-muted);text-align:center;">
+            Total Due = Total Sales − Total Paid + Old Balance (Ledger Balance: ${Formatters.formatCurrency(balance.ledger_balance || 0, currency)})
           </div>
 
           ${oldBalancesSectionHtml}
+
+          <!-- Ledger Section -->
+          <div class="profile-section">
+            <h4>Unified Ledger (${ledgerEntries.length} entries)</h4>
+            ${ledgerHtml}
+          </div>
 
           <div class="profile-section">
             <h4>Sales History (${profile.sales ? profile.sales.length : 0})</h4>
@@ -401,7 +420,7 @@ const CustomersPage = {
       const footer = `
         <button class="btn btn-secondary" onclick="window.Modal.close()">Close</button>
         <button class="btn btn-primary" onclick="window.Modal.close(); CustomersPage.editCustomer(${c.id})">Edit</button>
-        <button class="btn btn-success" onclick="window.Modal.close(); App.navigate('sales'); SalesPage.selectCustomer(${c.id}, '${this.escapeHtml(c.customer_name)}')">New Sale</button>
+        <button class="btn btn-success" onclick="window.Modal.close(); App.navigate('create-sale')">New Sale</button>
         <button class="btn btn-warning" onclick="window.Modal.close(); CustomersPage.showCustomerStatement(${c.id})">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
           Statement
@@ -490,6 +509,34 @@ const CustomersPage = {
         </table>`;
     };
 
+    // Build ledger entries table
+    const ledgerEntries = stmt.ledger_entries || [];
+    const ledgerHtml = ledgerEntries.length > 0 ? `
+      <h4 style="font-size:15px;margin:16px 0 8px;color:#475569;">Ledger Transactions</h4>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead>
+          <tr style="background:#f8fafc;">
+            <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:left;font-size:9px;text-transform:uppercase;color:#64748b;">Date</th>
+            <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:left;font-size:9px;text-transform:uppercase;color:#64748b;">Type</th>
+            <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:left;font-size:9px;text-transform:uppercase;color:#64748b;">Description</th>
+            <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:right;font-size:9px;text-transform:uppercase;color:#64748b;">Debit</th>
+            <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:right;font-size:9px;text-transform:uppercase;color:#64748b;">Credit</th>
+            <th style="padding:4px 8px;border:1px solid #e2e8f0;text-align:right;font-size:9px;text-transform:uppercase;color:#64748b;">Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${ledgerEntries.map(e => `<tr>
+            <td style="padding:3px 8px;border:1px solid #e2e8f0;font-size:10px;">${Formatters.formatDate(e.entry_date)}</td>
+            <td style="padding:3px 8px;border:1px solid #e2e8f0;font-size:10px;">${this.escapeHtml(e.reference_type)}</td>
+            <td style="padding:3px 8px;border:1px solid #e2e8f0;font-size:10px;">${this.escapeHtml(e.description)}</td>
+            <td style="padding:3px 8px;border:1px solid #e2e8f0;font-size:10px;text-align:right;color:#ef4444;">${e.debit > 0 ? Formatters.formatCurrency(e.debit, currency) : '-'}</td>
+            <td style="padding:3px 8px;border:1px solid #e2e8f0;font-size:10px;text-align:right;color:#22c55e;">${e.credit > 0 ? Formatters.formatCurrency(e.credit, currency) : '-'}</td>
+            <td style="padding:3px 8px;border:1px solid #e2e8f0;font-size:10px;text-align:right;font-weight:600;${e.running_balance > 0 ? 'color:#ef4444;' : 'color:#22c55e;'}">${Formatters.formatCurrency(e.running_balance, currency)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    ` : '';
+
     const salesHtml = stmt.sales && stmt.sales.length > 0
       ? stmt.sales.map(s => {
           const payTable = buildPaymentsTable(s);
@@ -574,8 +621,9 @@ const CustomersPage = {
             </tr>
           </table>
         </div>
+        ${ledgerHtml}
         ${stmt.sales && stmt.sales.length > 0 ? `
-        <h4 style="font-size:15px;margin:0 0 10px;color:#475569;">Transaction History (${stmt.sales.length})</h4>
+        <h4 style="font-size:15px;margin:16px 0 10px;color:#475569;">Transaction History (${stmt.sales.length})</h4>
         ${salesHtml}
         ` : ''}
         ${returnsHtml}
@@ -725,7 +773,7 @@ const CustomersPage = {
   deleteCustomer(id, name) {
     Modal.showConfirm(
       'Delete Customer',
-      'Are you sure you want to delete "' + name + '"? This will permanently delete the customer and ALL their data (sales, returns, old balances, payments). Stock will be restored. This action cannot be undone.',
+      'Are you sure you want to delete "' + name + '"? This will permanently delete the customer and ALL their data (sales, returns, old balances, payments, ledger entries). Stock will be restored. This action cannot be undone.',
       async () => {
         try {
           const result = await window.api.deleteCustomer(id);

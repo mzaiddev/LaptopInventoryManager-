@@ -89,4 +89,11 @@ contextBridge.exposeInMainWorld("api", {
   addOldBalance: (data) => ipcRenderer.invoke("oldBalance:add", data),
   updateOldBalance: (id, data) => ipcRenderer.invoke("oldBalance:update", id, data),
   deleteOldBalance: (id) => ipcRenderer.invoke("oldBalance:delete", id),
+
+  // ============ NEW LEDGER SYSTEM ============
+  getCustomerLedger: (customerId, filters) => ipcRenderer.invoke("ledger:getCustomerLedger", customerId, filters),
+  getCustomerLedgerSummary: (customerId) => ipcRenderer.invoke("ledger:getCustomerLedgerSummary", customerId),
+  getCustomerLedgerReport: () => ipcRenderer.invoke("ledger:getCustomerLedgerReport"),
+  addLedgerPayment: (data) => ipcRenderer.invoke("ledger:addLedgerPayment", data),
+  addLedgerOldBalance: (data) => ipcRenderer.invoke("ledger:addLedgerOldBalance", data),
 });
