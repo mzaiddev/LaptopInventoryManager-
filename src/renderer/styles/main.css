@@ -508,8 +508,64 @@ table tr:last-child td {
 body.dark-mode .badge-in-stock { background: #064e3b; color: #a7f3d0; }
 body.dark-mode .badge-reserved { background: #78350f; color: #fde68a; }
 body.dark-mode .badge-sold { background: #1e3a5f; color: #93c5fd; }
-body.dark-mode .badge-returned { background: #4c1d95; color: #c4b5fd; }
-body.dark-mode .badge-damaged { background: #7f1d1d; color: #fca5a5; }
+body.dark-mode .badge-returned { background: #4c1d95; color: #c4b5fd; }  body.dark-mode .badge-damaged { background: #7f1d1d; color: #fca5a5; }
+
+/* Ledger indicator chip on sales history */
+.ledger-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  cursor: help;
+  vertical-align: middle;
+}
+body.dark-mode .ledger-indicator {
+  color: #94a3b8;
+  background: #1e293b;
+  border-color: #334155;
+}
+
+/* Edit sale — locked products notice + read-only item list */
+.edit-sale-notice {
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  border-radius: var(--radius);
+  background: var(--warning-light);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: var(--warning);
+  font-size: 13px;
+  font-weight: 600;
+}
+body.dark-mode .edit-sale-notice {
+  background: #451a03;
+  border-color: #92400e;
+  color: #fbbf24;
+}
+.edit-sale-items-readonly {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.edit-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+  font-size: 13px;
+}
 body.dark-mode .badge-lost { background: #374151; color: #d1d5db; }
 
 /* Condition Badges */
@@ -1003,6 +1059,51 @@ body.dark-mode .badge-for-parts { background: #374151; color: #d1d5db; }
 
 .add-product-btn {
   margin-top: 8px;
+}
+
+/* ==================== RETURN FORM ITEM ROWS ==================== */
+.return-item-row {
+  display: grid;
+  grid-template-columns: 1fr 90px 100px 110px 40px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.return-item-row.header {
+  padding: 8px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.return-item-row.header span:nth-child(2),
+.return-item-row.header span:nth-child(3) {
+  text-align: center;
+}
+
+.return-item-row.header span:nth-child(4) {
+  text-align: right;
+}
+
+.return-item-row .form-control {
+  padding: 8px;
+  font-size: 13px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  color: var(--text-primary);
+  width: 100%;
+}
+
+.return-item-row .form-control:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-light);
 }
 
 /* Sale Summary */

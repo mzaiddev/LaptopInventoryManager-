@@ -443,9 +443,35 @@ class LedgerService {
         runningPaid += p.amount;
         return { ...p, running_paid: runningPaid, remaining_after: Math.max(0, sale.total_amount - runningPaid) };
       });
+
+      // Ledger-aware display values — the customer's ledger balance is the
+      // single source of truth for what the customer owes. Only treat the
+      // ledger as authoritative when the customer actually has ledger entries;
+      // legacy sales without ledger backing fall back to the sale's own values.
+      let ledgerBalance = 0;
+      let hasLedgerEntries = false;
+      if (sale.customer_id) {
+        const ledgerCheck = db.prepare(
+          "SELECT running_balance FROM customer_ledger WHERE customer_id = ? ORDER BY entry_date DESC, id DESC LIMIT 1"
+        ).get(sale.customer_id);
+        ledgerBalance = ledgerCheck ? ledgerCheck.running_balance : 0;
+        hasLedgerEntries = ledgerCheck !== undefined;
+      }
+      sale.ledger_balance = ledgerBalance;
+      sale.ledger_settled = hasLedgerEntries && sale.ledger_balance <= 0;
+      if (sale.ledger_settled) {
+        // Customer owes nothing (or we owe them) → sale shows as fully paid
+        sale.display_paid = sale.total_amount;
+        sale.display_remaining = 0;
+        sale.display_status = "Paid";
+      } else {
+        sale.display_paid = sale.paid_amount;
+        sale.display_remaining = sale.remaining_amount;
+        sale.display_status = sale.status;
+      }
     }
 
-    return { sales, total: totalResult?.total || 0, page: filters.page || 1, limit };
+    return { sales, total: totalResult?.total || 0, page: filters.page || 1, limit, totalPages: Math.ceil((totalResult?.total || 0) / limit) };
   }
 
   getSaleById(id) {
@@ -658,8 +684,9 @@ class LedgerService {
       }
 
       // Add ledger entry for return (credit - reduces customer's debt)
+      let ledgerBalanceAfterReturn = null;
       if (totalReturnAmount > 0) {
-        this._addLedgerEntry(
+        const ledgerResult = this._addLedgerEntry(
           data.customer_id,
           'Return',
           returnId,
@@ -668,13 +695,38 @@ class LedgerService {
           totalReturnAmount,
           data.return_date
         );
+        // The running balance returned by _addLedgerEntry is the correct
+        // post-return balance — deterministic regardless of how the return
+        // date orders against other entries (e.g., later payments).
+        ledgerBalanceAfterReturn = ledgerResult ? ledgerResult.runningBalance : null;
+        // Recalculate the stored running balances so the ledger sequence stays
+        // chronologically consistent even for backdated returns. This does not
+        // change the current balance (the last entry's balance matches the
+        // returned value), but keeps every intermediate row accurate.
+        this._updateLedgerRunningBalances(data.customer_id);
       }
 
       if (totalReturnAmount > 0) {
         const newTotal = Math.max(0, sale.total_amount - totalReturnAmount);
-        const newPaid = Math.min(sale.paid_amount, newTotal);
-        const newRemaining = newTotal - newPaid;
-        const newStatus = newRemaining <= 0 ? (newPaid > 0 ? "Paid" : "Outstanding") : "Partial";
+
+        // SINGLE SOURCE OF TRUTH: the customer's ledger running balance
+        // immediately after this return's CREDIT entry was recorded.
+        const ledgerBalance = ledgerBalanceAfterReturn !== null
+          ? ledgerBalanceAfterReturn
+          : 0;
+
+        let newPaid, newRemaining, newStatus;
+        if (ledgerBalance <= 0) {
+          // Customer owes nothing (or we owe them) → this sale shows as fully Paid
+          newPaid = newTotal;
+          newRemaining = 0;
+          newStatus = "Paid";
+        } else {
+          // Reflect the reduced total using the sale's own payment records
+          newPaid = Math.min(sale.paid_amount, newTotal);
+          newRemaining = newTotal - newPaid;
+          newStatus = newRemaining <= 0 ? (newPaid > 0 ? "Paid" : "Outstanding") : "Partial";
+        }
         db.prepare("UPDATE sale_issues SET total_amount = ?, paid_amount = ?, remaining_amount = ?, payment_status = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(newTotal, newPaid, newRemaining, newStatus, data.sale_issue_id);
       }
 
@@ -1187,35 +1239,184 @@ class LedgerService {
   }
 
   // ==================== UPDATE SALE ====================
+
+  // Reconcile the sale's payment records + Payment CREDIT ledger entries so the
+  // total paid amount equals the target. Creates, updates, or deletes records as needed.
+  _reconcileSalePayments(db, sale, newCustomerId, targetPaid, newDate, paymentMethod) {
+    const payments = db.prepare(
+      "SELECT * FROM payments WHERE sale_issue_id = ? ORDER BY payment_date ASC, id ASC"
+    ).all(sale.id);
+    const currentPaid = payments.reduce((s, p) => s + p.amount, 0);
+    const diff = targetPaid - currentPaid;
+
+    if (Math.abs(diff) < 0.001) {
+      // Amount unchanged — only refresh the payment method if provided
+      if (paymentMethod && payments.length > 0) {
+        db.prepare("UPDATE payments SET payment_method = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(paymentMethod, payments[0].id);
+        db.prepare("UPDATE customer_ledger SET description = ? WHERE customer_id = ? AND reference_type = 'Payment' AND reference_id = ?").run(
+          `Payment for ${sale.reference_no} - ${paymentMethod}`, newCustomerId, payments[0].id
+        );
+      }
+      return;
+    }
+
+    if (diff > 0) {
+      // Increase: add the difference to the first payment, or create a new payment record
+      if (payments.length > 0) {
+        const first = payments[0];
+        const newAmount = first.amount + diff;
+        db.prepare("UPDATE payments SET amount = ?, payment_date = ?, payment_method = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(newAmount, newDate, paymentMethod || first.payment_method, first.id);
+        db.prepare("UPDATE customer_ledger SET credit = ?, entry_date = ?, description = ? WHERE customer_id = ? AND reference_type = 'Payment' AND reference_id = ?").run(
+          newAmount, newDate, `Payment for ${sale.reference_no} - ${paymentMethod || first.payment_method}`, newCustomerId, first.id
+        );
+      } else {
+        const paymentResult = db.prepare("INSERT INTO payments (sale_issue_id, payment_date, amount, payment_method, note) VALUES (?, ?, ?, ?, ?)").run(
+          sale.id, newDate, diff, paymentMethod || "Cash", `Payment for ${sale.reference_no}`
+        );
+        this._addLedgerEntry(
+          newCustomerId, 'Payment', paymentResult.lastInsertRowid,
+          `Payment for ${sale.reference_no} - ${paymentMethod || "Cash"}`, 0, diff, newDate
+        );
+      }
+      return;
+    }
+
+    // Decrease: remove from the most recent payments first, deleting records that reach zero
+    let toRemove = -diff;
+    const reversed = [...payments].reverse();
+    for (const p of reversed) {
+      if (toRemove <= 0.001) break;
+      if (p.amount <= toRemove) {
+        toRemove -= p.amount;
+        db.prepare("DELETE FROM customer_ledger WHERE customer_id = ? AND reference_type = 'Payment' AND reference_id = ?").run(newCustomerId, p.id);
+        db.prepare("DELETE FROM payments WHERE id = ?").run(p.id);
+      } else {
+        const newAmount = p.amount - toRemove;
+        toRemove = 0;
+        db.prepare("UPDATE payments SET amount = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(newAmount, p.id);
+        db.prepare("UPDATE customer_ledger SET credit = ? WHERE customer_id = ? AND reference_type = 'Payment' AND reference_id = ?").run(newAmount, newCustomerId, p.id);
+      }
+    }
+  }
+
   updateSale(saleId, data) {
     const db = getDatabase();
-    
+
     const sale = db.prepare("SELECT * FROM sale_issues WHERE id = ?").get(saleId);
     if (!sale) {
       throw new Error("Sale not found");
     }
-    
+
     return db.transaction(() => {
-      if (data.customer_id !== undefined) {
-        db.prepare("UPDATE sale_issues SET customer_id = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(data.customer_id, saleId);
+      // ---- GUARD: products cannot be changed if the sale already has returns ----
+      const returnsCount = db.prepare(
+        "SELECT COUNT(*) as cnt FROM returns WHERE sale_issue_id = ? AND status != 'Cancelled'"
+      ).get(saleId)?.cnt || 0;
+      if (returnsCount > 0 && Array.isArray(data.items)) {
+        throw new Error("This sale has returns — products cannot be edited. You can update customer, date, type, payment, and notes only.");
       }
-      if (data.issue_date !== undefined) {
-        db.prepare("UPDATE sale_issues SET issue_date = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(data.issue_date, saleId);
+
+      const oldCustomerId = sale.customer_id;
+      const newCustomerId = data.customer_id !== undefined ? data.customer_id : sale.customer_id;
+      const newDate = data.issue_date !== undefined ? data.issue_date : sale.issue_date;
+      const newType = data.transaction_type !== undefined ? data.transaction_type : sale.transaction_type;
+      const newNotes = data.notes !== undefined ? data.notes || "" : sale.notes;
+
+      // ---- 1. Customer change: move the sale, its payments, AND its returns
+      // (plus every related ledger entry) to the new customer so per-customer
+      // balances stay consistent even when the sale already has returns ----
+      if (newCustomerId !== oldCustomerId) {
+        db.prepare("UPDATE customer_ledger SET customer_id = ? WHERE customer_id = ? AND reference_type = 'Sale' AND reference_id = ?")
+          .run(newCustomerId, oldCustomerId, saleId);
+        db.prepare(`UPDATE customer_ledger SET customer_id = ?
+                    WHERE customer_id = ? AND reference_type = 'Payment' AND reference_id IN (SELECT id FROM payments WHERE sale_issue_id = ?)`)
+          .run(newCustomerId, oldCustomerId, saleId);
+        // Returns belong to the sale — move them so their Return CREDIT
+        // entries (which reference return ids) follow the sale to the new customer
+        db.prepare("UPDATE returns SET customer_id = ? WHERE sale_issue_id = ?").run(newCustomerId, saleId);
+        db.prepare(`UPDATE customer_ledger SET customer_id = ?
+                    WHERE customer_id = ? AND reference_type = 'Return' AND reference_id IN (SELECT id FROM returns WHERE sale_issue_id = ?)`)
+          .run(newCustomerId, oldCustomerId, saleId);
       }
-      if (data.transaction_type !== undefined) {
-        db.prepare("UPDATE sale_issues SET transaction_type = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(data.transaction_type, saleId);
+
+      // ---- 2. Base sale fields ----
+      db.prepare("UPDATE sale_issues SET customer_id = ?, issue_date = ?, transaction_type = ?, notes = ?, updated_at = datetime('now','localtime') WHERE id = ?")
+        .run(newCustomerId, newDate, newType, newNotes, saleId);
+
+      // Update ledger entry dates to match the sale date
+      if (newDate !== sale.issue_date) {
+        db.prepare("UPDATE customer_ledger SET entry_date = ? WHERE customer_id = ? AND reference_type = 'Sale' AND reference_id = ?").run(newDate, newCustomerId, saleId);
+        db.prepare(`UPDATE customer_ledger SET entry_date = ?
+                    WHERE customer_id = ? AND reference_type = 'Payment' AND reference_id IN (SELECT id FROM payments WHERE sale_issue_id = ?)`).run(newDate, newCustomerId, saleId);
       }
-      if (data.notes !== undefined) {
-        db.prepare("UPDATE sale_issues SET notes = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(data.notes || "", saleId);
-      }
-      
-      if (data.payment_method !== undefined) {
-        const existingPayment = db.prepare("SELECT id FROM payments WHERE sale_issue_id = ? LIMIT 1").get(saleId);
-        if (existingPayment) {
-          db.prepare("UPDATE payments SET payment_method = ? WHERE sale_issue_id = ?").run(data.payment_method, saleId);
+
+      // ---- 3. Items: restore old stock, validate, deduct new stock ----
+      let totalAmount = sale.total_amount;
+      if (Array.isArray(data.items)) {
+        const oldItems = db.prepare("SELECT product_id, quantity FROM sale_issue_items WHERE sale_issue_id = ?").all(saleId);
+
+        // Restore old stock first so availability checks are correct
+        const restoreStmt = db.prepare("UPDATE products SET quantity = quantity + ?, status = CASE WHEN status = 'Sold' THEN 'In Stock' ELSE status END, updated_at = datetime('now','localtime') WHERE id = ?");
+        for (const item of oldItems) {
+          restoreStmt.run(item.quantity, item.product_id);
         }
+
+        // Validate new items against stock
+        const errors = [];
+        for (const item of data.items) {
+          const product = db.prepare("SELECT quantity, product_name FROM products WHERE id = ?").get(item.product_id);
+          if (!product) { errors.push(`Product ID ${item.product_id} not found`); continue; }
+          if (product.quantity < item.quantity) {
+            errors.push(`Insufficient stock for "${product.product_name}". Available: ${product.quantity}, Requested: ${item.quantity}`);
+          }
+        }
+        if (errors.length > 0) throw new Error(errors.join("\n"));
+
+        // Replace items
+        db.prepare("DELETE FROM sale_issue_items WHERE sale_issue_id = ?").run(saleId);
+        const itemStmt = db.prepare("INSERT INTO sale_issue_items (sale_issue_id, product_id, product_name, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?, ?)");
+        const deductStmt = db.prepare("UPDATE products SET quantity = quantity - ?, status = CASE WHEN quantity - ? <= 0 THEN 'Sold' ELSE status END, updated_at = datetime('now','localtime') WHERE id = ?");
+        totalAmount = 0;
+        for (const item of data.items) {
+          const product = db.prepare("SELECT product_name FROM products WHERE id = ?").get(item.product_id);
+          const subtotal = item.quantity * item.unit_price;
+          totalAmount += subtotal;
+          itemStmt.run(saleId, item.product_id, product?.product_name || "Unknown", item.quantity, item.unit_price, subtotal);
+          deductStmt.run(item.quantity, item.quantity, item.product_id);
+        }
+
+        // Sync the Sale DEBIT ledger entry with the new total
+        db.prepare("UPDATE customer_ledger SET debit = ? WHERE customer_id = ? AND reference_type = 'Sale' AND reference_id = ?").run(totalAmount, newCustomerId, saleId);
       }
-      
+
+      // ---- 4. Ledger type & paid amount reconciliation ----
+      const newLedgerType = data.ledger_type !== undefined ? data.ledger_type : sale.ledger_type;
+      if (data.ledger_type !== undefined || data.paid_amount !== undefined || data.payment_method !== undefined) {
+        let targetPaid;
+        if (newLedgerType === "Cash") {
+          targetPaid = totalAmount; // Cash = fully paid
+        } else {
+          targetPaid = Math.min(data.paid_amount !== undefined ? data.paid_amount : sale.paid_amount, totalAmount);
+        }
+        this._reconcileSalePayments(db, sale, newCustomerId, targetPaid, newDate, data.payment_method);
+      }
+
+      // ---- 5. Recalc totals from the payments table ----
+      const allPayments = db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE sale_issue_id = ?").get(saleId);
+      const finalPaid = allPayments?.total || 0;
+      const finalRemaining = Math.max(0, totalAmount - finalPaid);
+      const finalStatus = finalRemaining <= 0 ? "Paid" : finalPaid > 0 ? "Partial" : "Outstanding";
+
+      db.prepare("UPDATE sale_issues SET total_amount = ?, paid_amount = ?, remaining_amount = ?, payment_status = ?, ledger_type = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(
+        totalAmount, finalPaid, finalRemaining, finalStatus, newLedgerType, saleId
+      );
+
+      // ---- 6. Recalculate running balances for affected customers ----
+      this._updateLedgerRunningBalances(newCustomerId);
+      if (oldCustomerId !== newCustomerId) {
+        this._updateLedgerRunningBalances(oldCustomerId);
+      }
+
       return { success: true };
     })();
   }
