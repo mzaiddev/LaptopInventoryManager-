@@ -1091,19 +1091,18 @@ const InventoryPage = {
 
         grandTotal += inStockQty;
 
-        const bgColor = catIndex % 2 === 0 ? '#f8fafc' : '#ffffff';
-        const qtyColor = inStockQty > 0 ? '#166534' : '#94a3b8';
-        const dotColor = inStockQty > 0 ? '#22c55e' : '#d1d5db';
+        const qtyColor = '#000';
+        const dotColor = inStockQty > 0 ? '#000' : '#fff';
 
-        rowsHtml += '<tr style="background:' + bgColor + ';">' +
-          '<td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:11px;">' + catIndex + '</td>' +
-          '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' +
+        rowsHtml += '<tr style="background:transparent;">' +
+          '<td style="padding:8px 12px;border:1px solid #000;text-align:center;color:#000;font-size:12px;">' + catIndex + '</td>' +
+          '<td style="padding:8px 12px;border:1px solid #000;">' +
             '<div style="display:flex;align-items:center;gap:8px;">' +
-              '<span style="width:8px;height:8px;border-radius:50%;background:' + dotColor + ';display:inline-block;"></span>' +
-              '<strong style="font-size:13px;color:#1e293b;">' + this.escapeHtml(cat) + '</strong>' +
+              '<span style="width:9px;height:9px;border-radius:50%;background:' + dotColor + ';border:1px solid #000;display:inline-block;"></span>' +
+              '<strong style="font-size:14px;color:#000;">' + this.escapeHtml(cat) + '</strong>' +
             '</div>' +
           '</td>' +
-          '<td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;font-weight:700;font-size:15px;color:' + qtyColor + ';">' + inStockQty + '</td>' +
+          '<td style="padding:8px 12px;border:1px solid #000;text-align:center;font-weight:700;font-size:15px;color:' + qtyColor + ';">' + inStockQty + '</td>' +
         '</tr>';
       }
 
@@ -1121,36 +1120,36 @@ const InventoryPage = {
       '<style>' +
         '@page { margin: 8mm; size: A4 portrait; }' +
         '* { margin: 0; padding: 0; box-sizing: border-box; }' +
-        'body { font-family: Segoe UI, Arial, sans-serif; color: #1e293b; padding: 12px; background: #fff; font-size: 11px; }' +
-        '.print-header { text-align: center; margin-bottom: 14px; border-bottom: 2px solid #2563eb; padding-bottom: 8px; }' +
-        '.print-header h1 { font-size: 18px; color: #1e293b; }' +
-        '.print-header .sub { font-size: 10px; color: #64748b; }' +
-        '.print-footer { margin-top: 14px; text-align: center; font-size: 9px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 6px; }' +
+        'body { font-family: Segoe UI, Arial, sans-serif; color: #000; padding: 12px; background: #fff; font-size: 14px; }' +
+        '.print-header { text-align: center; margin-bottom: 14px; border-bottom: 2px solid #000; padding-bottom: 8px; }' +
+        '.print-header h1 { font-size: 22px; color: #000; }' +
+        '.print-header .sub { font-size: 13px; color: #000; }' +
+        '.print-footer { margin-top: 14px; text-align: center; font-size: 12px; color: #000; border-top: 1px solid #000; padding-top: 6px; }' +
         '.print-actions { text-align: center; margin-bottom: 10px; }' +
-        '.print-actions button { padding: 7px 18px; margin: 0 5px; border: none; border-radius: 5px; cursor: pointer; font-size: 12px; }' +
-        '.btn-print { background: #2563eb; color: #fff; }' +
-        '.btn-pdf { background: #16a34a; color: #fff; }' +
-        'table { width: 100%; border-collapse: collapse; font-size: 11px; }' +
-        'th { background: #2563eb; color: #fff; padding: 8px 12px; text-align: left; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
-        'td { padding: 6px 12px; border: 1px solid #e2e8f0; color: #334155; }' +
+        '.print-actions button { padding: 8px 20px; margin: 0 5px; border: 1px solid #000; border-radius: 5px; cursor: pointer; font-size: 13px; background: #fff; color: #000; }' +
+        '.btn-print { background: #fff; color: #000; }' +
+        '.btn-pdf { background: #fff; color: #000; }' +
+        'table { width: 100%; border-collapse: collapse; font-size: 12px; }' +
+        'th { background: transparent; color: #000; padding: 8px 12px; text-align: left; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #000; }' +
+        'td { padding: 7px 12px; border: 1px solid #000; color: #000; }' +
         '.summary-row { display: flex; gap: 16px; justify-content: center; margin: 14px 0; }' +
-        '.summary-item { padding: 10px 20px; background: #f1f5f9; border-radius: 8px; border: 1px solid #e2e8f0; text-align: center; min-width: 140px; }' +
-        '.summary-item .label { font-size: 9px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }' +
-        '.summary-item .value { font-size: 18px; font-weight: 700; color: #1e293b; margin-top: 4px; }' +
-        '.grand-row { background: #1e40af !important; color: #fff !important; font-weight: 700; font-size: 13px; }' +
-        '.grand-row td { color: #fff !important; border-color: #1e3a5f; padding: 10px 12px; }' +
+        '.summary-item { padding: 12px 22px; background: transparent; border-radius: 8px; border: 1px solid #000; text-align: center; min-width: 140px; }' +
+        '.summary-item .label { font-size: 11px; color: #000; text-transform: uppercase; letter-spacing: 0.5px; }' +
+        '.summary-item .value { font-size: 20px; font-weight: 700; color: #000; margin-top: 4px; }' +
+        '.grand-row { background: transparent !important; color: #000 !important; font-weight: 700; font-size: 13px; border-top: 2px solid #000; }' +
+        '.grand-row td { color: #000 !important; border-color: #000; padding: 10px 12px; }' +
         '@media print { .print-actions { display: none; } body { padding: 0; } }' +
       '</style></head><body>' +
       '<div class="print-actions"><button class="btn-print" onclick="window.print()">Print</button><button class="btn-pdf" onclick="window.print()">Download PDF</button></div>' +
       '<div class="print-header">' +
         '<h1>' + this.escapeHtml(company.shopName) + '</h1>' +
         (company.address ? '<p style="font-size:11px;color:#64748b;">' + this.escapeHtml(company.address) + '</p>' : '') +
-        '<div style="font-size:10px;color:#94a3b8;">' +
+        '<div style="font-size:13px;color:#000;">' +
           (company.phone ? 'Phone: ' + this.escapeHtml(company.phone) + ' | ' : '') +
           (company.email ? 'Email: ' + this.escapeHtml(company.email) + ' | ' : '') +
           'Printed: ' + dateStr + ' ' + timeStr +
         '</div>' +
-        '<h1 style="font-size:16px;color:#475569;margin-top:6px;">Stock Summary by Category</h1>' +
+        '<h1 style="font-size:22px;color:#000;margin-top:6px;">Stock Summary by Category</h1>' +
         '<div class="sub">In Stock quantity for each product category (0 = no stock)</div>' +
       '</div>' +
       '<div class="summary-row">' +
