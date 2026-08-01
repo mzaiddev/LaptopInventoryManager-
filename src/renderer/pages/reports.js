@@ -266,7 +266,7 @@ const ReportsPage = {
             </tr>`).join('')}
           </tbody>
           <tfoot>
-            <tr style="font-weight:700;background:#f1f5f9;">
+            <tr style="font-weight:700;background:transparent;">
               <td colspan="5" style="text-align:right;">Totals:</td>
               <td style="text-align:right;">${currencyFmt(totalAmount)}</td>
               <td style="text-align:right;">${currencyFmt(totalPaid)}</td>
@@ -275,7 +275,7 @@ const ReportsPage = {
             </tr>
           </tfoot>
         </table>
-        <div style="margin-top:10px;font-size:11px;color:#64748b;">
+        <div style="margin-top:10px;font-size:13px;color:#000;">
           <strong>Summary:</strong> ${sales.length} transactions | Total: ${currencyFmt(totalAmount)} | Collected: ${currencyFmt(totalPaid)} | Remaining: ${currencyFmt(totalRemaining)}
         </div>`;
       }
@@ -288,7 +288,7 @@ const ReportsPage = {
         title = 'Remaining Dues Report';
         
         content = `
-        <div style="margin-bottom:10px;font-size:14px;font-weight:700;color:#ef4444;">Total Remaining: ${currencyFmt(totalOutstanding)}</div>
+        <div style="margin-bottom:10px;font-size:15px;font-weight:700;color:#000;">Total Remaining: ${currencyFmt(totalOutstanding)}</div>
         <table>
           <thead><tr>
             <th>Customer</th><th>Phone</th><th>Invoices</th><th>Total Sales</th><th>Total Paid</th><th>Remaining</th>
@@ -300,7 +300,7 @@ const ReportsPage = {
               <td>${c.invoice_count}</td>
               <td style="text-align:right;">${currencyFmt(c.total_sales)}</td>
               <td style="text-align:right;">${currencyFmt(c.total_paid)}</td>
-              <td style="text-align:right;font-weight:700;color:#ef4444;">${currencyFmt(c.total_outstanding)}</td>
+              <td style="text-align:right;font-weight:700;color:#000;">${currencyFmt(c.total_outstanding)}</td>
             </tr>`).join('')}
           </tbody>
         </table>`;
@@ -335,11 +335,11 @@ const ReportsPage = {
               <td>${this.escapeHtml(c.phone) || '-'}</td>
               <td style="text-align:right;">${currencyFmt(c.total_sales)}</td>
               <td style="text-align:right;">${currencyFmt(c.total_paid)}</td>
-              <td style="text-align:right;font-weight:700;color:${c.outstanding_balance > 0 ? '#ef4444' : '#22c55e'};">${currencyFmt(c.outstanding_balance)}</td>
+              <td style="text-align:right;font-weight:700;color:#000;">${currencyFmt(c.outstanding_balance)}</td>
             </tr>`).join('')}
           </tbody>
           <tfoot>
-            <tr style="font-weight:700;background:#f1f5f9;">
+            <tr style="font-weight:700;background:transparent;">
               <td colspan="2" style="text-align:right;">Totals:</td>
               <td style="text-align:right;">${currencyFmt(totalSales)}</td>
               <td style="text-align:right;">${currencyFmt(totalPaid)}</td>
@@ -358,7 +358,7 @@ const ReportsPage = {
         title = 'Damage Report';
         
         content = `
-        <div style="margin-bottom:10px;font-size:11px;color:#64748b;">${damages.length} records | Total Qty: ${totalQty} | Value Lost: ${currencyFmt(totalValue)}</div>
+        <div style="margin-bottom:10px;font-size:13px;color:#000;">${damages.length} records | Total Qty: ${totalQty} | Value Lost: ${currencyFmt(totalValue)}</div>
         <table>
           <thead><tr>
             <th>Ref</th><th>Product</th><th>Category</th><th>Qty</th><th>Type</th><th>Date</th><th>Reason</th><th>Value Lost</th>
@@ -384,21 +384,21 @@ const ReportsPage = {
 <style>
   @page { margin: 12mm; size: A4 portrait; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; padding: 15px; background: #fff; font-size: 11px; }
-  .header { text-align: center; margin-bottom: 16px; border-bottom: 2px solid #2563eb; padding-bottom: 10px; }
-  .header h1 { font-size: 18px; color: #1e293b; margin-bottom: 2px; }
-  .header .sub { font-size: 11px; color: #64748b; }
-  .header .company-info { font-size: 12px; color: #475569; margin-top: 4px; }
-  .footer { margin-top: 16px; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
-  table { width: 100%; border-collapse: collapse; font-size: 10px; }
-  th { background: #2563eb; color: #fff; padding: 5px 7px; text-align: left; font-weight: 600; white-space: nowrap; font-size: 10px; }
-  td { padding: 4px 7px; border-bottom: 1px solid #e2e8f0; color: #334155; }
-  tr:nth-child(even) { background: #f8fafc; }
-  tfoot td { border-top: 2px solid #2563eb; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; padding: 15px; background: #fff; font-size: 14px; }
+  .header { text-align: center; margin-bottom: 16px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+  .header h1 { font-size: 22px; color: #000; margin-bottom: 2px; }
+  .header .sub { font-size: 13px; color: #000; }
+  .header .company-info { font-size: 14px; color: #000; margin-top: 4px; }
+  .footer { margin-top: 16px; text-align: center; font-size: 12px; color: #000; border-top: 1px solid #000; padding-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { background: transparent; color: #000; padding: 7px 8px; text-align: left; font-weight: 700; white-space: nowrap; font-size: 12px; border-bottom: 2px solid #000; }
+  td { padding: 6px 8px; border-bottom: 1px solid #999; color: #000; }
+  tr:nth-child(even) { background: transparent; }
+  tfoot td { border-top: 2px solid #000; }
   .print-actions { text-align: center; margin-bottom: 12px; }
-  .print-actions button { padding: 8px 20px; margin: 0 6px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
-  .btn-print { background: #2563eb; color: #fff; }
-  .btn-pdf { background: #16a34a; color: #fff; }
+  .print-actions button { padding: 8px 20px; margin: 0 6px; border: 1px solid #000; border-radius: 6px; cursor: pointer; font-size: 13px; background: #fff; color: #000; }
+  .btn-print { background: #fff; color: #000; }
+  .btn-pdf { background: #fff; color: #000; }
   @media print { .print-actions { display: none; } }
 </style>
 </head>
