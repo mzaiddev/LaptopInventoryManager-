@@ -6,11 +6,11 @@
   "author": "LaptopInventoryManager",
   "license": "MIT",
   "scripts": {
-    "start": "electron .",
-    "dev": "electron . --dev",
-    "build": "electron-builder",
-    "build:portable": "electron-builder --win portable",
-    "build:installer": "electron-builder --win nsis",
+    "start": "node init && electron .",
+    "dev": "node init && electron . --dev",
+    "build": "node init && electron-builder",
+    "build:portable": "node init && electron-builder --win portable",
+    "build:installer": "node init && electron-builder --win nsis",
     "postinstall": "electron-builder install-app-deps"
   },
   "build": {
