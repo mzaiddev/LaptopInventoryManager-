@@ -1,7 +1,7 @@
 // Dashboard Page
 const DashboardPage = {
   async load() {
-    const content = document.getElementById('page-content');
+    const content = document.getElementById("page-content");
     content.innerHTML = `
       <div class="page-header">
         <div>
@@ -23,7 +23,7 @@ const DashboardPage = {
   },
 
   async refresh() {
-    const container = document.getElementById('dashboard-content');
+    const container = document.getElementById("dashboard-content");
     if (!container) return;
 
     try {
@@ -34,7 +34,7 @@ const DashboardPage = {
       }
 
       const data = result.data;
-      App.currency = data.currency || 'USD';
+      App.currency = data.currency || "USD";
 
       container.innerHTML = this.renderDashboard(data);
     } catch (err) {
@@ -50,13 +50,11 @@ const DashboardPage = {
     const ledger = data.saleSummary;
     const damage = data.damageSummary;
     const activity = data.recentActivity;
-    const oldBalance = data.oldBalanceSummary;
     const ledgerData = data.ledgerSummary;
 
     return `
-      ${this.renderFinancialOverview(fin, ledger, sales, damage)}
-      ${ledgerData ? this.renderLedgerOverview(ledgerData) : ''}
-      ${oldBalance && oldBalance.totalRecords > 0 ? this.renderOldBalanceOverview(oldBalance) : ''}
+      ${this.renderFinancialOverview(fin, ledger, sales, damage, ledgerData)}
+     
       ${this.renderInventorySummary(inv, fin, damage)}
       ${this.renderConditionSummary(cond)}
       ${this.renderActivity(activity)}
@@ -64,7 +62,7 @@ const DashboardPage = {
   },
 
   renderLedgerOverview(ledgerData) {
-    const currency = App.currency || 'USD';
+    const currency = App.currency || "USD";
     return `
       <div class="dashboard-section">
         <h2>Customer Ledger Summary</h2>
@@ -98,12 +96,12 @@ const DashboardPage = {
             <div class="stat-label">Total Credits (Payments)</div>
           </div>
           <div class="stat-card clickable" onclick="App.navigate('ledgers')" title="View ledger">
-            <div class="stat-icon ${ledgerData.netLedgerBalance > 0 ? 'red' : 'green'}">
+            <div class="stat-icon ${ledgerData.netLedgerBalance > 0 ? "red" : "green"}">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
                 <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
             </div>
-            <div class="stat-value" style="color:${ledgerData.netLedgerBalance > 0 ? 'var(--danger)' : 'var(--success)'};">${Formatters.formatCurrency(ledgerData.netLedgerBalance, currency)}</div>
+            <div class="stat-value" style="color:${ledgerData.netLedgerBalance > 0 ? "var(--danger)" : "var(--success)"};">${Formatters.formatCurrency(ledgerData.netLedgerBalance, currency)}</div>
             <div class="stat-label">Net Ledger Balance</div>
             <div class="stat-trend">${ledgerData.customersOwing} customers owing</div>
           </div>
@@ -113,7 +111,7 @@ const DashboardPage = {
   },
 
   renderOldBalanceOverview(oldBalance) {
-    const currency = App.currency || 'USD';
+    const currency = App.currency || "USD";
     return `
       <div class="dashboard-section">
         <h2>Old Balances</h2>
@@ -152,10 +150,12 @@ const DashboardPage = {
     `;
   },
 
-  renderFinancialOverview(fin, ledger, sales, damage) {
-    const currency = App.currency || 'USD';
+  renderFinancialOverview(fin, ledger, sales, damage, ledgerData) {
+    const currency = App.currency || "USD";
     const netProfit = fin.grossProfit - (ledger.totalReturnsValue || 0);
     const netRevenue = fin.totalSoldValue - (ledger.totalReturnsValue || 0);
+    const totalDue = ledger.totalDueFromLedger || 0;
+    const totalPaid = sales.totalPaidFromLedger || 0;
 
     return `
       <div class="dashboard-section">
@@ -170,6 +170,36 @@ const DashboardPage = {
             <div class="stat-value">${Formatters.formatCurrency(sales.totalSales, currency)}</div>
             <div class="stat-label">Total Sales (${sales.totalTransactions} transactions)</div>
             <div class="stat-trend">Today: ${Formatters.formatCurrency(sales.todaySales, currency)}</div>
+          </div>
+          <div class="stat-card clickable" onclick="DashboardPage.showDetail('Total Paid (Ledger)', DashboardPage.getCollectedDetailHtml)" title="Click for details">
+            <div class="stat-icon green">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
+            <div class="stat-value">${Formatters.formatCurrency(totalPaid, currency)}</div>
+            <div class="stat-label">Total Paid (Ledger)</div>
+            <div class="stat-trend">Today: ${Formatters.formatCurrency(sales.todayCollected, currency)}</div>
+          </div>
+          <div class="stat-card clickable" onclick="DashboardPage.showDetail('Total Due', DashboardPage.getOutstandingDetailHtml)" title="Click for details">
+            <div class="stat-icon red">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            </div>
+            <div class="stat-value" style="color:${totalDue > 0 ? "var(--danger)" : "var(--success)"};">${Formatters.formatCurrency(totalDue, currency)}</div>
+            <div class="stat-label">Total Due (Ledger)</div>
+            <div class="stat-trend">${ledgerData?.customersOwing || 0} customers owing</div>
+          </div>
+          <div class="stat-card clickable" onclick="DashboardPage.showDetail('Returns & Credits', DashboardPage.getReturnsDetailHtml)" title="Click for details">
+            <div class="stat-icon warning">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+              </svg>
+            </div>
+            <div class="stat-value">${Formatters.formatCurrency(ledger.totalReturnsValue, currency)}</div>
+            <div class="stat-label">Returns / Credits</div>
+            <div class="stat-trend">${ledger.totalReturns || 0} return transactions</div>
           </div>
           <div class="stat-card clickable" onclick="DashboardPage.showDetail('Cost of Goods Sold', DashboardPage.getCostDetailHtml)" title="Click for details">
             <div class="stat-icon yellow">
@@ -189,62 +219,13 @@ const DashboardPage = {
             <div class="stat-value">${Formatters.formatCurrency(fin.grossProfit, currency)}</div>
             <div class="stat-label">Gross Profit</div>
           </div>
-          <div class="stat-card clickable" onclick="DashboardPage.showDetail('Net Revenue', DashboardPage.getNetRevenueDetailHtml)" title="Click for details">
-            <div class="stat-icon green">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-              </svg>
-            </div>
-            <div class="stat-value">${Formatters.formatCurrency(netRevenue, currency)}</div>
-            <div class="stat-label">Net Revenue (after returns)</div>
-          </div>
-          <div class="stat-card clickable" onclick="DashboardPage.showDetail('Remaining Balances', DashboardPage.getOutstandingDetailHtml)" title="Click for details">
-            <div class="stat-icon red">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
-                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-              </svg>
-            </div>
-            <div class="stat-value">${Formatters.formatCurrency(ledger.totalOutstanding, currency)}</div>
-            <div class="stat-label">Remaining Balance</div>
-            <div class="stat-trend">${ledger.outstandingInvoices || 0} remaining invoices</div>
-          </div>
-          <div class="stat-card clickable" onclick="DashboardPage.showDetail('Payments Collected', DashboardPage.getCollectedDetailHtml)" title="Click for details">
-            <div class="stat-icon green">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              </svg>
-            </div>
-            <div class="stat-value">${Formatters.formatCurrency(sales.totalCollected, currency)}</div>
-            <div class="stat-label">Total Collected</div>
-            <div class="stat-trend">Today: ${Formatters.formatCurrency(sales.todayCollected, currency)}</div>
-          </div>
-          <div class="stat-card clickable" onclick="DashboardPage.showDetail('Damaged Stock', DashboardPage.getDamageDetailHtml)" title="Click for details">
-            <div class="stat-icon red">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
-                <line x1="18" y1="6" x2="6" y2="18"/><circle cx="12" cy="12" r="10"/>
-              </svg>
-            </div>
-            <div class="stat-value">${Formatters.formatCurrency(fin.damagedStockValue, currency)}</div>
-            <div class="stat-label">Damaged Stock Value</div>
-            <div class="stat-trend">${damage.damagedStatusQty} units damaged</div>
-          </div>
-          <div class="stat-card clickable" onclick="DashboardPage.showDetail('Returns & Credits', DashboardPage.getReturnsDetailHtml)" title="Click for details">
-            <div class="stat-icon warning">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
-                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-              </svg>
-            </div>
-            <div class="stat-value">${Formatters.formatCurrency(ledger.totalReturnsValue, currency)}</div>
-            <div class="stat-label">Returns / Credits</div>
-            <div class="stat-trend">${ledger.totalReturns || 0} return transactions</div>
-          </div>
           <div class="stat-card clickable" onclick="DashboardPage.showDetail('Net Profit', DashboardPage.getProfitDetailHtml)" title="Click for details">
             <div class="stat-icon blue">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
                 <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
               </svg>
             </div>
-            <div class="stat-value ${netProfit >= 0 ? '' : 'text-danger'}">${Formatters.formatCurrency(netProfit, currency)}</div>
+            <div class="stat-value ${netProfit >= 0 ? "" : "text-danger"}">${Formatters.formatCurrency(netProfit, currency)}</div>
             <div class="stat-label">Net Profit / Loss</div>
           </div>
         </div>
@@ -253,7 +234,7 @@ const DashboardPage = {
   },
 
   renderInventorySummary(inv, fin, damage) {
-    const currency = App.currency || 'USD';
+    const currency = App.currency || "USD";
     const availableQty = inv.inStock;
     const availableValue = fin.currentInventoryValue;
 
@@ -432,8 +413,10 @@ const DashboardPage = {
     if (!items || items.length === 0) {
       return '<p style="color:var(--text-muted);text-align:center;padding:20px;">No sales yet.</p>';
     }
-    const currency = App.currency || 'USD';
-    return `<ul class="activity-list">${items.map(item => `
+    const currency = App.currency || "USD";
+    return `<ul class="activity-list">${items
+      .map(
+        (item) => `
       <li class="activity-item">
         <div class="activity-icon added">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
@@ -446,15 +429,19 @@ const DashboardPage = {
         </div>
         <div class="activity-time">${Formatters.formatRelativeTime(item.issue_date)}</div>
       </li>
-    `).join('')}</ul>`;
+    `,
+      )
+      .join("")}</ul>`;
   },
 
   renderPaymentsList(items) {
     if (!items || items.length === 0) {
       return '<p style="color:var(--text-muted);text-align:center;padding:20px;">No payments yet.</p>';
     }
-    const currency = App.currency || 'USD';
-    return `<ul class="activity-list">${items.map(item => `
+    const currency = App.currency || "USD";
+    return `<ul class="activity-list">${items
+      .map(
+        (item) => `
       <li class="activity-item">
         <div class="activity-icon updated">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
@@ -467,15 +454,19 @@ const DashboardPage = {
         </div>
         <div class="activity-time">${Formatters.formatRelativeTime(item.payment_date)}</div>
       </li>
-    `).join('')}</ul>`;
+    `,
+      )
+      .join("")}</ul>`;
   },
 
   renderReturnsList(items) {
     if (!items || items.length === 0) {
       return '<p style="color:var(--text-muted);text-align:center;padding:20px;">No returns yet.</p>';
     }
-    const currency = App.currency || 'USD';
-    return `<ul class="activity-list">${items.map(item => `
+    const currency = App.currency || "USD";
+    return `<ul class="activity-list">${items
+      .map(
+        (item) => `
       <li class="activity-item">
         <div class="activity-icon sold">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
@@ -488,15 +479,19 @@ const DashboardPage = {
         </div>
         <div class="activity-time">${Formatters.formatRelativeTime(item.return_date)}</div>
       </li>
-    `).join('')}</ul>`;
+    `,
+      )
+      .join("")}</ul>`;
   },
 
   renderDamagesList(items) {
     if (!items || items.length === 0) {
       return '<p style="color:var(--text-muted);text-align:center;padding:20px;">No damages recorded.</p>';
     }
-    const currency = App.currency || 'USD';
-    return `<ul class="activity-list">${items.map(item => `
+    const currency = App.currency || "USD";
+    return `<ul class="activity-list">${items
+      .map(
+        (item) => `
       <li class="activity-item">
         <div class="activity-icon sold">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
@@ -509,23 +504,28 @@ const DashboardPage = {
         </div>
         <div class="activity-time">${Formatters.formatRelativeTime(item.recorded_date)}</div>
       </li>
-    `).join('')}</ul>`;
+    `,
+      )
+      .join("")}</ul>`;
   },
 
   // ==================== DETAIL MODAL METHODS ====================
 
   async showDetail(title, htmlFn) {
-    const body = '<div class="loading"><div class="spinner" style="width:24px;height:24px;"></div></div>';
-    const footer = '<button class="btn btn-secondary" onclick="window.Modal.close()">Close</button>';
-    Modal.show({ title, body, footer, size: 'md' });
+    const body =
+      '<div class="loading"><div class="spinner" style="width:24px;height:24px;"></div></div>';
+    const footer =
+      '<button class="btn btn-secondary" onclick="window.Modal.close()">Close</button>';
+    Modal.show({ title, body, footer, size: "md" });
 
     try {
       const html = await htmlFn();
-      const modalBody = document.querySelector('.modal-body');
+      const modalBody = document.querySelector(".modal-body");
       if (modalBody) modalBody.innerHTML = html;
-    } catch(e) {
-      const modalBody = document.querySelector('.modal-body');
-      if (modalBody) modalBody.innerHTML = `<p style="color:var(--danger);">Error: ${e.message}</p>`;
+    } catch (e) {
+      const modalBody = document.querySelector(".modal-body");
+      if (modalBody)
+        modalBody.innerHTML = `<p style="color:var(--danger);">Error: ${e.message}</p>`;
     }
   },
 
@@ -533,7 +533,7 @@ const DashboardPage = {
     const result = await window.api.getDashboardData();
     if (!result.success) throw new Error(result.error);
     const s = result.data.salesSummary;
-    const currency = App.currency || 'USD';
+    const currency = App.currency || "USD";
     return `
       <div class="ledger-stats-grid" style="grid-template-columns:repeat(2,1fr);">
         <div class="ledger-stat-card stat-success">
@@ -572,7 +572,7 @@ const DashboardPage = {
     const result = await window.api.getDashboardData();
     if (!result.success) throw new Error(result.error);
     const f = result.data.financialSummary;
-    const currency = App.currency || 'USD';
+    const currency = App.currency || "USD";
     return `
       <div class="ledger-stats-grid" style="grid-template-columns:repeat(2,1fr);">
         <div class="ledger-stat-card">
@@ -595,7 +595,7 @@ const DashboardPage = {
     if (!result.success) throw new Error(result.error);
     const f = result.data.financialSummary;
     const l = result.data.saleSummary;
-    const currency = App.currency || 'USD';
+    const currency = App.currency || "USD";
     const netProfit = f.grossProfit - (l.totalReturnsValue || 0);
     return `
       <div class="ledger-stats-grid" style="grid-template-columns:repeat(2,1fr);">
@@ -618,7 +618,7 @@ const DashboardPage = {
       </div>
       <div style="margin-top:12px;padding:12px;background:var(--bg-tertiary);border-radius:var(--radius);text-align:center;">
         <span style="font-size:14px;color:var(--text-secondary);">Net Profit: </span>
-        <span style="font-size:24px;font-weight:700;color:${netProfit >= 0 ? 'var(--success)' : 'var(--danger)'};">${Formatters.formatCurrency(netProfit, currency)}</span>
+        <span style="font-size:24px;font-weight:700;color:${netProfit >= 0 ? "var(--success)" : "var(--danger)"};">${Formatters.formatCurrency(netProfit, currency)}</span>
       </div>
     `;
   },
@@ -628,7 +628,7 @@ const DashboardPage = {
     if (!result.success) throw new Error(result.error);
     const f = result.data.financialSummary;
     const l = result.data.saleSummary;
-    const currency = App.currency || 'USD';
+    const currency = App.currency || "USD";
     const netRevenue = f.totalSoldValue - (l.totalReturnsValue || 0);
     return `
       <div class="ledger-stats-grid" style="grid-template-columns:repeat(2,1fr);">
@@ -649,34 +649,43 @@ const DashboardPage = {
   },
 
   async getOutstandingDetailHtml() {
-    const result = await window.api.getOutstandingReport();
+    const result = await window.api.getCustomerLedgerReport();
     if (!result.success) throw new Error(result.error);
     const data = result.data || [];
-    const currency = App.currency || 'USD';
-    const totalOutstanding = data.reduce((sum, c) => sum + c.total_outstanding, 0);
-    if (data.length === 0) {
+    const currency = App.currency || "USD";
+    const totalDue = data.reduce((sum, c) => sum + (c.ledger_balance || 0), 0);
+    const customersWithBalance = data.filter((c) => c.ledger_balance > 0);
+    if (customersWithBalance.length === 0) {
       return '<p style="text-align:center;padding:20px;color:var(--success);">All customers have cleared their balances!</p>';
     }
-    const safe = (str) => { const d = document.createElement('div'); d.textContent = str || ''; return d.innerHTML; };
+    const safe = (str) => {
+      const d = document.createElement("div");
+      d.textContent = str || "";
+      return d.innerHTML;
+    };
     return `
       <div style="margin-bottom:12px;font-size:18px;font-weight:700;color:var(--danger);">
-        Total Due: ${Formatters.formatCurrency(totalOutstanding, currency)} (${data.length} customers)
+        Total Due: ${Formatters.formatCurrency(totalDue, currency)} (${customersWithBalance.length} customers)
       </div>
       <table class="report-table">
-        <thead><tr><th>Customer</th><th>Phone</th><th>Invoices</th><th>Remaining</th></tr></thead>
+        <thead><tr><th>Customer</th><th>Phone</th><th>Ledger Balance</th><th>Sale Outstanding</th></tr></thead>
         <tbody>
-          ${data.map(c => `
+          ${customersWithBalance
+            .map(
+              (c) => `
             <tr>
               <td><strong>${safe(c.customer_name)}</strong></td>
-              <td>${safe(c.phone) || '-'}</td>
-              <td>${c.invoice_count}</td>
-              <td style="font-weight:700;color:var(--danger);">${Formatters.formatCurrency(c.total_outstanding, currency)}</td>
+              <td>${safe(c.phone) || "-"}</td>
+              <td style="font-weight:700;color:var(--danger);">${Formatters.formatCurrency(c.ledger_balance, currency)}</td>
+              <td>${Formatters.formatCurrency(c.sale_outstanding, currency)}</td>
             </tr>
-          `).join('')}
+          `,
+            )
+            .join("")}
         </tbody>
       </table>
       <div style="margin-top:12px;">
-        <button class="btn btn-primary btn-sm" onclick="Modal.close();App.navigate('ledgers')">View All Sales</button>
+        <button class="btn btn-primary btn-sm" onclick="Modal.close();App.navigate('ledgers')">View Ledger</button>
       </div>
     `;
   },
@@ -686,24 +695,26 @@ const DashboardPage = {
     if (!result.success) throw new Error(result.error);
     const s = result.data.salesSummary;
     const l = result.data.saleSummary;
-    const currency = App.currency || 'USD';
+    const currency = App.currency || "USD";
+    const totalPaidFromLedger = s.totalPaidFromLedger || 0;
+    const totalDueFromLedger = l.totalDueFromLedger || 0;
     return `
       <div class="ledger-stats-grid" style="grid-template-columns:repeat(2,1fr);">
         <div class="ledger-stat-card stat-success">
-          <div class="stat-value">${Formatters.formatCurrency(s.totalCollected, currency)}</div>
-          <div class="stat-label">Total Collected</div>
+          <div class="stat-value">${Formatters.formatCurrency(totalPaidFromLedger, currency)}</div>
+          <div class="stat-label">Total Paid (Ledger)</div>
         </div>
         <div class="ledger-stat-card">
           <div class="stat-value">${Formatters.formatCurrency(l.totalSaleCollected, currency)}</div>
-          <div class="stat-label">From Invoices</div>
+          <div class="stat-label">From Invoice Payments</div>
         </div>
         <div class="ledger-stat-card">
           <div class="stat-value">${Formatters.formatCurrency(s.todayCollected, currency)}</div>
           <div class="stat-label">Today Collections</div>
         </div>
         <div class="ledger-stat-card stat-danger">
-          <div class="stat-value">${Formatters.formatCurrency(l.totalOutstanding, currency)}</div>
-          <div class="stat-label">Still Remaining</div>
+          <div class="stat-value">${Formatters.formatCurrency(totalDueFromLedger, currency)}</div>
+          <div class="stat-label">Still Due (Ledger)</div>
         </div>
       </div>
     `;
@@ -713,7 +724,7 @@ const DashboardPage = {
     const result = await window.api.getDashboardData();
     if (!result.success) throw new Error(result.error);
     const d = result.data.damageSummary;
-    const currency = App.currency || 'USD';
+    const currency = App.currency || "USD";
     return `
       <div class="ledger-stats-grid" style="grid-template-columns:repeat(2,1fr);">
         <div class="ledger-stat-card stat-danger">
@@ -747,7 +758,7 @@ const DashboardPage = {
     if (!result.success) throw new Error(result.error);
     const f = result.data.financialSummary;
     const inv = result.data.inventorySummary;
-    const currency = App.currency || 'USD';
+    const currency = App.currency || "USD";
     return `
       <div class="ledger-stats-grid" style="grid-template-columns:repeat(2,1fr);">
         <div class="ledger-stat-card">
@@ -799,7 +810,7 @@ const DashboardPage = {
     if (!result.success) throw new Error(result.error);
     const l = result.data.saleSummary;
     const inv = result.data.inventorySummary;
-    const currency = App.currency || 'USD';
+    const currency = App.currency || "USD";
     return `
       <div class="ledger-stats-grid" style="grid-template-columns:repeat(2,1fr);">
         <div class="ledger-stat-card stat-warning">
@@ -842,19 +853,20 @@ const DashboardPage = {
   },
 
   async showOldBalanceDetail() {
-    const body = '<div class="loading"><div class="spinner" style="width:24px;height:24px;"></div></div>';
+    const body =
+      '<div class="loading"><div class="spinner" style="width:24px;height:24px;"></div></div>';
     const footer = `
       <button class="btn btn-secondary" onclick="window.Modal.close()">Close</button>
-      <button class="btn btn-primary" onclick="Modal.close();App.navigate('old-balances')">Manage Old Balances</button>
+      <button class="btn btn-primary" onclick="Modal.close();App.navigate('ledgers')">View Ledger</button>
     `;
-    Modal.show({ title: 'Old Balances Summary', body, footer, size: 'md' });
+    Modal.show({ title: "Old Balances Summary", body, footer, size: "md" });
 
     try {
       const result = await window.api.getOldBalanceSummary();
       if (!result.success) throw new Error(result.error);
       const d = result.data;
-      const currency = App.currency || 'USD';
-      const modalBody = document.querySelector('.modal-body');
+      const currency = App.currency || "USD";
+      const modalBody = document.querySelector(".modal-body");
       if (modalBody) {
         modalBody.innerHTML = `
           <div class="ledger-stats-grid" style="grid-template-columns:repeat(2,1fr);">
@@ -876,21 +888,21 @@ const DashboardPage = {
             </div>
           </div>
           <p style="margin-top:12px;color:var(--text-secondary);font-size:13px;">
-            Old balances are pre-existing customer balances recorded before using this software.
-            They do not require any products - just a balance amount per customer.
+            Old balances are integrated into the customer ledger and reflected in Total Due.
           </p>
         `;
       }
-    } catch(e) {
-      const modalBody = document.querySelector('.modal-body');
-      if (modalBody) modalBody.innerHTML = `<p style="color:var(--danger);">Error: ${e.message}</p>`;
+    } catch (e) {
+      const modalBody = document.querySelector(".modal-body");
+      if (modalBody)
+        modalBody.innerHTML = `<p style="color:var(--danger);">Error: ${e.message}</p>`;
     }
   },
 
   escapeHtml(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
+    if (!str) return "";
+    const div = document.createElement("div");
     div.textContent = str;
     return div.innerHTML;
-  }
+  },
 };

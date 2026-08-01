@@ -141,6 +141,11 @@ class DashboardService {
       FROM sale_issues si
     `).get(today, today);
 
+    // Get total paid from ledger (includes ALL payments - both sale-specific and direct ledger payments)
+    const ledgerPaid = db.prepare(`
+      SELECT COALESCE(SUM(credit), 0) as total_paid FROM customer_ledger WHERE reference_type = 'Payment'
+    `).get();
+
     return {
       totalSales: stats.total_sales,
       totalCollected: stats.total_collected,
@@ -149,7 +154,9 @@ class DashboardService {
       todayCollected: stats.today_collected,
       paidCount: stats.paid_count,
       partialCount: stats.partial_count,
-      outstandingCount: stats.outstanding_count
+      outstandingCount: stats.outstanding_count,
+      // Ledger-based total paid (includes all payments from ALL sources)
+      totalPaidFromLedger: ledgerPaid?.total_paid || 0
     };
   }
 
@@ -172,6 +179,13 @@ class DashboardService {
       FROM returns WHERE status = 'Completed'
     `).get();
 
+    // Get net ledger balance (total debits - total credits = what customers owe)
+    // This is the SINGLE SOURCE OF TRUTH for what customers owe
+    const ledgerBalance = db.prepare(`
+      SELECT COALESCE(SUM(debit), 0) - COALESCE(SUM(credit), 0) as net_balance
+      FROM customer_ledger
+    `).get();
+
     return {
       totalOutstanding: stats.total_outstanding,
       totalSaleAmounts: stats.total_sale_amounts,
@@ -181,7 +195,9 @@ class DashboardService {
       paidInvoices: stats.paid_count,
       partialInvoices: stats.partial_count,
       totalReturnsValue: returnsTotal.total_returns_value,
-      totalReturns: returnsTotal.total_returns
+      totalReturns: returnsTotal.total_returns,
+      // Ledger-based total due (SINGLE SOURCE OF TRUTH)
+      totalDueFromLedger: ledgerBalance?.net_balance || 0
     };
   }
 

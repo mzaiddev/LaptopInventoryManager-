@@ -461,6 +461,16 @@ function registerIpcHandlers() {
     }
   });
 
+  // --- Delete Ledger Entry ---
+  ipcMain.handle("ledger:deleteEntry", async (event, entryId) => {
+    try {
+      const result = ledgerService.deleteLedgerEntry(entryId);
+      return { success: true, data: result };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
   // ==================== NEW LEDGER SYSTEM IPC HANDLERS ====================
 
   // Customer Ledger

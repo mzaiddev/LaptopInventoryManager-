@@ -934,7 +934,7 @@ class LedgerService {
       balance: {
         opening_balance: 0,
         total_sales: balance.ts || 0,
-        total_paid: balance.tp || 0,
+        total_paid: ledgerSummary.total_paid || 0,
         total_outstanding: balance.to_ || 0,
         old_balance_debit: oldData.debit,
         old_balance_credit: oldData.credit,
@@ -1061,6 +1061,46 @@ class LedgerService {
     }
     
     return result;
+  }
+
+  // ==================== DELETE LEDGER ENTRY ====================
+  deleteLedgerEntry(entryId) {
+    const db = getDatabase();
+    
+    const entry = db.prepare("SELECT * FROM customer_ledger WHERE id = ?").get(entryId);
+    if (!entry) {
+      throw new Error("Ledger entry not found");
+    }
+    
+    return db.transaction(() => {
+      // Handle different entry types
+      if (entry.reference_type === 'Sale') {
+        throw new Error("Cannot delete a sale from ledger. Use Sales History to delete the sale.");
+      }
+      
+      if (entry.reference_type === 'Payment' && entry.reference_id !== null) {
+        throw new Error("Cannot delete a sale payment from ledger. Use Sales History to delete the payment.");
+      }
+      
+      if (entry.reference_type === 'Return') {
+        throw new Error("Cannot delete a return from ledger. Use Returns page to delete the return.");
+      }
+      
+      // For OldBalance entries, also delete from old_balances table
+      if (entry.reference_type === 'OldBalanceDebit' || entry.reference_type === 'OldBalanceCredit') {
+        if (entry.reference_id) {
+          db.prepare("DELETE FROM old_balances WHERE id = ?").run(entry.reference_id);
+        }
+      }
+      
+      // Delete the ledger entry
+      db.prepare("DELETE FROM customer_ledger WHERE id = ?").run(entryId);
+      
+      // Recalculate running balances
+      this._updateLedgerRunningBalances(entry.customer_id);
+      
+      return { success: true };
+    })();
   }
 
   // ==================== DELETE SALE ====================

@@ -191,7 +191,7 @@ const PrintService = {
         <div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:8px;">
           <table class="print-selection-table" style="width:100%;border-collapse:collapse;font-size:12px;">
             <thead>
-              <tr style="background:#f1f5f9;">
+              <tr style="background:transparent;">
                 <th style="width:36px;text-align:center;"><input type="checkbox" id="print-select-all-header" checked onchange="PrintService.toggleSelectAll(event)"></th>
                 ${tableHeader}
               </tr>
@@ -558,33 +558,33 @@ const PrintService = {
 <style>
   @page { margin: 10mm; size: A4 ${orientation}; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; padding: 15px; background: #fff; font-size: 11px; }
-  .print-header { text-align: center; margin-bottom: 14px; border-bottom: 2px solid #2563eb; padding-bottom: 8px; }
-  .print-header h1 { font-size: 16px; color: #1e293b; }
-  .print-header .sub { font-size: 10px; color: #64748b; }
-  .print-footer { margin-top: 14px; text-align: center; font-size: 9px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 6px; }
-  .print-info-line { display: flex; justify-content: space-between; font-size: 10px; color: #64748b; margin-bottom: 8px; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #000; padding: 15px; background: #fff; font-size: 11px; }
+  .print-header { text-align: center; margin-bottom: 14px; border-bottom: 2px solid #000; padding-bottom: 8px; }
+  .print-header h1 { font-size: 16px; color: #000; }
+  .print-header .sub { font-size: 10px; color: #000; }
+  .print-footer { margin-top: 14px; text-align: center; font-size: 9px; color: #000; border-top: 1px solid #999; padding-top: 6px; }
+  .print-info-line { display: flex; justify-content: space-between; font-size: 10px; color: #000; margin-bottom: 8px; }
   table { width: 100%; border-collapse: collapse; font-size: 9px; }
-  th { background: #2563eb; color: #fff; padding: 5px 6px; text-align: left; font-weight: 600; white-space: nowrap; font-size: 9px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  td { padding: 3px 6px; border-bottom: 1px solid #e2e8f0; color: #334155; }
-  tr:nth-child(even) { background: #f8fafc; }
+  th { background: transparent; color: #000; padding: 5px 6px; text-align: left; font-weight: 700; white-space: nowrap; font-size: 9px; border-bottom: 1px solid #000; }
+  td { padding: 3px 6px; border-bottom: 1px solid #999; color: #000; }
+  tr:nth-child(even) { background: transparent; }
   .summary-row { display: flex; gap: 12px; flex-wrap: wrap; }
-  .summary-item { padding: 5px 10px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0; }
-  .summary-item .label { font-size: 8px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
-  .summary-item .value { font-size: 13px; font-weight: 700; color: #1e293b; }
-  .badge-p { padding: 1px 5px; border-radius: 8px; font-size: 8px; font-weight: 500; display: inline-block; }
-  .b-instock { background: #dcfce7; color: #166534; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .b-reserved { background: #fef3c7; color: #92400e; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .b-sold { background: #dbeafe; color: #1e40af; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .b-damaged { background: #fee2e2; color: #991b1b; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .b-returned { background: #fce7f3; color: #9d174d; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .b-lost { background: #f3f4f6; color: #374151; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .summary-item { padding: 5px 10px; background: transparent; border-radius: 6px; border: 1px solid #999; }
+  .summary-item .label { font-size: 8px; color: #000; text-transform: uppercase; letter-spacing: 0.5px; }
+  .summary-item .value { font-size: 13px; font-weight: 700; color: #000; }
+  .badge-p { padding: 1px 5px; border-radius: 8px; font-size: 8px; font-weight: 500; display: inline-block; border: 1px solid #666; }
+  .b-instock { border-color: #166534; color: #000; }
+  .b-reserved { border-color: #92400e; color: #000; }
+  .b-sold { border-color: #1e40af; color: #000; }
+  .b-damaged { border-color: #991b1b; color: #000; }
+  .b-returned { border-color: #9d174d; color: #000; }
+  .b-lost { border-color: #374151; color: #000; }
   .print-actions { text-align: center; margin-bottom: 10px; }
-  .print-actions button { padding: 7px 18px; margin: 0 5px; border: none; border-radius: 5px; cursor: pointer; font-size: 12px; }
-  .btn-print { background: #2563eb; color: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .btn-pdf { background: #16a34a; color: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .filter-tag { display: inline-block; padding: 2px 8px; background: #eef2ff; color: #4338ca; border-radius: 10px; font-size: 9px; margin-right: 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  @media print { .print-actions { display: none; } body { padding: 0; } * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
+  .print-actions button { padding: 7px 18px; margin: 0 5px; border: 1px solid #000; border-radius: 5px; cursor: pointer; font-size: 12px; background: #fff; color: #000; }
+  .btn-print { border-color: #000; }
+  .btn-pdf { border-color: #000; }
+  .filter-tag { display: inline-block; padding: 2px 8px; background: transparent; color: #000; border: 1px solid #999; border-radius: 10px; font-size: 9px; margin-right: 4px; }
+  @media print { .print-actions { display: none; } body { padding: 0; } }
 </style>
 </head>
 <body>

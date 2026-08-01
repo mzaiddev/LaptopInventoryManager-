@@ -74,9 +74,6 @@ const App = {
         case "returns":
           await ReturnsPage.load();
           break;
-        case "reports":
-          await ReportsPage.load();
-          break;
         case "backup":
           await BackupPage.load();
           break;
@@ -109,9 +106,6 @@ const App = {
         break;
       case "returns":
         await ReturnsPage.refresh();
-        break;
-      case "reports":
-        await ReportsPage.refresh();
         break;
       case "backup":
         await BackupPage.refresh();

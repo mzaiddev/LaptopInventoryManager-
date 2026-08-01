@@ -141,6 +141,9 @@ const SalesHistoryPage = {
                       <button class="btn btn-sm btn-secondary" onclick="SalesHistoryPage.printInvoice(${l.sale_id})" title="Print Invoice">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                       </button>
+                      <button class="btn btn-sm btn-success" onclick="SalesHistoryPage.editSale(${l.sale_id})" title="Edit Sale">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
                       <button class="btn btn-sm btn-danger" onclick="SalesHistoryPage.deleteSaleConfirm(${l.sale_id})" title="Delete Sale">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="3 6 5 6 21 0"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                       </button>
@@ -204,6 +207,57 @@ const SalesHistoryPage = {
     this.loadSales();
   },
 
+  async editSale(saleId) {
+    try {
+      const result = await window.api.getSaleById(saleId);
+      if (!result.success || !result.data) {
+        Toast.error("Failed to load sale.");
+        return;
+      }
+      const sale = result.data;
+      const formHtml = `
+        <form id="edit-sale-form" onsubmit="return false;">
+          <div class="form-group">
+            <label>Date</label>
+            <input type="date" class="form-control" id="es-date" value="${sale.issue_date || ''}">
+          </div>
+          <div class="form-group">
+            <label>Type</label>
+            <select class="form-control" id="es-type">
+              <option value="Sale" ${sale.transaction_type === 'Sale' ? 'selected' : ''}>Sale</option>
+              <option value="Issue" ${sale.transaction_type === 'Issue' ? 'selected' : ''}>Issue</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Notes</label>
+            <textarea class="form-control" id="es-notes" rows="3">${this.escapeHtml(sale.notes || sale.sale_notes || '')}</textarea>
+          </div>
+        </form>
+      `;
+      Modal.showForm("Edit Sale", formHtml, async () => {
+        const data = {
+          issue_date: document.getElementById("es-date")?.value || sale.issue_date,
+          transaction_type: document.getElementById("es-type")?.value || sale.transaction_type,
+          notes: document.getElementById("es-notes")?.value?.trim() || ""
+        };
+        try {
+          const updateResult = await window.api.updateSale(saleId, data);
+          if (updateResult.success) {
+            Toast.success("Sale updated successfully.");
+            Modal.close();
+            await this.loadSales();
+          } else {
+            Toast.error(updateResult.error || "Failed to update sale.");
+          }
+        } catch (err) {
+          Toast.error(err.message);
+        }
+      }, "sm");
+    } catch (err) {
+      Toast.error(err.message);
+    }
+  },
+
   async deleteSaleConfirm(saleId) {
     const confirmed = confirm("Are you sure you want to delete this sale? Products will be restored to inventory. This action cannot be undone.");
     if (!confirmed) return;
@@ -239,19 +293,19 @@ const SalesHistoryPage = {
         <html><head><title>Invoice - ${l.reference_no}</title>
         <style>
           @page { margin: 10mm; }
-          body { font-family: 'Courier New', monospace; padding: 20px; color: #333; }
+          body { font-family: Arial, Helvetica, sans-serif; padding: 20px; color: #000; }
           .shop-header { text-align: center; margin-bottom: 12px; }
           .shop-header h1 { font-size: 20px; margin-bottom: 2px; }
-          .shop-header p { font-size: 12px; color: #555; margin: 1px 0; }
-          .invoice-header { text-align: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #333; }
+          .shop-header p { font-size: 12px; color: #000; margin: 1px 0; }
+          .invoice-header { text-align: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #000; }
           .invoice-header h2 { font-size: 22px; margin-bottom: 4px; }
           .invoice-info { display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 13px; }
           table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 13px; }
-          table th { background: #f5f5f5; padding: 8px 10px; text-align: left; border: 1px solid #ddd; font-size: 12px; text-transform: uppercase; }
-          table td { padding: 6px 10px; border: 1px solid #ddd; }
+          table th { background: transparent; padding: 8px 10px; text-align: left; border: 1px solid #999; font-size: 12px; text-transform: uppercase; font-weight: 700; }
+          table td { padding: 6px 10px; border: 1px solid #999; }
           .invoice-totals { text-align: right; font-size: 14px; margin-top: 10px; }
-          .grand-total { font-size: 18px; font-weight: 700; border-top: 2px solid #333; padding-top: 8px; margin-top: 4px; }
-          .invoice-footer { text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 12px; color: #666; }
+          .grand-total { font-size: 18px; font-weight: 700; border-top: 2px solid #000; padding-top: 8px; margin-top: 4px; }
+          .invoice-footer { text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #999; font-size: 12px; color: #000; }
           @media print { body { padding: 0; } }
         </style></head>
         <body>
