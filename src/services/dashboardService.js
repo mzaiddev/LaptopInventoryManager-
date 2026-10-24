@@ -91,9 +91,11 @@ class DashboardService {
   getBalances(db) {
     const paid = this._paymentsByMethod(db);
     const spent = expenseService.totals({});
+    // Money already in the drawer / bank when the shop started using the app (Settings).
+    const opening = (key) => roundMoney(Number(this.getSetting(key)) || 0);
     return {
-      cashInHand: roundMoney(paid.cash - spent.cash),
-      bankBalance: roundMoney(paid.bank - spent.bank),
+      cashInHand: roundMoney(opening("opening_cash") + paid.cash - spent.cash),
+      bankBalance: roundMoney(opening("opening_bank") + paid.bank - spent.bank),
     };
   }
 
