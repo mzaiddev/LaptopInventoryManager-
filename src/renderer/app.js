@@ -142,6 +142,9 @@ const App = {
       case "returns":
         await ReturnsPage.refresh();
         break;
+      case "expenses":
+        await ExpensesPage.refresh();
+        break;
       case "backup":
         await BackupPage.refresh();
         break;

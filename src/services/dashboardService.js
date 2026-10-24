@@ -1,320 +1,137 @@
-const { getDatabase } = require('../database/dbInit');
+const { getDatabase } = require("../database/dbInit");
+const { roundMoney } = require("../utils/money");
+const expenseService = require("./expenseService");
+
+// Empty from/to means unbounded on that side.
+function between(col, from, to) {
+  const sql = [];
+  const args = [];
+  if (from) { sql.push(`${col} >= ?`); args.push(from); }
+  if (to) { sql.push(`${col} <= ?`); args.push(to); }
+  return { sql: sql.length ? " AND " + sql.join(" AND ") : "", args };
+}
 
 class DashboardService {
-  getDashboardData() {
+  // range: { from, to } (YYYY-MM-DD, inclusive). costVisible: owner revealed purchase prices.
+  getDashboardData({ from, to } = {}, { costVisible = false } = {}) {
     const db = getDatabase();
-    const currency = this.getSetting('currency') || 'USD';
-
-    const inventorySummary = this.getInventorySummary(db);
-    const financialSummary = this.getFinancialSummary(db);
-    const conditionSummary = this.getConditionSummary(db);
-    const salesSummary = this.getSalesSummary(db);
-    const saleSummary = this.getSaleFinancialSummary(db);
-    const recentActivity = this.getRecentActivity(db);
-    const damageSummary = this.getDamageSummary(db);
-    const oldBalanceSummary = this.getOldBalanceSummary(db);
-    const ledgerSummary = this.getLedgerSummary(db);
+    const sales = this.getSales(db, from, to);
+    const received = this.getReceived(db, from, to);
+    const returns = this.getReturns(db, from, to);
+    const expenses = expenseService.totals({ from, to });
+    const cogs = this.getCogs(db, from, to);
 
     return {
-      inventorySummary,
-      financialSummary,
-      conditionSummary,
-      salesSummary,
-      saleSummary,
-      damageSummary,
-      oldBalanceSummary,
-      ledgerSummary,
-      recentActivity,
-      currency
+      range: { from: from || null, to: to || null },
+      currency: this.getSetting("currency") || "USD",
+      sales: sales.total,
+      salesCount: sales.count,
+      received,
+      returns,
+      expenses: { total: expenses.total, cash: expenses.cash, bank: expenses.bank },
+      netProfit: costVisible ? roundMoney(sales.total - cogs - expenses.total) : null,
+      ...this.getBalances(db),
+      outstanding: this.getOutstanding(db),
+      stock: this.getStock(db, costVisible),
+      recentSales: this.getRecentSales(db),
+      recentPayments: this.getRecentPayments(db),
     };
   }
 
-  getInventorySummary(db) {
-    const damagedCount = db.prepare(`
-      SELECT COALESCE(SUM(quantity), 0) as total FROM damage_records WHERE damage_type IN ('Damaged', 'Disposed')
-    `).get();
-
-    const soldFromSales = db.prepare(`
-      SELECT COALESCE(SUM(quantity), 0) as total FROM sale_issue_items
-    `).get();
-
-    const returnedFromReturns = db.prepare(`
-      SELECT COALESCE(SUM(ri.quantity), 0) as total
-      FROM return_items ri
-      JOIN returns r ON ri.return_id = r.id
-      WHERE r.status = 'Completed'
-    `).get();
-
-    const stats = db.prepare(`
-      SELECT
-        COUNT(*) as total_products,
-        COALESCE(SUM(quantity), 0) as total_quantity,
-        COALESCE(SUM(CASE WHEN status != 'Sold' AND status != 'Lost' THEN quantity ELSE 0 END), 0) as in_stock,
-        COALESCE(SUM(CASE WHEN status = 'Reserved' THEN quantity ELSE 0 END), 0) as reserved,
-        COALESCE(SUM(CASE WHEN status = 'Sold' THEN quantity ELSE 0 END), 0) as sold,
-        COALESCE(SUM(CASE WHEN status = 'Returned' THEN quantity ELSE 0 END), 0) as returned
-      FROM products
-    `).get();
-
-    return {
-      totalProducts: stats.total_products,
-      totalQuantity: stats.total_quantity,
-      inStock: stats.in_stock,
-      reserved: stats.reserved,
-      sold: stats.sold,
-      returned: stats.returned,
-      damaged: damagedCount.total || 0,
-      totalSoldFromSales: soldFromSales.total || 0,
-      totalReturnedFromReturns: returnedFromReturns.total || 0
-    };
+  getSales(db, from, to) {
+    const w = between("issue_date", from, to);
+    const r = db.prepare(`SELECT COALESCE(SUM(total_amount),0) t, COUNT(*) c FROM sale_issues WHERE 1=1${w.sql}`).get(...w.args);
+    return { total: roundMoney(r.t), count: r.c };
   }
 
-  getFinancialSummary(db) {
-    const salesFinancials = db.prepare(`
-      SELECT
-        COALESCE(SUM(sii.subtotal), 0) as total_sales_value,
-        COALESCE(SUM(sii.quantity * COALESCE(p.purchase_price, 0)), 0) as total_cogs,
-        COALESCE(SUM(sii.subtotal) - SUM(sii.quantity * COALESCE(p.purchase_price, 0)), 0) as total_gross_profit
+  // Money in by Cash / Bank: payments on sales plus direct ledger payments. Old 'Online'/'Other' rows count as Bank.
+  _paymentsByMethod(db, from, to) {
+    const wp = between("payment_date", from, to);
+    const wl = between("entry_date", from, to);
+    const out = { cash: 0, bank: 0 };
+    const add = (method, amount) => {
+      out[method === "Cash" || method === null ? "cash" : "bank"] += amount;
+    };
+    db.prepare(`SELECT payment_method m, SUM(amount) a FROM payments WHERE 1=1${wp.sql} GROUP BY payment_method`)
+      .all(...wp.args).forEach((r) => add(r.m, r.a));
+    db.prepare(`SELECT payment_method m, SUM(credit) a FROM customer_ledger WHERE reference_type='Payment' AND reference_id IS NULL${wl.sql} GROUP BY payment_method`)
+      .all(...wl.args).forEach((r) => add(r.m, r.a));
+    return { cash: roundMoney(out.cash), bank: roundMoney(out.bank) };
+  }
+
+  getReceived(db, from, to) {
+    const p = this._paymentsByMethod(db, from, to);
+    return { total: roundMoney(p.cash + p.bank), cash: p.cash, bank: p.bank };
+  }
+
+  getReturns(db, from, to) {
+    const w = between("return_date", from, to);
+    const r = db.prepare(`SELECT COALESCE(SUM(total_return_amount),0) t, COUNT(*) c FROM returns WHERE status='Completed'${w.sql}`).get(...w.args);
+    return { total: roundMoney(r.t), count: r.c };
+  }
+
+  // Cost of goods still with customers (sold minus returned) for sales in range.
+  getCogs(db, from, to) {
+    const w = between("si.issue_date", from, to);
+    const r = db.prepare(`
+      SELECT COALESCE(SUM((sii.quantity - COALESCE(ret.q, 0)) * COALESCE(p.purchase_price, 0)), 0) c
       FROM sale_issue_items sii
-      LEFT JOIN products p ON sii.product_id = p.id
-    `).get();
+      JOIN sale_issues si ON si.id = sii.sale_issue_id
+      LEFT JOIN products p ON p.id = sii.product_id
+      LEFT JOIN (
+        SELECT r.sale_issue_id sid, ri.product_id pid, SUM(ri.quantity) q
+        FROM return_items ri JOIN returns r ON r.id = ri.return_id
+        WHERE r.status = 'Completed' GROUP BY r.sale_issue_id, ri.product_id
+      ) ret ON ret.sid = sii.sale_issue_id AND ret.pid = sii.product_id
+      WHERE 1=1${w.sql}`).get(...w.args);
+    return roundMoney(r.c);
+  }
 
-    const inventoryValues = db.prepare(`
-      SELECT
-        COALESCE(SUM(purchase_price * quantity), 0) as total_purchase_value,
-        COALESCE(SUM(selling_price * quantity), 0) as total_selling_value,
-        COALESCE(SUM(CASE WHEN status != 'Sold' AND status != 'Lost' THEN purchase_price * quantity ELSE 0 END), 0) as current_inventory_value
-      FROM products
-    `).get();
-
-    const damagedValue = db.prepare(`
-      SELECT COALESCE(SUM(dr.quantity * p.purchase_price), 0) as total
-      FROM damage_records dr
-      LEFT JOIN products p ON dr.product_id = p.id
-      WHERE dr.damage_type IN ('Damaged', 'Disposed')
-    `).get();
-
+  // All-time, never filtered by date.
+  getBalances(db) {
+    const paid = this._paymentsByMethod(db);
+    const spent = expenseService.totals({});
     return {
-      totalPurchaseValue: inventoryValues.total_purchase_value,
-      totalSellingValue: inventoryValues.total_selling_value,
-      totalSoldValue: salesFinancials.total_sales_value,
-      currentInventoryValue: inventoryValues.current_inventory_value,
-      expectedProfit: salesFinancials.total_gross_profit,
-      totalCOGS: salesFinancials.total_cogs,
-      grossProfit: salesFinancials.total_gross_profit,
-      damagedStockValue: damagedValue.total || 0
+      cashInHand: roundMoney(paid.cash - spent.cash),
+      bankBalance: roundMoney(paid.bank - spent.bank),
     };
   }
 
-  getConditionSummary(db) {
-    const stats = db.prepare(`
-      SELECT
-        COALESCE(SUM(CASE WHEN condition = 'Excellent' THEN 1 ELSE 0 END), 0) as excellent,
-        COALESCE(SUM(CASE WHEN condition = 'Good' THEN 1 ELSE 0 END), 0) as good,
-        COALESCE(SUM(CASE WHEN condition = 'Fair' THEN 1 ELSE 0 END), 0) as fair,
-        COALESCE(SUM(CASE WHEN condition = 'Damaged' THEN 1 ELSE 0 END), 0) as damaged,
-        COALESCE(SUM(CASE WHEN condition = 'For Parts' THEN 1 ELSE 0 END), 0) as for_parts
-      FROM products
-    `).get();
-
-    return {
-      excellent: stats.excellent,
-      good: stats.good,
-      fair: stats.fair,
-      damaged: stats.damaged,
-      forParts: stats.for_parts
-    };
+  // Ledger balance is the single source of truth for what customers owe.
+  getOutstanding(db) {
+    const amount = db.prepare("SELECT COALESCE(SUM(debit),0) - COALESCE(SUM(credit),0) b FROM customer_ledger").get().b;
+    const owing = db.prepare(`
+      SELECT COUNT(*) c FROM (
+        SELECT customer_id FROM customer_ledger GROUP BY customer_id HAVING SUM(debit) - SUM(credit) > 0.005
+      )`).get().c;
+    return { amount: roundMoney(amount), customersOwing: owing };
   }
 
-  getSalesSummary(db) {
-    const today = new Date().toISOString().split('T')[0];
-    const stats = db.prepare(`
-      SELECT
-        COALESCE(SUM(si.total_amount), 0) as total_sales,
-        COALESCE(SUM(si.paid_amount), 0) as total_collected,
-        COUNT(si.id) as total_transactions,
-        COALESCE(SUM(CASE WHEN si.issue_date = ? THEN si.total_amount ELSE 0 END), 0) as today_sales,
-        COALESCE(SUM(CASE WHEN si.issue_date = ? THEN si.paid_amount ELSE 0 END), 0) as today_collected,
-        COALESCE(SUM(CASE WHEN si.payment_status = 'Paid' THEN 1 ELSE 0 END), 0) as paid_count,
-        COALESCE(SUM(CASE WHEN si.payment_status = 'Partial' THEN 1 ELSE 0 END), 0) as partial_count,
-        COALESCE(SUM(CASE WHEN si.payment_status = 'Outstanding' THEN 1 ELSE 0 END), 0) as outstanding_count
-      FROM sale_issues si
-    `).get(today, today);
-
-    // Get total paid from ledger (includes ALL payments - both sale-specific and direct ledger payments)
-    const ledgerPaid = db.prepare(`
-      SELECT COALESCE(SUM(credit), 0) as total_paid FROM customer_ledger WHERE reference_type = 'Payment'
-    `).get();
-
-    return {
-      totalSales: stats.total_sales,
-      totalCollected: stats.total_collected,
-      totalTransactions: stats.total_transactions,
-      todaySales: stats.today_sales,
-      todayCollected: stats.today_collected,
-      paidCount: stats.paid_count,
-      partialCount: stats.partial_count,
-      outstandingCount: stats.outstanding_count,
-      // Ledger-based total paid (includes all payments from ALL sources)
-      totalPaidFromLedger: ledgerPaid?.total_paid || 0
-    };
+  getStock(db, costVisible) {
+    const r = db.prepare(`
+      SELECT COALESCE(SUM(quantity),0) q, COALESCE(SUM(quantity * purchase_price),0) v
+      FROM products WHERE status = 'In Stock'`).get();
+    return { itemsInStock: r.q, stockValue: costVisible ? roundMoney(r.v) : null };
   }
 
-  getSaleFinancialSummary(db) {
-    const stats = db.prepare(`
-      SELECT
-        COALESCE(SUM(remaining_amount), 0) as total_outstanding,
-        COALESCE(SUM(total_amount), 0) as total_sale_amounts,
-        COALESCE(SUM(paid_amount), 0) as total_sale_collected,
-        COUNT(*) as total_invoices,
-        COALESCE(SUM(CASE WHEN payment_status = 'Outstanding' THEN 1 ELSE 0 END), 0) as outstanding_count,
-        COALESCE(SUM(CASE WHEN payment_status = 'Paid' THEN 1 ELSE 0 END), 0) as paid_count,
-        COALESCE(SUM(CASE WHEN payment_status = 'Partial' THEN 1 ELSE 0 END), 0) as partial_count
-      FROM sale_issues
-    `).get();
-
-    const returnsTotal = db.prepare(`
-      SELECT COALESCE(SUM(total_return_amount), 0) as total_returns_value,
-             COUNT(*) as total_returns
-      FROM returns WHERE status = 'Completed'
-    `).get();
-
-    // Get net ledger balance (total debits - total credits = what customers owe)
-    // This is the SINGLE SOURCE OF TRUTH for what customers owe
-    const ledgerBalance = db.prepare(`
-      SELECT COALESCE(SUM(debit), 0) - COALESCE(SUM(credit), 0) as net_balance
-      FROM customer_ledger
-    `).get();
-
-    return {
-      totalOutstanding: stats.total_outstanding,
-      totalSaleAmounts: stats.total_sale_amounts,
-      totalSaleCollected: stats.total_sale_collected,
-      totalInvoices: stats.total_invoices,
-      outstandingInvoices: stats.outstanding_count,
-      paidInvoices: stats.paid_count,
-      partialInvoices: stats.partial_count,
-      totalReturnsValue: returnsTotal.total_returns_value,
-      totalReturns: returnsTotal.total_returns,
-      // Ledger-based total due (SINGLE SOURCE OF TRUTH)
-      totalDueFromLedger: ledgerBalance?.net_balance || 0
-    };
-  }
-
-  getDamageSummary(db) {
-    const stats = db.prepare(`
-      SELECT
-        COALESCE(SUM(CASE WHEN dr.damage_type IN ('Damaged', 'Disposed') THEN dr.quantity ELSE 0 END), 0) as total_damaged_qty,
-        COUNT(DISTINCT CASE WHEN dr.damage_type IN ('Damaged', 'Disposed') THEN dr.product_id END) as damaged_products_count,
-        COALESCE(SUM(CASE WHEN dr.damage_type IN ('Damaged', 'Disposed') THEN dr.quantity * COALESCE(p.purchase_price, 0) ELSE 0 END), 0) as total_damaged_value
-      FROM damage_records dr
-      LEFT JOIN products p ON dr.product_id = p.id
-    `).get();
-
-    return {
-      totalDamagedQty: stats.total_damaged_qty || 0,
-      damagedProductsCount: stats.damaged_products_count || 0,
-      totalDamagedValue: stats.total_damaged_value || 0,
-      damagedStatusQty: stats.total_damaged_qty || 0,
-      damagedStatusValue: stats.total_damaged_value || 0
-    };
-  }
-
-  getRecentActivity(db) {
-    const recentSales = db.prepare(`
+  getRecentSales(db) {
+    return db.prepare(`
       SELECT si.id, si.reference_no, si.total_amount, si.issue_date, c.customer_name
-      FROM sale_issues si
-      LEFT JOIN customers c ON si.customer_id = c.id
-      ORDER BY si.created_at DESC LIMIT 5
-    `).all();
+      FROM sale_issues si LEFT JOIN customers c ON si.customer_id = c.id
+      ORDER BY si.created_at DESC, si.id DESC LIMIT 5`).all();
+  }
 
-    const recentReturns = db.prepare(`
-      SELECT r.id, r.reference_no, r.total_return_amount, r.return_date, c.customer_name
-      FROM returns r
-      LEFT JOIN customers c ON r.customer_id = c.id
-      ORDER BY r.created_at DESC LIMIT 5
-    `).all();
-
-    const recentPayments = db.prepare(`
-      SELECT p.id, p.amount, p.payment_date, p.payment_method, si.reference_no as sale_ref, c.customer_name
+  getRecentPayments(db) {
+    return db.prepare(`
+      SELECT p.id, p.amount, p.payment_date, p.payment_method, si.reference_no sale_ref, c.customer_name
       FROM payments p
       LEFT JOIN sale_issues si ON p.sale_issue_id = si.id
       LEFT JOIN customers c ON si.customer_id = c.id
-      ORDER BY p.created_at DESC LIMIT 5
-    `).all();
-
-    const recentDamages = db.prepare(`
-      SELECT dr.id, dr.quantity, dr.reference_no, dr.recorded_date, p.product_name
-      FROM damage_records dr
-      LEFT JOIN products p ON dr.product_id = p.id
-      ORDER BY dr.created_at DESC LIMIT 5
-    `).all();
-
-    return { recentSales, recentReturns, recentPayments, recentDamages };
-  }
-
-  getOldBalanceSummary(db) {
-    try {
-      const stats = db.prepare(`
-        SELECT
-          COALESCE(SUM(CASE WHEN balance_type = 'Debit' THEN amount ELSE 0 END), 0) as total_debit,
-          COALESCE(SUM(CASE WHEN balance_type = 'Credit' THEN amount ELSE 0 END), 0) as total_credit,
-          COUNT(DISTINCT customer_id) as total_customers,
-          COUNT(*) as total_records
-        FROM old_balances
-      `).get();
-
-      return {
-        totalDebit: stats.total_debit || 0,
-        totalCredit: stats.total_credit || 0,
-        totalCustomers: stats.total_customers || 0,
-        totalRecords: stats.total_records || 0,
-        netOldBalance: (stats.total_debit || 0) - (stats.total_credit || 0)
-      };
-    } catch (err) {
-      console.error("Error in getOldBalanceSummary:", err.message);
-      return { totalDebit: 0, totalCredit: 0, totalCustomers: 0, totalRecords: 0, netOldBalance: 0 };
-    }
-  }
-
-  getLedgerSummary(db) {
-    try {
-      const stats = db.prepare(`
-        SELECT
-          COALESCE(SUM(debit), 0) as total_debits,
-          COALESCE(SUM(credit), 0) as total_credits,
-          COUNT(DISTINCT customer_id) as customers_with_ledger,
-          COUNT(*) as total_entries
-        FROM customer_ledger
-      `).get();
-
-      // Get customers with positive balance (they owe money)
-      const customersOwing = db.prepare(`
-        SELECT COUNT(*) as cnt FROM (
-          SELECT customer_id, running_balance
-          FROM customer_ledger
-          WHERE id IN (SELECT MAX(id) FROM customer_ledger GROUP BY customer_id)
-          HAVING running_balance > 0
-        )
-      `).get();
-
-      return {
-        totalDebits: stats.total_debits || 0,
-        totalCredits: stats.total_credits || 0,
-        netLedgerBalance: (stats.total_debits || 0) - (stats.total_credits || 0),
-        customersWithLedger: stats.customers_with_ledger || 0,
-        totalEntries: stats.total_entries || 0,
-        customersOwing: customersOwing?.cnt || 0
-      };
-    } catch (err) {
-      console.error("Error in getLedgerSummary:", err.message);
-      return { totalDebits: 0, totalCredits: 0, netLedgerBalance: 0, customersWithLedger: 0, totalEntries: 0, customersOwing: 0 };
-    }
+      ORDER BY p.created_at DESC, p.id DESC LIMIT 5`).all();
   }
 
   getSetting(key) {
-    const db = getDatabase();
-    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+    const row = getDatabase().prepare("SELECT value FROM settings WHERE key = ?").get(key);
     return row ? row.value : null;
   }
 }

@@ -2,7 +2,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("api", {
   // Dashboard
-  getDashboardData: () => ipcRenderer.invoke("dashboard:getData"),
+  getDashboardData: (range) => ipcRenderer.invoke("dashboard:getData", range),
 
   // Inventory
   getProducts: (filters) => ipcRenderer.invoke("inventory:getAll", filters),

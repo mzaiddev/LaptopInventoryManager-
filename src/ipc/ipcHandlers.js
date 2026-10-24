@@ -89,9 +89,12 @@ function registerIpcHandlers() {
   });
 
   // Dashboard
-  ipcMain.handle("dashboard:getData", async () => {
+  ipcMain.handle("dashboard:getData", async (event, range) => {
     try {
-      return { success: true, data: dashboardService.getDashboardData() };
+      return {
+        success: true,
+        data: dashboardService.getDashboardData(range || {}, { costVisible: authService.isCostVisible() }),
+      };
     } catch (err) {
       return { success: false, error: err.message };
     }
