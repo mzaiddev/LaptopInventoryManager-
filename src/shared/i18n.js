@@ -29,6 +29,8 @@
     [/^(\d+) (?:problem\(s\)|problems?)$/, "$1 مسائل"],
     [/^Page (\d+) of (\d+)$/, "صفحہ $1 از $2"],
     [/^Found (\d+) problem\(s\):$/, "$1 مسائل ملے:"],
+    [/^Dear (.+),$/, "محترم $1،"],
+    [/^Here is your account statement from (.+) \((.+)\)\.$/, "یہ $1 کی طرف سے آپ کا اکاؤنٹ اسٹیٹمنٹ ہے ($2)۔"],
     [/^Printing (\d+) record\(s\)\.\.\.$/, "$1 ریکارڈ پرنٹ ہو رہے ہیں..."],
     [/^Sale saved! Reference: (.+)$/, "فروخت محفوظ ہو گئی! حوالہ: $1"],
     [/^Damage recorded\. Reference: (.+)$/, "نقصان درج ہو گیا۔ حوالہ: $1"],
@@ -41,6 +43,7 @@
 
   // These need to translate a part of the sentence (a status, a condition).
   const PARTS = [
+    [/^Invoice (\S+) \((.+)\)$/, (m, lookup) => `انوائس ${m[1]} (${lookup(m[2])})`],
     [/^Status updated to (.+)$/, (m, lookup) => "حالت اپ ڈیٹ ہو کر " + lookup(m[1])],
     [/^Condition updated to (.+)$/, (m, lookup) => "کنڈیشن اپ ڈیٹ ہو کر " + lookup(m[1])],
   ];

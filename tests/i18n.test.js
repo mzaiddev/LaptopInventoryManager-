@@ -86,3 +86,11 @@ test("dialogs and toasts with names or counts inside", () => {
   assert.strictEqual(t("Printing 3 record(s)..."), "3 ریکارڈ پرنٹ ہو رہے ہیں...");
   assert.match(t('Are you sure you want to delete "Ali"? This will permanently delete the customer and ALL their data (sales, returns, old balances, payments, ledger entries). Stock will be restored. This action cannot be undone.'), /مستقل طور پر حذف/);
 });
+
+test("WhatsApp message sentences", () => {
+  assert.strictEqual(t("Dear Ali,"), "محترم Ali،");
+  assert.strictEqual(t("Here is your account statement from Zia Shop (10/24/2026)."), "یہ Zia Shop کی طرف سے آپ کا اکاؤنٹ اسٹیٹمنٹ ہے (10/24/2026)۔");
+  assert.strictEqual(t("Invoice SALE-1 (Oct 24, 2026)"), "انوائس SALE-1 (24 اکتوبر 2026)");
+  assert.strictEqual(t("Thank you!"), "شکریہ!");
+  assert.strictEqual(t("TOTAL YOU OWE US"), "کل رقم جو آپ کے ذمے ہے");
+});

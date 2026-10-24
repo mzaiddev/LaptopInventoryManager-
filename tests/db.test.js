@@ -3,7 +3,7 @@ const assert = require("node:assert");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { freshDb, closeDatabase } = require("./helpers");
+const { freshDb, closeDatabase, tempDir } = require("./helpers");
 const { initDatabase } = require("../src/database/dbInit");
 
 test("initDatabase builds the schema in memory", () => {
@@ -16,7 +16,7 @@ test("initDatabase builds the schema in memory", () => {
 
 test("opening an existing DB file twice keeps its rows", () => {
   closeDatabase();
-  const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "lim-")), "t.db");
+  const f = path.join(tempDir(), "t.db");
   let db = initDatabase(f);
   db.prepare("INSERT INTO products (product_name, category) VALUES ('A','Laptop')").run();
   closeDatabase();

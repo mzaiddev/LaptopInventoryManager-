@@ -643,11 +643,13 @@ const SalesHistoryPage = {
         printWindow.document.close();
         return;
       }
+      const t = (s) => I18n.t(s);
+      const money = (n) => Formatters._formatCurrency(n, currency, true);
       const message =
-        'Dear ' + l.customer_name + ',\n\nInvoice ' + l.reference_no + ' (' + Formatters.formatDate(l.issue_date) + ')\n' +
-        'Total: ' + Formatters.formatCurrency(l.total_amount, currency) + '\n' +
-        'Paid: ' + Formatters.formatCurrency(l.paid_amount, currency) + '\n' +
-        'Balance: ' + Formatters.formatCurrency(l.remaining_amount, currency) + '\n\nThank you!\n- ' + shopName;
+        t('Dear ' + l.customer_name + ',') + '\n\n' + t('Invoice ' + l.reference_no + ' (' + Formatters.formatDate(l.issue_date) + ')') + '\n' +
+        t('Total:') + ' ' + money(l.total_amount) + '\n' +
+        t('Paid:') + ' ' + money(l.paid_amount) + '\n' +
+        t('Balance:') + ' ' + money(l.remaining_amount) + '\n\n' + t('Thank you!') + '\n- ' + shopName;
       const r = await window.api.shareStatement({ html: I18n.translateHtml(html), customerName: 'Invoice-' + l.reference_no, phone: l.phone || '', message });
       if (!r.success) Toast.error(r.error || 'Could not create the PDF.');
       else if (r.data.chat === 'none') Toast.warning('PDF saved. This customer has no valid phone number, so WhatsApp was not opened.');

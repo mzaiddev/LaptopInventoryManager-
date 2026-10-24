@@ -680,13 +680,14 @@ const CustomersPage = {
         const shopName = document.getElementById('shop-name')?.textContent || 'Laptop Inventory Manager';
         const dateStr = new Date().toLocaleDateString();
         const sum = this.summaryLines(stmt.balance.statement);
-        const money = (n) => Formatters.formatCurrency(n, currency, true);
+        const money = (n) => Formatters._formatCurrency(n, currency, true);
+        const t = (s) => I18n.t(s); // the message is written in the language the app is in
         const message =
-          'Dear ' + customerName + ',\n\n' +
-          'Here is your account statement from ' + shopName + ' (' + dateStr + ').\n\n' +
-          sum.lines.map((l) => (l.sign ? l.sign + ' ' : '') + l.label + ': ' + money(l.amount)).join('\n') + '\n' +
-          '= ' + sum.totalLabel + ': ' + money(sum.total) + '\n\n' +
-          'The attached PDF lists every entry. For any questions please contact us. Thank you!\n- ' + shopName;
+          t('Dear ' + customerName + ',') + '\n\n' +
+          t('Here is your account statement from ' + shopName + ' (' + dateStr + ').') + '\n\n' +
+          sum.lines.map((l) => (l.sign ? l.sign + ' ' : '') + t(l.label) + ': ' + money(l.amount)).join('\n') + '\n' +
+          '= ' + t(sum.totalLabel) + ': ' + money(sum.total) + '\n\n' +
+          t('The attached PDF lists every entry. For any questions please contact us. Thank you!') + '\n- ' + shopName;
         const r = await window.api.shareStatement({
           html: I18n.translateHtml(this._statementDocument(customerName, printContent, false)),
           customerName,

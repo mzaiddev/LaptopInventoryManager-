@@ -96,3 +96,28 @@ test("a junk opening balance setting is treated as zero", () => {
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('opening_cash', 'abc')").run();
   assert.strictEqual(dashboard.getDashboardData(OCT, {}).cashInHand, 1100);
 });
+
+test("details give the lines behind each card, and they add up", () => {
+  fixture();
+  const d = dashboard.getDashboardData(OCT, { costVisible: true }).details;
+  assert.deepStrictEqual(d.sales, { discounts: 100, returns: 950 });
+  assert.deepStrictEqual(d.received, { onSales: 500, onLedger: 300 });
+  assert.deepStrictEqual(d.profit, { sales: 950, cogs: 800, expenses: 300 });
+  assert.deepStrictEqual(d.cash, { opening: 0, received: 1300, expenses: 200 });
+  assert.deepStrictEqual(d.bank, { opening: 0, received: 500, expenses: 100 });
+  assert.deepStrictEqual(d.owe, { old_balance: 0, sales: 2900, returns: 950, payments: 1800, other: 0, balance: 150 });
+  assert.strictEqual(d.owe.old_balance + d.owe.sales - d.owe.returns - d.owe.payments + d.owe.other, d.owe.balance);
+});
+
+test("profit details are hidden while purchase prices are hidden", () => {
+  fixture();
+  const d = dashboard.getDashboardData(OCT, { costVisible: false }).details;
+  assert.strictEqual(d.profit, null);
+});
+
+test("details on an empty database are all zero", () => {
+  freshDb();
+  const d = dashboard.getDashboardData(OCT, { costVisible: true }).details;
+  assert.deepStrictEqual(d.owe, { old_balance: 0, sales: 0, returns: 0, payments: 0, other: 0, balance: 0 });
+  assert.deepStrictEqual(d.received, { onSales: 0, onLedger: 0 });
+});

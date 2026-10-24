@@ -35,6 +35,47 @@ class DashboardService {
       stock: this.getStock(db, costVisible),
       recentSales: this.getRecentSales(db),
       recentPayments: this.getRecentPayments(db),
+      details: this.getDetails(db, { from, to, sales, returns, expenses, cogs, costVisible }),
+    };
+  }
+
+  // The lines behind each card, so the owner can see how a figure was worked out.
+  getDetails(db, { from, to, sales, returns, expenses, cogs, costVisible }) {
+    const ws = between("issue_date", from, to);
+    const wi = between("si.issue_date", from, to);
+    const wp = between("payment_date", from, to);
+    const wl = between("entry_date", from, to);
+    const discounts =
+      db.prepare(`SELECT COALESCE(SUM(discount_amount),0) t FROM sale_issues WHERE 1=1${ws.sql}`).get(...ws.args).t +
+      db.prepare(`SELECT COALESCE(SUM(sii.discount_amount),0) t FROM sale_issue_items sii JOIN sale_issues si ON si.id = sii.sale_issue_id WHERE 1=1${wi.sql}`).get(...wi.args).t;
+    const onSales = db.prepare(`SELECT COALESCE(SUM(amount),0) t FROM payments WHERE 1=1${wp.sql}`).get(...wp.args).t;
+    const onLedger = db.prepare(`SELECT COALESCE(SUM(credit),0) t FROM customer_ledger WHERE reference_type='Payment' AND reference_id IS NULL${wl.sql}`).get(...wl.args).t;
+
+    const paid = this._paymentsByMethod(db);
+    const spent = expenseService.totals({});
+    const opening = (key) => roundMoney(Number(this.getSetting(key)) || 0);
+
+    const l = db.prepare(`
+      SELECT
+        COALESCE(SUM(CASE WHEN reference_type='OldBalanceDebit' THEN debit ELSE 0 END),0) - COALESCE(SUM(CASE WHEN reference_type='OldBalanceCredit' THEN credit ELSE 0 END),0) old_balance,
+        COALESCE(SUM(CASE WHEN reference_type='Sale' THEN debit ELSE 0 END),0) sales,
+        COALESCE(SUM(CASE WHEN reference_type='Return' THEN credit ELSE 0 END),0) returns,
+        COALESCE(SUM(CASE WHEN reference_type='Payment' THEN credit ELSE 0 END),0) payments,
+        COALESCE(SUM(debit),0) - COALESCE(SUM(credit),0) balance
+      FROM customer_ledger`).get();
+    const owe = {
+      old_balance: roundMoney(l.old_balance), sales: roundMoney(l.sales), returns: roundMoney(l.returns),
+      payments: roundMoney(l.payments), other: 0, balance: roundMoney(l.balance),
+    };
+    owe.other = roundMoney(owe.balance - (owe.old_balance + owe.sales - owe.returns - owe.payments));
+
+    return {
+      sales: { discounts: roundMoney(discounts), returns: returns.total },
+      received: { onSales: roundMoney(onSales), onLedger: roundMoney(onLedger) },
+      profit: costVisible ? { sales: sales.total, cogs, expenses: expenses.total } : null,
+      cash: { opening: opening("opening_cash"), received: paid.cash, expenses: spent.cash },
+      bank: { opening: opening("opening_bank"), received: paid.bank, expenses: spent.bank },
+      owe,
     };
   }
 

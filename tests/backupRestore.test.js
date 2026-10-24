@@ -4,9 +4,10 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { initDatabase, closeDatabase } = require("../src/database/dbInit");
+const { tempDir } = require("./helpers");
 const backup = require("../src/services/backupFiles");
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "lim-bk-"));
+const tmp = () => tempDir("lim-bk-");
 
 function makeDb(file, productName = "A") {
   closeDatabase();
