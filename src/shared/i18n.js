@@ -7,6 +7,11 @@
   const UNITS = { K: "ہزار", M: "ملین", B: "ارب" };
 
   const INLINE = [
+    [/\((\d+) items?\)/g, "($1 آئٹمز)"],
+    [/\((Sale)\)/g, "(فروخت)"],
+    [/\((Issue)\)/g, "(اجراء)"],
+    [/\b(AM)\b/g, "صبح"],
+    [/\b(PM)\b/g, "شام"],
     [/\((Cash)\)/g, "(نقد)"],
     [/\((Bank)\)/g, "(بینک)"],
     [/\bCash:/g, "نقد:"],
@@ -16,6 +21,9 @@
   ];
 
   const FULL = [
+    [/^(\d+) transactions?$/, "$1 لین دین"],
+    [/^Selected: (\d+)\/(\d+)$/, "منتخب: $1/$2"],
+    [/^This is a computer-generated statement from (.+)$/, "یہ $1 کی طرف سے کمپیوٹر سے تیار کردہ اسٹیٹمنٹ ہے"],
     [/^(\d+) item\(s\)$/, "$1 آئٹم"],
     [/^Sale (SALE-\S+)$/, "فروخت $1"],
     [/^Return (RET-\S+)$/, "واپسی $1"],
@@ -43,6 +51,8 @@
 
   // These need to translate a part of the sentence (a status, a condition).
   const PARTS = [
+    [/^(.+) - (Sale|Issue)$/, (m, lookup) => lookup(m[1]) + " - " + lookup(m[2])],
+    [/^Generated on (.+)$/, (m, lookup) => "تیاری کی تاریخ: " + lookup(m[1])],
     [/^Invoice (\S+) \((.+)\)$/, (m, lookup) => `انوائس ${m[1]} (${lookup(m[2])})`],
     [/^Status updated to (.+)$/, (m, lookup) => "حالت اپ ڈیٹ ہو کر " + lookup(m[1])],
     [/^Condition updated to (.+)$/, (m, lookup) => "کنڈیشن اپ ڈیٹ ہو کر " + lookup(m[1])],
@@ -67,6 +77,7 @@
         if (m) return fn(m, lookup);
       }
       if (core.includes(" · ")) return core.split(" · ").map(lookup).join(" · ");
+      if (core.includes(" | ")) return core.split(" | ").map(lookup).join(" | ");
       const arrow = core.match(/^(.+?) ([▲▼])$/);
       if (arrow) return lookup(arrow[1]) + " " + arrow[2];
       for (const key of prefixKeys) {

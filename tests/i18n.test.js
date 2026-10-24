@@ -94,3 +94,17 @@ test("WhatsApp message sentences", () => {
   assert.strictEqual(t("Thank you!"), "شکریہ!");
   assert.strictEqual(t("TOTAL YOU OWE US"), "کل رقم جو آپ کے ذمے ہے");
 });
+
+test("report headings and footers joined with a bar, times, and item counts", () => {
+  assert.strictEqual(t("Sales Report | 10/24/2026"), "فروخت رپورٹ | 10/24/2026");
+  assert.strictEqual(t("4 transactions | Total: PKR 190K | Collected: PKR 1 | Remaining: PKR 40K"), "4 لین دین | کل: PKR 190 ہزار | وصول شدہ: PKR 1 | باقی: PKR 40 ہزار");
+  assert.strictEqual(t("Generated on 24 Oct, 03:04 PM").includes("شام"), true);
+  assert.strictEqual(t("Laptop (1 items)"), "لیپ ٹاپ (1 آئٹمز)");
+  assert.strictEqual(t("Selected: 1/4"), "منتخب: 1/4");
+  assert.strictEqual(t("Cash (Sale)"), "نقد (فروخت)");
+  assert.strictEqual(t("This is a computer-generated statement from Zia"), "یہ Zia کی طرف سے کمپیوٹر سے تیار کردہ اسٹیٹمنٹ ہے");
+});
+
+test("a date followed by the sale type", () => {
+  assert.strictEqual(t("Oct 24, 2026 - Sale"), "24 اکتوبر 2026 - فروخت");
+});
