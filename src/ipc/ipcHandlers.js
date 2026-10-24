@@ -17,6 +17,14 @@ function registerIpcHandlers() {
     auditService.log(action, entity, typeof args[0] === "number" ? args[0] : null);
   });
 
+  ipcMain.handle("ledger:getEntries", async (event, filters) => {
+    try {
+      return { success: true, data: ledgerService.getLedgerEntries(filters || {}) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
   ipcMain.handle("integrity:check", async () => {
     try {
       return { success: true, data: require("../services/integrityService").check() };

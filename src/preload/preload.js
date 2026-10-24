@@ -90,6 +90,7 @@ contextBridge.exposeInMainWorld("api", {
   updateOldBalance: (id, data) => ipcRenderer.invoke("oldBalance:update", id, data),
   deleteOldBalance: (id) => ipcRenderer.invoke("oldBalance:delete", id),
 
+  getLedgerEntries: (filters) => ipcRenderer.invoke("ledger:getEntries", filters),
   checkIntegrity: () => ipcRenderer.invoke("integrity:check"),
 
   // Activity log

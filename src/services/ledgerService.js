@@ -63,6 +63,32 @@ class LedgerService {
 
   // ==================== CUSTOMER LEDGER QUERIES ====================
 
+  // Ledger list for the screen: one customer or all, newest first, filtered and paged.
+  // filters: customer_id, reference_type, date_from, date_to, search, page, pageSize
+  getLedgerEntries(filters = {}) {
+    const db = getDatabase();
+    const where = [];
+    const args = [];
+    if (filters.customer_id) { where.push("l.customer_id = ?"); args.push(filters.customer_id); }
+    if (filters.reference_type) { where.push("l.reference_type = ?"); args.push(filters.reference_type); }
+    if (filters.date_from) { where.push("l.entry_date >= ?"); args.push(filters.date_from); }
+    if (filters.date_to) { where.push("l.entry_date <= ?"); args.push(filters.date_to); }
+    if (filters.search) {
+      const like = `%${String(filters.search).replace(/[\\%_]/g, "\\$&")}%`;
+      where.push("(c.customer_name LIKE ? ESCAPE '\\' OR l.description LIKE ? ESCAPE '\\')");
+      args.push(like, like);
+    }
+    const sql = where.length ? "WHERE " + where.join(" AND ") : "";
+    const from = "FROM customer_ledger l LEFT JOIN customers c ON c.id = l.customer_id";
+    const pageSize = Math.min(Math.max(parseInt(filters.pageSize) || 50, 1), 500);
+    const page = Math.max(parseInt(filters.page) || 1, 1);
+    const total = db.prepare(`SELECT COUNT(*) n ${from} ${sql}`).get(...args).n;
+    const rows = db
+      .prepare(`SELECT l.*, c.customer_name ${from} ${sql} ORDER BY l.entry_date DESC, l.id DESC LIMIT ? OFFSET ?`)
+      .all(...args, pageSize, (page - 1) * pageSize);
+    return { rows, total, page, pageSize };
+  }
+
   getCustomerLedger(customerId, filters = {}) {
     const db = getDatabase();
     let query = "SELECT * FROM customer_ledger WHERE customer_id = ?";

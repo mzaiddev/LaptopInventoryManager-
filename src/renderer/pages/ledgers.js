@@ -3,6 +3,7 @@
 const LedgersPage = {
   currentCustomerId: null,
   currentCustomerName: null,
+  filters: { preset: "all", from: "", to: "", type: "", search: "", page: 1 },
 
   async load() {
     const content = document.getElementById("page-content");
@@ -94,6 +95,7 @@ const LedgersPage = {
           </div>
         </div>
         <div class="card-body">
+          <div id="ledger-filter-bar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;"></div>
           <div id="ledger-entries-table-container">
             <div class="empty-state">
               <h3>🔍 Search for a Customer</h3>
@@ -104,8 +106,9 @@ const LedgersPage = {
       </div>
     `;
 
-    // Load ALL ledger entries by default (show all customers)
-    await this.loadAllLedgerEntries();
+    this.renderFilterBar();
+    // Everything, newest first, until a customer is picked.
+    await this.loadEntries();
 
     // If a customer was pre-selected (e.g., from Sales page), load their data
     if (this.currentCustomerId) {
@@ -117,63 +120,90 @@ const LedgersPage = {
   },
 
   async refresh() {
-    if (this.currentCustomerId) {
-      await this.loadCustomerBalance();
-      await this.loadCustomerLedgerEntries();
-    } else {
-      await this.loadAllLedgerEntries();
+    if (this.currentCustomerId) await this.loadCustomerBalance();
+    await this.loadEntries();
+  },
+
+  // ---------- filters ----------
+  pad(n) { return String(n).padStart(2, "0"); },
+  iso(d) { return d.getFullYear() + "-" + this.pad(d.getMonth() + 1) + "-" + this.pad(d.getDate()); },
+
+  dateRange() {
+    const f = this.filters;
+    const now = new Date();
+    const today = this.iso(now);
+    switch (f.preset) {
+      case "today": return { from: today, to: today };
+      case "week": { const d = new Date(now); d.setDate(d.getDate() - 6); return { from: this.iso(d), to: today }; }
+      case "month": return { from: this.iso(new Date(now.getFullYear(), now.getMonth(), 1)), to: today };
+      case "custom": return { from: f.from, to: f.to };
+      default: return { from: "", to: "" };
     }
   },
 
-  async loadAllLedgerEntries() {
+  renderFilterBar() {
+    const bar = document.getElementById("ledger-filter-bar");
+    if (!bar) return;
+    const f = this.filters;
+    const presets = [["all", "All"], ["today", "Today"], ["week", "Last 7 Days"], ["month", "This Month"], ["custom", "Custom"]];
+    const types = [["", "All types"], ["Sale", "Sales"], ["Payment", "Payments"], ["Return", "Returns"], ["OldBalanceDebit", "Old balance (owes)"], ["OldBalanceCredit", "Old balance (paid)"]];
+    bar.innerHTML =
+      presets.map(([k, label]) => `<button class="btn btn-sm ${f.preset === k ? "btn-primary" : "btn-secondary"}" onclick="LedgersPage.setPreset('${k}')">${label}</button>`).join("") +
+      `<span style="display:${f.preset === "custom" ? "inline-flex" : "none"};gap:6px;align-items:center;">
+         <input type="date" class="form-control" id="ledger-from" value="${f.from}" onchange="LedgersPage.onCustomDates()">
+         <span>to</span>
+         <input type="date" class="form-control" id="ledger-to" value="${f.to}" onchange="LedgersPage.onCustomDates()">
+       </span>
+       <select class="form-control" style="width:170px;" onchange="LedgersPage.setType(this.value)">${types.map(([v, l]) => `<option value="${v}" ${f.type === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+       <input type="text" class="form-control" style="width:220px;" id="ledger-entry-search" placeholder="Search name or description" value="${this.escapeHtml(f.search)}" oninput="LedgersPage.onEntrySearch()">`;
+  },
+
+  setPreset(key) { this.filters.preset = key; this.filters.page = 1; this.renderFilterBar(); this.loadEntries(); },
+  setType(v) { this.filters.type = v; this.filters.page = 1; this.loadEntries(); },
+  goToPage(n) { this.filters.page = n; this.loadEntries(); },
+
+  onCustomDates() {
+    this.filters.from = document.getElementById("ledger-from").value;
+    this.filters.to = document.getElementById("ledger-to").value;
+    if (this.filters.from && this.filters.to && this.filters.from > this.filters.to) {
+      Toast.error("'From' date must not be after 'To' date.");
+      return;
+    }
+    this.filters.page = 1;
+    this.loadEntries();
+  },
+
+  onEntrySearch() {
+    clearTimeout(this._entryTimer);
+    this._entryTimer = setTimeout(() => {
+      this.filters.search = document.getElementById("ledger-entry-search").value.trim();
+      this.filters.page = 1;
+      this.loadEntries();
+    }, 300);
+  },
+
+  // One loader for both views: all customers, or the selected one. Newest first, paged.
+  async loadEntries() {
     const container = document.getElementById("ledger-entries-table-container");
     if (!container) return;
-    container.innerHTML =
-      '<div class="loading"><div class="spinner"></div></div>';
-
-    try {
-      // Get all customers with ledger data
-      const reportResult = await window.api.getCustomerLedgerReport();
-      if (!reportResult.success) {
-        container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${reportResult.error}</p></div>`;
-        return;
-      }
-
-      const customers = reportResult.data || [];
-      if (customers.length === 0) {
-        container.innerHTML =
-          '<div class="empty-state"><h3>No ledger entries</h3><p>Create a sale or add a payment to see ledger entries.</p></div>';
-        return;
-      }
-
-      // Fetch ledger entries for each customer
-      let allEntries = [];
-      for (const c of customers) {
-        const ledgerResult = await window.api.getCustomerLedger(c.customer_id);
-        if (ledgerResult.success && ledgerResult.data) {
-          const entries = ledgerResult.data.map((e) => ({
-            ...e,
-            customer_name: c.customer_name,
-            customer_id: c.customer_id,
-          }));
-          allEntries = allEntries.concat(entries);
-        }
-      }
-
-      // Sort by date descending
-      allEntries.sort(
-        (a, b) =>
-          new Date(b.entry_date) - new Date(a.entry_date) || b.id - a.id,
-      );
-
-      this.allLedgerEntries = allEntries;
-      this.filteredEntries = allEntries;
-      this.renderLedgerTable(allEntries);
-      document.getElementById("ledger-entries-subtitle").textContent =
-        "- All Customers";
-    } catch (err) {
-      container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${err.message}</p></div>`;
+    const { from, to } = this.dateRange();
+    const result = await window.api.getLedgerEntries({
+      customer_id: this.currentCustomerId || undefined,
+      reference_type: this.filters.type || undefined,
+      date_from: from || undefined,
+      date_to: to || undefined,
+      search: this.filters.search || undefined,
+      page: this.filters.page,
+      pageSize: 50,
+    });
+    if (!result.success) {
+      container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${this.escapeHtml(result.error)}</p></div>`;
+      return;
     }
+    document.getElementById("ledger-entries-subtitle").textContent = this.currentCustomerId
+      ? "- " + (this.currentCustomerName || "Customer")
+      : "- All Customers";
+    this.renderLedgerTable(result.data.rows, result.data.total, result.data.pageSize);
   },
 
   shareWhatsApp() {
@@ -191,11 +221,7 @@ const LedgersPage = {
 
     if (query.length < 1) {
       document.getElementById("ledger-customer-results").style.display = "none";
-      // Show all entries again
-      this.filteredEntries = this.allLedgerEntries;
-      this.renderLedgerTable(this.allLedgerEntries);
-      document.getElementById("ledger-entries-subtitle").textContent =
-        "- All Customers";
+      if (this.currentCustomerId) this.clearCustomerSelection();
       return;
     }
 
@@ -245,29 +271,18 @@ const LedgersPage = {
     document.getElementById("ledger-entries-subtitle").textContent =
       `- ${this.escapeHtml(customerName || "Customer")}`;
 
-    // Show loading in table
-    const container = document.getElementById("ledger-entries-table-container");
-    container.innerHTML =
-      '<div class="loading"><div class="spinner"></div></div>';
-
-    // Load balance and ledger entries
+    this.filters.page = 1;
     await this.loadCustomerBalance();
-    await this.loadCustomerLedgerEntries();
+    await this.loadEntries();
   },
 
   clearCustomerSelection() {
     this.currentCustomerId = null;
     this.currentCustomerName = null;
-    document.getElementById("ledger-selected-customer-info").style.display =
-      "none";
+    document.getElementById("ledger-selected-customer-info").style.display = "none";
     document.getElementById("ledger-customer-search").value = "";
-    document.getElementById("ledger-entries-subtitle").textContent = "";
-    document.getElementById("ledger-entries-table-container").innerHTML = `
-      <div class="empty-state">
-        <h3>🔍 Search for a Customer</h3>
-        <p>Use the search box above to find a customer and view their complete ledger.</p>
-      </div>
-    `;
+    this.filters.page = 1;
+    this.loadEntries();
   },
 
   async loadCustomerBalance() {
@@ -309,35 +324,23 @@ const LedgersPage = {
     }
   },
 
-  async loadCustomerLedgerEntries() {
-    const container = document.getElementById("ledger-entries-table-container");
-    if (!container || !this.currentCustomerId) return;
-
-    try {
-      const result = await window.api.getCustomerLedger(this.currentCustomerId);
-      if (!result.success) {
-        container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${result.error}</p></div>`;
-        return;
-      }
-
-      const entries = result.data || [];
-      if (entries.length === 0) {
-        container.innerHTML =
-          '<div class="empty-state"><h3>No ledger entries</h3><p>Create a sale or add a payment to see ledger entries for this customer.</p></div>';
-        return;
-      }
-
-      this.renderLedgerTable(entries);
-    } catch (err) {
-      container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${err.message}</p></div>`;
-    }
-  },
-
-  renderLedgerTable(entries) {
+  renderLedgerTable(entries, total = entries.length, pageSize = 50) {
     const container = document.getElementById("ledger-entries-table-container");
     if (!container) return;
 
     const currency = App.currency || "USD";
+    const showCustomer = !this.currentCustomerId;
+    if (entries.length === 0) {
+      container.innerHTML = '<div class="empty-state"><h3>No ledger entries</h3><p>Nothing matches these filters. Try "All".</p></div>';
+      return;
+    }
+    const pages = Math.max(1, Math.ceil(total / pageSize));
+    const pager = `<div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:12px;">
+        <span style="color:var(--text-muted);">${total} entries</span>
+        <button class="btn btn-secondary btn-sm" ${this.filters.page <= 1 ? "disabled" : ""} onclick="LedgersPage.goToPage(${this.filters.page - 1})">Previous</button>
+        <span>Page ${this.filters.page} of ${pages}</span>
+        <button class="btn btn-secondary btn-sm" ${this.filters.page >= pages ? "disabled" : ""} onclick="LedgersPage.goToPage(${this.filters.page + 1})">Next</button>
+      </div>`;
 
     container.innerHTML = `
       <div class="table-wrapper">
@@ -345,11 +348,12 @@ const LedgersPage = {
           <thead>
             <tr>
               <th>Date</th>
+              ${showCustomer ? "<th>Customer</th>" : ""}
               <th>Type</th>
               <th>Description</th>
               <th style="text-align:right;">Debit (Owes)</th>
               <th style="text-align:right;">Credit (Paid)</th>
-              <th style="text-align:right;" title="Running balance after this entry">Balance</th>
+              <th style="text-align:right;" title="This customer's balance after this entry">Balance</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -360,6 +364,7 @@ const LedgersPage = {
                 return `
                 <tr>
                   <td>${Formatters.formatDate(e.entry_date)}</td>
+                  ${showCustomer ? `<td style="font-weight:600;">${this.escapeHtml(e.customer_name || "")}</td>` : ""}
                   <td><span class="badge ${typeBadge}">${this.escapeHtml(e.reference_type)}</span></td>
                   <td style="font-size:13px;">${this.escapeHtml(e.description)}</td>
                   <td style="text-align:right;font-weight:600;color:var(--danger);">${e.debit > 0 ? Formatters.formatCurrency(e.debit, currency) : '-'}</td>
@@ -377,6 +382,7 @@ const LedgersPage = {
           </tbody>
         </table>
       </div>
+      ${pager}
     `;
   },
 
@@ -486,7 +492,7 @@ const LedgersPage = {
             // If viewing this customer, refresh
             if (this.currentCustomerId === customerId) {
               await this.loadCustomerBalance();
-              await this.loadCustomerLedgerEntries();
+              await this.loadEntries();
             } else {
               // Select this customer
               const customerName =
@@ -658,7 +664,7 @@ const LedgersPage = {
             Modal.close();
             if (this.currentCustomerId === customerId) {
               await this.loadCustomerBalance();
-              await this.loadCustomerLedgerEntries();
+              await this.loadEntries();
             } else {
               const customerName =
                 document
