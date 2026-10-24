@@ -6,6 +6,15 @@ const App = {
   pagination: null,
 
   async init() {
+    const s = await window.api.authStatus();
+    if (!(s.success && s.data.loggedIn)) {
+      await LoginPage.show();
+      return;
+    }
+    await this.start();
+  },
+
+  async start() {
     // Load settings first
     try {
       const result = await window.api.getSettings();

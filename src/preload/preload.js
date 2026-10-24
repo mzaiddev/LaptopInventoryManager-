@@ -90,6 +90,16 @@ contextBridge.exposeInMainWorld("api", {
   updateOldBalance: (id, data) => ipcRenderer.invoke("oldBalance:update", id, data),
   deleteOldBalance: (id) => ipcRenderer.invoke("oldBalance:delete", id),
 
+  // Auth
+  authStatus: () => ipcRenderer.invoke("auth:status"),
+  login: (username, password) => ipcRenderer.invoke("auth:login", username, password),
+  logout: () => ipcRenderer.invoke("auth:logout"),
+  changePassword: (current, next) => ipcRenderer.invoke("auth:changePassword", current, next),
+  changeSuperPassword: (current, next) => ipcRenderer.invoke("auth:changeSuperPassword", current, next),
+  grantSuper: (password) => ipcRenderer.invoke("auth:grantSuper", password),
+  revealCost: (password) => ipcRenderer.invoke("auth:revealCost", password),
+  hideCost: () => ipcRenderer.invoke("auth:hideCost"),
+
   // ============ NEW LEDGER SYSTEM ============
   getCustomerLedger: (customerId, filters) => ipcRenderer.invoke("ledger:getCustomerLedger", customerId, filters),
   getCustomerLedgerSummary: (customerId) => ipcRenderer.invoke("ledger:getCustomerLedgerSummary", customerId),

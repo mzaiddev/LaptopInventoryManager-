@@ -23,9 +23,62 @@ const SettingsPage = {
           </div>
         </div>
       </div>
+      <div class="card" style="margin-bottom:24px;">
+        <div class="card-header"><h3>Security</h3></div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Current Password</label>
+              <input type="password" class="form-control" id="sec-pw-current" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label>New Password</label>
+              <input type="password" class="form-control" id="sec-pw-new" autocomplete="off">
+            </div>
+            <div class="form-group" style="align-self:flex-end;">
+              <button class="btn btn-primary" onclick="SettingsPage.changePassword()">Change Password</button>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Current Super-Password</label>
+              <input type="password" class="form-control" id="sec-sp-current" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label>New Super-Password</label>
+              <input type="password" class="form-control" id="sec-sp-new" autocomplete="off">
+            </div>
+            <div class="form-group" style="align-self:flex-end;">
+              <button class="btn btn-primary" onclick="SettingsPage.changeSuperPassword()">Change Super-Password</button>
+            </div>
+          </div>
+          <small>The super-password protects editing and deleting products and viewing purchase prices.</small>
+        </div>
+      </div>
     `;
 
     await this.loadSettings();
+  },
+
+  async _change(apiFn, currentId, newId, okMsg) {
+    const current = document.getElementById(currentId).value;
+    const next = document.getElementById(newId).value;
+    const r = await apiFn(current, next);
+    if (r.success) {
+      Toast.success(okMsg);
+      document.getElementById(currentId).value = "";
+      document.getElementById(newId).value = "";
+    } else {
+      Toast.error(r.error);
+    }
+  },
+
+  changePassword() {
+    return this._change(window.api.changePassword, "sec-pw-current", "sec-pw-new", "Password changed.");
+  },
+
+  changeSuperPassword() {
+    return this._change(window.api.changeSuperPassword, "sec-sp-current", "sec-sp-new", "Super-password changed.");
   },
 
   async refresh() {

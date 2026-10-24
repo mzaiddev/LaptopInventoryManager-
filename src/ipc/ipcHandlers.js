@@ -1,4 +1,6 @@
-const { ipcMain, dialog, app } = require("electron");
+const { ipcMain: rawIpcMain, dialog, app } = require("electron");
+const authService = require("../services/authService");
+const { guardIpc } = require("./guard");
 const inventoryService = require("../services/inventoryService");
 const dashboardService = require("../services/dashboardService");
 const backupService = require("../services/backupService");
@@ -8,6 +10,57 @@ const oldBalanceService = require("../services/oldBalanceService");
 const fs = require("fs");
 
 function registerIpcHandlers() {
+  const ipcMain = guardIpc(rawIpcMain, authService);
+
+  // Auth
+  ipcMain.handle("auth:status", async () => ({
+    success: true,
+    data: {
+      loggedIn: authService.isLoggedIn(),
+      hasOwner: authService.hasOwner(),
+      costVisible: authService.isCostVisible(),
+      installId: authService.getInstallId(),
+    },
+  }));
+  ipcMain.handle("auth:login", async (event, username, password) => {
+    const r = authService.login(username, password);
+    return r.ok ? { success: true } : { success: false, error: "Wrong username or password" };
+  });
+  ipcMain.handle("auth:logout", async () => {
+    authService.logout();
+    return { success: true };
+  });
+  ipcMain.handle("auth:changePassword", async (event, current, next) => {
+    try {
+      authService.changePassword(current, next);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+  ipcMain.handle("auth:changeSuperPassword", async (event, current, next) => {
+    try {
+      authService.changeSuperPassword(current, next);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+  ipcMain.handle("auth:grantSuper", async (event, pw) =>
+    authService.grantSuperOnce(pw)
+      ? { success: true }
+      : { success: false, error: "Wrong super-password" },
+  );
+  ipcMain.handle("auth:revealCost", async (event, pw) =>
+    authService.revealCost(pw)
+      ? { success: true }
+      : { success: false, error: "Wrong super-password" },
+  );
+  ipcMain.handle("auth:hideCost", async () => {
+    authService.hideCost();
+    return { success: true };
+  });
+
   // Dashboard
   ipcMain.handle("dashboard:getData", async () => {
     try {

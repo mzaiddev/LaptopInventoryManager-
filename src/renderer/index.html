@@ -84,6 +84,7 @@
         </button>
       </nav>
       <div class="sidebar-footer">
+        <button class="btn btn-secondary btn-sm" style="width:100%;margin-bottom:8px;" onclick="LoginPage.logout()">Sign out</button>
         <span class="version">v1.0.0</span>
         <span class="developer-credit">Developed by Muhammad Zaid - 03189230490</span>
       </div>
@@ -117,6 +118,8 @@
     </main>
   </div>
 
+  <div id="login-screen" style="display:none;"></div>
+
   <!-- Modal Container -->
   <div id="modal-overlay" class="modal-overlay" style="display:none;">
     <div id="modal-content" class="modal-content"></div>
@@ -138,6 +141,7 @@
   <script src="components/Table.js"></script>
   
   <!-- 3. Pages (depend on components + utilities) -->
+  <script src="pages/login.js"></script>
   <script src="pages/dashboard.js"></script>
   <script src="pages/inventory.js"></script>
   <script src="pages/backup.js"></script>

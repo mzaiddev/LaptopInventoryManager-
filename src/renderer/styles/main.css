@@ -1164,3 +1164,24 @@ body.dark-mode .badge-for-parts { background: #374151; color: #d1d5db; }
     grid-template-columns: 1fr;
   }
 }
+/* Login */
+#login-screen {
+  position: fixed;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  z-index: 3000;
+}
+.login-card {
+  width: 360px;
+  padding: 32px;
+  background: var(--bg-primary);
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+  text-align: center;
+}
+.login-card .form-group { text-align: left; }
+.login-logo svg { width: 48px; height: 48px; color: var(--primary); }
+.login-btn { width: 100%; margin-top: 8px; }
+.login-note { color: var(--text-secondary, #64748b); margin: 16px 0 0; }
