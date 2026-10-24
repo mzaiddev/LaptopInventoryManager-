@@ -6,6 +6,8 @@ const DB_NAME = 'inventory.db';
 const BACKUP_DIR = 'backups';
 
 function getUserDataPath() {
+  // Lets a trial run or a portable copy keep its data away from the real shop data.
+  if (process.env.LIM_DATA_DIR) return process.env.LIM_DATA_DIR;
   return path.join(app.getPath('appData'), APP_NAME);
 }
 
