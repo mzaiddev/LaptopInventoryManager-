@@ -475,6 +475,29 @@ const CustomersPage = {
     }
   },
 
+  // The account summary as simple lines that add up: old + sales - returns - payments = balance.
+  summaryLines(s) {
+    const lines = [];
+    if (s.old_balance) lines.push({ sign: '', label: 'Old balance (before using our system)', amount: s.old_balance });
+    lines.push({ sign: '+', label: 'Sales', amount: s.sales });
+    if (s.returns) lines.push({ sign: '-', label: 'Returns', amount: s.returns });
+    lines.push({ sign: '-', label: 'Payments received', amount: s.payments });
+    if (s.other) lines.push({ sign: s.other > 0 ? '+' : '-', label: 'Other adjustments', amount: Math.abs(s.other) });
+    const owes = s.balance >= 0;
+    return { lines, totalLabel: owes ? 'TOTAL YOU OWE US' : 'CREDIT (we owe you)', total: Math.abs(s.balance) };
+  },
+
+  summaryTableHtml(s, currency) {
+    const { lines, totalLabel, total } = this.summaryLines(s);
+    const row = (l) => '<tr><td style="padding:7px 14px;border:1px solid #999;width:30px;text-align:center;font-weight:700;">' + l.sign + '</td>' +
+      '<td style="padding:7px 14px;border:1px solid #999;">' + l.label + '</td>' +
+      '<td style="padding:7px 14px;border:1px solid #999;text-align:right;">' + Formatters.formatCurrency(l.amount, currency, true) + '</td></tr>';
+    return '<table style="width:100%;font-size:15px;border-collapse:collapse;color:#000;">' + lines.map(row).join('') +
+      '<tr><td style="padding:9px 14px;border:2px solid #000;text-align:center;font-weight:700;">=</td>' +
+      '<td style="padding:9px 14px;border:2px solid #000;font-weight:700;">' + totalLabel + '</td>' +
+      '<td style="padding:9px 14px;border:2px solid #000;text-align:right;font-weight:700;font-size:17px;">' + Formatters.formatCurrency(total, currency, true) + '</td></tr></table>';
+  },
+
   buildStatementHtml(stmt, currency) {
     // Build ledger entries table
     const ledgerEntries = stmt.ledger_entries || [];
@@ -576,20 +599,7 @@ const CustomersPage = {
           </table>
         </div>
         <div style="margin-bottom:20px;">
-          <table style="width:100%;font-size:15px;border-collapse:collapse;">
-            <tr style="background:transparent;">
-              <th style="padding:10px 14px;border:1px solid #000;text-align:left;font-size:14px;text-transform:uppercase;color:#000;font-weight:700;">Total Sales</th>
-              <th style="padding:10px 14px;border:1px solid #000;text-align:left;font-size:14px;text-transform:uppercase;color:#000;font-weight:700;">Total Paid</th>
-              <th style="padding:10px 14px;border:1px solid #000;text-align:left;font-size:14px;text-transform:uppercase;color:#000;font-weight:700;">Old Balance</th>
-              <th style="padding:10px 14px;border:1px solid #000;text-align:left;font-size:14px;text-transform:uppercase;color:#000;font-weight:700;">Total Due</th>
-            </tr>
-            <tr>
-              <td style="padding:8px 14px;border:1px solid #999;font-size:15px;color:#000;">${Formatters.formatCurrency(stmt.balance.total_sales, currency)}</td>
-              <td style="padding:8px 14px;border:1px solid #999;font-size:15px;color:#000;">${Formatters.formatCurrency(stmt.balance.total_paid, currency)}</td>
-              <td style="padding:8px 14px;border:1px solid #999;font-size:15px;font-weight:700;color:#000;">${stmt.balance.old_balance_net !== undefined ? Formatters.formatCurrency(stmt.balance.old_balance_net, currency) : Formatters.formatCurrency(0, currency)}</td>
-              <td style="padding:8px 14px;border:1px solid #999;font-size:15px;font-weight:700;color:#000;">${Formatters.formatCurrency(stmt.balance.total_due || 0, currency)}</td>
-            </tr>
-          </table>
+          ${this.summaryTableHtml(stmt.balance.statement, currency)}
         </div>
         ${ledgerHtml}
         ${stmt.sales && stmt.sales.length > 0 ? `
@@ -669,17 +679,14 @@ const CustomersPage = {
       {
         const shopName = document.getElementById('shop-name')?.textContent || 'Laptop Inventory Manager';
         const dateStr = new Date().toLocaleDateString();
-        const message = (
+        const sum = this.summaryLines(stmt.balance.statement);
+        const money = (n) => Formatters.formatCurrency(n, currency, true);
+        const message =
           'Dear ' + customerName + ',\n\n' +
-          'Please find attached your detailed account statement from ' + shopName + '.\n\n' +
-          'Summary:\n' +
-          'Total Sales: ' + Formatters.formatCurrency(stmt.balance.total_sales, currency) + '\n' +
-          'Total Paid: ' + Formatters.formatCurrency(stmt.balance.total_paid, currency) + '\n' +
-          'Old Balance: ' + Formatters.formatCurrency(stmt.balance.old_balance_net || 0, currency) + '\n' +
-          'Total Due (what you owe us now): ' + Formatters.formatCurrency(stmt.balance.total_due || 0, currency) + '\n\n' +
-          'For any queries, please contact us. Thank you for your business!\n\n' +
-          '- ' + shopName + ' | ' + dateStr
-        );
+          'Here is your account statement from ' + shopName + ' (' + dateStr + ').\n\n' +
+          sum.lines.map((l) => (l.sign ? l.sign + ' ' : '') + l.label + ': ' + money(l.amount)).join('\n') + '\n' +
+          '= ' + sum.totalLabel + ': ' + money(sum.total) + '\n\n' +
+          'The attached PDF lists every entry. For any questions please contact us. Thank you!\n- ' + shopName;
         const r = await window.api.shareStatement({
           html: this._statementDocument(customerName, printContent, false),
           customerName,

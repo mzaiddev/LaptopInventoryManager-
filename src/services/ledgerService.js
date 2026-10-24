@@ -161,7 +161,20 @@ class LedgerService {
     const totalDebits = (ls.total_sale_debits || 0) + (ls.total_old_debits || 0);
     const totalCredits = (ls.total_payment_credits || 0) + (ls.total_old_credits || 0) + (ls.total_return_credits || 0);
 
+    // Plain-language breakdown that always adds up: old + sales - returns - payments (+ other) = balance.
+    const old_balance = roundMoney((ls.total_old_debits || 0) - (ls.total_old_credits || 0));
+    const sales = roundMoney(ls.total_sale_debits || 0);
+    const returns = roundMoney(ls.total_return_credits || 0);
+    const payments = roundMoney(ls.total_payment_credits || 0);
+    const balance = roundMoney(ledgerBalance);
+    const statement = {
+      old_balance, sales, returns, payments,
+      other: roundMoney(balance - (old_balance + sales - returns - payments)),
+      balance,
+    };
+
     return {
+      statement,
       // Sale-specific stats
       total_sales: saleStats.ts,
       total_paid_from_sales: saleStats.tp,
@@ -1050,7 +1063,8 @@ class LedgerService {
         ledger_balance: ledgerSummary.ledger_balance,
         total_due: ledgerSummary.total_due,
         total_debits: ledgerSummary.total_debits,
-        total_credits: ledgerSummary.total_credits
+        total_credits: ledgerSummary.total_credits,
+        statement: ledgerSummary.statement
       }
     };
   }
