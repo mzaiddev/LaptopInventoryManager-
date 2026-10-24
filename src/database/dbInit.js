@@ -1009,6 +1009,8 @@ function seedDefaults() {
     theme: "light",
     compact_numbers: "1",
     default_country_code: "92",
+    opening_cash: "0",
+    opening_bank: "0",
   };
 
   const insertSetting = db.prepare(

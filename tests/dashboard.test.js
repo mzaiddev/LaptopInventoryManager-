@@ -82,3 +82,17 @@ test("a range with no activity shows zero sales but the same cash balance", () =
   const d = dashboard.getDashboardData({ from: "2025-01-01", to: "2025-01-31" }, { costVisible: true });
   assert.deepStrictEqual([d.sales, d.received.total, d.expenses.total, d.netProfit], [0, 0, 0, 0]);
 });
+
+test("opening cash and bank amounts from Settings are added to the balances", () => {
+  const db = fixture();
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('opening_cash', '5000'), ('opening_bank', '20000')").run();
+  const d = dashboard.getDashboardData(OCT, { costVisible: true });
+  assert.strictEqual(d.cashInHand, 6100);
+  assert.strictEqual(d.bankBalance, 20400);
+});
+
+test("a junk opening balance setting is treated as zero", () => {
+  const db = fixture();
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('opening_cash', 'abc')").run();
+  assert.strictEqual(dashboard.getDashboardData(OCT, {}).cashInHand, 1100);
+});
