@@ -620,7 +620,7 @@ const PrintService = {
       Toast.error("Please allow pop-ups for printing.");
       return;
     }
-    printWindow.document.write(html);
+    printWindow.document.write(I18n.translateHtml(html));
     printWindow.document.close();
   },
 

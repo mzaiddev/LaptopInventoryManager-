@@ -41,6 +41,8 @@ const App = {
       if (result.success) {
         this.currency = result.data.currency || "USD";
         Formatters.compact = result.data.compact_numbers !== "0";
+        // This PC's own choice wins; the saved setting only decides on a fresh PC.
+        if (result.data.language && !I18n.hasLocalChoice()) await I18n.setLanguage(result.data.language, false);
         const theme = result.data.theme || "light";
         if (theme === "dark") {
           document.body.classList.add("dark-mode");
@@ -267,6 +269,7 @@ const App = {
 
 // Initialize when DOM is ready
 document.addEventListener("DOMContentLoaded", () => {
+  I18n.init();
   App.init().catch((err) => {
     console.error("Failed to initialize app:", err);
     document.getElementById("page-content").innerHTML =

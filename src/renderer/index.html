@@ -104,6 +104,7 @@
           <div id="shop-name">Laptop Inventory Manager</div>
         </div>
         <div class="topbar-right">
+          <button id="lang-toggle" data-no-i18n class="btn btn-secondary btn-sm" style="margin-right:8px;margin-left:8px;" onclick="I18n.toggle()" title="Language / زبان">اردو</button>
           <button id="cost-toggle" class="btn btn-secondary btn-sm" style="margin-right:12px;" onclick="App.toggleCost()">Show Purchase Prices</button>
           <div class="theme-toggle">
             <button onclick="App.toggleTheme()" title="Toggle Theme">
@@ -137,6 +138,8 @@
 
   <!-- Scripts - IMPORTANT: Load order matters -->
   <!-- 1. Utilities (no dependencies) -->
+  <script src="../shared/ur.js"></script>
+  <script src="../shared/i18n.js"></script>
   <script src="../shared/compact.js"></script>
   <script src="../shared/saleMath.js"></script>
   <script src="utils/formatters.js"></script>
@@ -144,6 +147,7 @@
   <script src="utils/printService.js"></script>
   
   <!-- 2. Components (depend on utilities) -->
+  <script src="i18n.js"></script>
   <script src="components/Toast.js"></script>
   <script src="components/Modal.js"></script>
   <script src="components/SuperPrompt.js"></script>

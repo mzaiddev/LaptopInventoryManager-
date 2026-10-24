@@ -639,7 +639,7 @@ const SalesHistoryPage = {
       `;
       if (!share) {
         const printWindow = window.open('', '_blank', 'width=800,height=600');
-        printWindow.document.write(html);
+        printWindow.document.write(I18n.translateHtml(html));
         printWindow.document.close();
         return;
       }
@@ -648,7 +648,7 @@ const SalesHistoryPage = {
         'Total: ' + Formatters.formatCurrency(l.total_amount, currency) + '\n' +
         'Paid: ' + Formatters.formatCurrency(l.paid_amount, currency) + '\n' +
         'Balance: ' + Formatters.formatCurrency(l.remaining_amount, currency) + '\n\nThank you!\n- ' + shopName;
-      const r = await window.api.shareStatement({ html, customerName: 'Invoice-' + l.reference_no, phone: l.phone || '', message });
+      const r = await window.api.shareStatement({ html: I18n.translateHtml(html), customerName: 'Invoice-' + l.reference_no, phone: l.phone || '', message });
       if (!r.success) Toast.error(r.error || 'Could not create the PDF.');
       else if (r.data.chat === 'none') Toast.warning('PDF saved. This customer has no valid phone number, so WhatsApp was not opened.');
       else if (r.data.clipboardOk) Toast.success('PDF copied. In the WhatsApp chat press Ctrl+V, then Send.');

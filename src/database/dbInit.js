@@ -1009,6 +1009,7 @@ function seedDefaults() {
     theme: "light",
     compact_numbers: "1",
     default_country_code: "92",
+    language: "en",
     opening_cash: "0",
     opening_bank: "0",
   };

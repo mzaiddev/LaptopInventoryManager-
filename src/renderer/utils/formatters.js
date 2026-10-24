@@ -3,7 +3,17 @@ const Formatters = {
   // Settings > "Short numbers" (12.5K, 3.2M). Set from App.start().
   compact: true,
 
+  // In right-to-left (Urdu) screens an amount stays "PKR 50,000", not "50,000 PKR".
+  isolate(text) {
+    return window.I18n && I18n.isUrdu() ? '\u2066' + text + '\u2069' : text;
+  },
+
   formatCurrency(amount, currency = 'USD', exact = false) {
+    const text = this._formatCurrency(amount, currency, exact);
+    return text === '-' ? text : this.isolate(text);
+  },
+
+  _formatCurrency(amount, currency = 'USD', exact = false) {
     if (amount === undefined || amount === null) return '-';
     try {
       const fmt = new Intl.NumberFormat('en-US', {

@@ -195,6 +195,15 @@ const SettingsPage = {
           </div>
           <div class="form-row">
             <div class="form-group">
+              <label>Language</label>
+              <select class="form-control" id="set-language" data-no-i18n onchange="I18n.setLanguage(this.value)">
+                <option value="en" ${I18n.lang === "en" ? "selected" : ""}>English</option>
+                <option value="ur" ${I18n.lang === "ur" ? "selected" : ""}>اردو</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
               <label>Opening Cash in Hand</label>
               <input type="number" step="0.01" class="form-control" id="set-opening-cash" value="${this.escapeHtml(settings.opening_cash || "0")}">
             </div>

@@ -1198,3 +1198,16 @@ body.dark-mode .badge-for-parts { background: #374151; color: #d1d5db; }
 
 .reveal-link { color: inherit; text-decoration: none; cursor: pointer; }
 .reveal-link:hover { color: var(--primary); }
+
+/* Urdu (right to left) */
+html[dir="rtl"] body { font-family: 'Segoe UI', 'Tahoma', 'Urdu Typesetting', 'Noto Naskh Arabic', sans-serif; }
+html[dir="rtl"] #sidebar { left: auto; right: 0; }
+html[dir="rtl"] #main-content { margin-left: 0; margin-right: var(--sidebar-width); }
+html[dir="rtl"] .nav-item { text-align: right; }
+html[dir="rtl"] table th { text-align: right; }
+html[dir="rtl"] #toast-container { right: auto; left: 20px; }
+html[dir="rtl"] .toast-success { border-left: 0; border-right: 4px solid var(--success); }
+html[dir="rtl"] .toast-error { border-left: 0; border-right: 4px solid var(--danger); }
+html[dir="rtl"] .toast-warning { border-left: 0; border-right: 4px solid var(--warning); }
+html[dir="rtl"] .login-card .form-group { text-align: right; }
+@media (max-width: 1100px) { html[dir="rtl"] #main-content { margin-right: 60px; } }

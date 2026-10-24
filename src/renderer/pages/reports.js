@@ -421,7 +421,7 @@ const ReportsPage = {
 </body>
 </html>`;
 
-      printWindow.document.write(html);
+      printWindow.document.write(I18n.translateHtml(html));
       printWindow.document.close();
     } catch (err) {
       Toast.error('Print error: ' + err.message);

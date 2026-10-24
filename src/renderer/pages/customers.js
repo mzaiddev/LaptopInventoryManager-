@@ -658,7 +658,7 @@ const CustomersPage = {
       Toast.error('Please allow pop-ups for printing.');
       return;
     }
-    printWindow.document.write(this._statementDocument(customerName, printContent, true));
+    printWindow.document.write(I18n.translateHtml(this._statementDocument(customerName, printContent, true)));
     printWindow.document.close();
   },
 
@@ -688,7 +688,7 @@ const CustomersPage = {
           '= ' + sum.totalLabel + ': ' + money(sum.total) + '\n\n' +
           'The attached PDF lists every entry. For any questions please contact us. Thank you!\n- ' + shopName;
         const r = await window.api.shareStatement({
-          html: this._statementDocument(customerName, printContent, false),
+          html: I18n.translateHtml(this._statementDocument(customerName, printContent, false)),
           customerName,
           phone,
           message,

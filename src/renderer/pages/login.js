@@ -23,6 +23,7 @@ const LoginPage = {
                <button class="btn btn-primary login-btn" type="submit">Sign in</button>`
             : `<p class="login-note">This copy has not been activated yet. Please contact your software provider.</p>`
         }
+        <button type="button" data-no-i18n class="btn btn-secondary btn-sm" style="margin-top:12px;" onclick="I18n.toggle()">${I18n.isUrdu() ? "English" : "اردو"}</button>
       </form>`;
     el.style.display = "flex";
     document.getElementById("app").style.display = "none";
