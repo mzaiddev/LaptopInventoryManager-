@@ -998,7 +998,7 @@ body.dark-mode .badge-for-parts { background: #374151; color: #d1d5db; }
 
 .product-row-header {
   display: grid;
-  grid-template-columns: 1fr 70px 100px 100px 40px;
+  grid-template-columns: 1fr 70px 100px 90px 100px 40px;
   gap: 8px;
   padding: 8px 4px;
   font-size: 12px;
@@ -1020,7 +1020,7 @@ body.dark-mode .badge-for-parts { background: #374151; color: #d1d5db; }
 
 .product-row-fields {
   display: grid;
-  grid-template-columns: 1fr 70px 100px 100px 40px;
+  grid-template-columns: 1fr 70px 100px 90px 100px 40px;
   gap: 8px;
   align-items: center;
 }

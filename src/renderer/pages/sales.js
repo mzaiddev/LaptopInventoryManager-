@@ -1,6 +1,5 @@
-// Sales Page - Create New Sale/Issue (Products only, no payment tracking here)
+// Sales Page - Create New Sale/Issue with discounts and Cash / Bank Transfer payment.
 // When a sale is created, the ledger is auto-generated in the backend.
-// All payment/balance management happens in the Ledger module.
 const SalesPage = {
   selectedCustomer: null,
   selectedProducts: [],
@@ -58,10 +57,17 @@ const SalesPage = {
               </div>
               <div class="form-row">
                 <div class="form-group">
-                  <label>Payment Method</label>
+                  <label>Payment Terms</label>
                   <select class="form-control" id="sale-ledger-type" onchange="SalesPage.onLedgerTypeChange()">
-                    <option value="Cash">Cash (Full Payment)</option>
+                    <option value="Cash">Full Payment</option>
                     <option value="Loan">Loan (Remaining Balance)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Paid Via</label>
+                  <select class="form-control" id="sale-pay-method">
+                    <option value="Cash">Cash</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
                   </select>
                 </div>
                 <div class="form-group" id="sale-paid-amount-group" style="display:none;">
@@ -85,6 +91,7 @@ const SalesPage = {
                   <span class="prd-col">Product</span>
                   <span class="qty-col">Qty</span>
                   <span class="price-col">Unit Price</span>
+                  <span class="disc-col">Discount</span>
                   <span class="sub-col">Subtotal</span>
                   <span class="act-col"></span>
                 </div>
@@ -106,10 +113,26 @@ const SalesPage = {
                 <span>Total Quantity</span>
                 <span id="sale-total-qty">0</span>
               </div>
+              <div class="summary-row">
+                <span>Subtotal</span>
+                <span id="sale-subtotal">0</span>
+              </div>
+              <div class="summary-row">
+                <span>Discount on whole sale</span>
+                <span style="display:flex;gap:6px;">
+                  <select class="form-control" id="sale-disc-type" onchange="SalesPage.updateSummary()" style="width:110px;">
+                    <option value="none">None</option>
+                    <option value="amount">Amount</option>
+                    <option value="percent">Percent %</option>
+                  </select>
+                  <input type="number" min="0" step="0.01" class="form-control" id="sale-disc-value" value="0" oninput="SalesPage.updateSummary()" style="width:110px;">
+                </span>
+              </div>
               <div class="summary-row total">
                 <span>Total Amount</span>
                 <span id="sale-total-amount">0</span>
               </div>
+              <div class="form-error" id="sale-summary-error"></div>
             </div>
 
             <!-- Submit -->
@@ -201,7 +224,7 @@ const SalesPage = {
           container.innerHTML = result.data
             .map(
               (c) => `
-            <div class="customer-search-item" onclick="SalesPage.selectCustomer(${c.id}, '${this.escapeHtml(c.customer_name)}')">
+            <div class="customer-search-item" data-id="${c.id}" data-name="${this.escapeHtml(c.customer_name)}" onclick="SalesPage.selectCustomer(Number(this.dataset.id), this.dataset.name)">
               <div class="name">${this.escapeHtml(c.customer_name)}</div>
               <div class="phone">${this.escapeHtml(c.phone) || "No phone"}</div>
             </div>
@@ -307,6 +330,9 @@ const SalesPage = {
         <div class="price-col">
           <input type="number" step="0.01" min="0" value="${product ? product.price : 0}" class="form-control" onchange="SalesPage.updateRow(${index})" style="font-size:13px;text-align:right;width:100%;">
         </div>
+        <div class="disc-col">
+          <input type="number" step="0.01" min="0" value="${product && product.discount ? product.discount : 0}" class="form-control" onchange="SalesPage.updateRow(${index})" style="font-size:13px;text-align:right;width:100%;">
+        </div>
         <div class="sub-col" style="font-size:14px;font-weight:600;text-align:right;padding:8px 4px;">0</div>
         <div class="act-col">
           <button type="button" class="remove-item-btn" onclick="SalesPage.removeProductRow(${index})" title="Remove">&times;</button>
@@ -320,6 +346,7 @@ const SalesPage = {
       name: "",
       qty: 1,
       price: 0,
+      discount: 0,
       subtotal: 0,
     });
 
@@ -376,7 +403,8 @@ const SalesPage = {
     const inputs = row.querySelectorAll("input");
     const qty = parseInt(inputs[0].value) || 0;
     const price = parseFloat(inputs[1].value) || 0;
-    const subtotal = qty * price;
+    const discount = parseFloat(inputs[2].value) || 0;
+    const subtotal = qty * price - discount;
     const subEl = row.querySelector(".sub-col");
     if (subEl) {
       subEl.textContent = Formatters.formatCurrency(subtotal, App.currency);
@@ -385,6 +413,7 @@ const SalesPage = {
     if (this.selectedProducts[index]) {
       this.selectedProducts[index].qty = qty;
       this.selectedProducts[index].price = price;
+      this.selectedProducts[index].discount = discount;
       this.selectedProducts[index].subtotal = subtotal;
     }
     this.updateSummary();
@@ -402,12 +431,31 @@ const SalesPage = {
       (p) => p && p.id && p.qty > 0,
     );
     const totalQty = validItems.reduce((sum, p) => sum + p.qty, 0);
-    const totalAmount = validItems.reduce((sum, p) => sum + p.subtotal, 0);
 
     document.getElementById("sale-total-items").textContent = validItems.length;
     document.getElementById("sale-total-qty").textContent = totalQty;
+    const calc = this.calcTotals(validItems);
+    document.getElementById("sale-summary-error").textContent = calc.error || "";
+    document.getElementById("sale-subtotal").textContent = Formatters.formatCurrency(calc.subtotal, App.currency);
     document.getElementById("sale-total-amount").textContent =
-      Formatters.formatCurrency(totalAmount, App.currency);
+      Formatters.formatCurrency(calc.total, App.currency);
+  },
+
+  // Same arithmetic the server uses (src/shared/saleMath.js); the server re-checks everything.
+  calcTotals(validItems) {
+    const type = document.getElementById("sale-disc-type")?.value || "none";
+    const value = parseFloat(document.getElementById("sale-disc-value")?.value) || 0;
+    if (validItems.length === 0) return { subtotal: 0, total: 0 };
+    try {
+      return computeSaleTotals(
+        validItems.map((p) => ({ quantity: p.qty, unit_price: p.price, discount_amount: p.discount || 0 })),
+        type,
+        value,
+      );
+    } catch (err) {
+      const gross = validItems.reduce((s, p) => s + p.qty * p.price, 0);
+      return { subtotal: gross, total: gross, error: err.message };
+    }
   },
 
   async submitSale() {
@@ -426,10 +474,14 @@ const SalesPage = {
 
     const ledgerType =
       document.getElementById("sale-ledger-type")?.value || "Cash";
-    const totalAmount = validItems.reduce((sum, p) => sum + p.subtotal, 0);
+    const calc = this.calcTotals(validItems);
+    if (calc.error) {
+      Toast.error(calc.error);
+      return;
+    }
     const paidAmount =
       ledgerType === "Cash"
-        ? totalAmount
+        ? calc.total
         : parseFloat(document.getElementById("sale-paid-amount")?.value) || 0;
 
     const data = {
@@ -440,11 +492,15 @@ const SalesPage = {
       transaction_type: document.getElementById("sale-type")?.value || "Sale",
       ledger_type: ledgerType,
       paid_amount: paidAmount,
+      payment_method: document.getElementById("sale-pay-method")?.value || "Cash",
+      discount_type: document.getElementById("sale-disc-type")?.value || "none",
+      discount_value: parseFloat(document.getElementById("sale-disc-value")?.value) || 0,
       notes: document.getElementById("sale-notes")?.value?.trim() || "",
       items: validItems.map((p) => ({
         product_id: p.id,
         quantity: p.qty,
         unit_price: p.price,
+        discount_amount: p.discount || 0,
       })),
     };
 
@@ -475,6 +531,6 @@ const SalesPage = {
     if (!str) return "";
     const div = document.createElement("div");
     div.textContent = str;
-    return div.innerHTML;
+    return div.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   },
 };

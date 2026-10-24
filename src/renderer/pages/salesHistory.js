@@ -240,6 +240,8 @@ const SalesHistoryPage = {
       ).join("");
 
       const paidGroupStyle = sale.ledger_type === "Loan" ? "" : "display:none;";
+      const oldestPayment = (sale.payments || [])[(sale.payments || []).length - 1];
+      const paidVia = oldestPayment && oldestPayment.payment_method === "Cash" ? "Cash" : oldestPayment ? "Bank Transfer" : "Cash";
 
       const itemsSection = hasReturns ? `
         <div class="edit-sale-notice">This sale has returns — products cannot be edited. You can still update customer, date, type, payment, and notes.</div>
@@ -256,6 +258,7 @@ const SalesHistoryPage = {
           <span class="prd-col">Product</span>
           <span class="qty-col">Qty</span>
           <span class="price-col">Unit Price</span>
+          <span class="disc-col">Discount</span>
           <span class="sub-col">Subtotal</span>
           <span class="act-col"></span>
         </div>
@@ -295,10 +298,17 @@ const SalesHistoryPage = {
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label>Payment Method</label>
+                <label>Payment Terms</label>
                 <select class="form-control" id="es-ledger-type" onchange="SalesHistoryPage.onEditLedgerTypeChange()">
-                  <option value="Cash" ${sale.ledger_type === 'Cash' ? 'selected' : ''}>Cash (Full Payment)</option>
+                  <option value="Cash" ${sale.ledger_type === 'Cash' ? 'selected' : ''}>Full Payment</option>
                   <option value="Loan" ${sale.ledger_type === 'Loan' ? 'selected' : ''}>Loan (Remaining Balance)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Paid Via</label>
+                <select class="form-control" id="es-pay-method">
+                  <option value="Cash" ${paidVia === 'Cash' ? 'selected' : ''}>Cash</option>
+                  <option value="Bank Transfer" ${paidVia === 'Bank Transfer' ? 'selected' : ''}>Bank Transfer</option>
                 </select>
               </div>
               <div class="form-group" id="es-paid-amount-group" style="${paidGroupStyle}">
@@ -318,6 +328,18 @@ const SalesHistoryPage = {
             </div>
           </div>
           <div class="sale-summary">
+            ${hasReturns ? '' : `<div class="summary-row">
+              <span>Discount on whole sale</span>
+              <span style="display:flex;gap:6px;">
+                <select class="form-control" id="es-disc-type" onchange="SalesHistoryPage.updateEditSummary()" style="width:110px;">
+                  <option value="none" ${sale.discount_type === 'none' || !sale.discount_type ? 'selected' : ''}>None</option>
+                  <option value="amount" ${sale.discount_type === 'amount' ? 'selected' : ''}>Amount</option>
+                  <option value="percent" ${sale.discount_type === 'percent' ? 'selected' : ''}>Percent %</option>
+                </select>
+                <input type="number" min="0" step="0.01" class="form-control" id="es-disc-value" value="${sale.discount_value || 0}" oninput="SalesHistoryPage.updateEditSummary()" style="width:110px;">
+              </span>
+            </div>`}
+            <div class="form-error" id="es-summary-error"></div>
             <div class="summary-row total">
               <span>Total Amount</span>
               <span id="es-total-amount">${Formatters.formatCurrency(sale.total_amount, App.currency)}</span>
@@ -335,6 +357,7 @@ const SalesHistoryPage = {
           product_name: it.product_name,
           quantity: it.quantity,
           unit_price: it.unit_price,
+          discount_amount: it.discount_amount || 0,
           subtotal: it.subtotal
         }))
       };
@@ -362,7 +385,7 @@ const SalesHistoryPage = {
     const container = document.getElementById("es-items-list");
     if (!container) return;
     const index = forcedIndex !== null ? forcedIndex : st.items.length;
-    const data = item || { product_id: null, product_name: "", quantity: 1, unit_price: 0, subtotal: 0 };
+    const data = item || { product_id: null, product_name: "", quantity: 1, unit_price: 0, discount_amount: 0, subtotal: 0 };
     if (forcedIndex === null) st.items.push(data);
 
     const options = st.products.map(p => {
@@ -387,6 +410,9 @@ const SalesHistoryPage = {
         </div>
         <div class="price-col">
           <input type="number" step="0.01" min="0" value="${data.unit_price || 0}" class="form-control" onchange="SalesHistoryPage.updateEditRow(${index})" style="font-size:13px;text-align:right;width:100%;">
+        </div>
+        <div class="disc-col">
+          <input type="number" step="0.01" min="0" value="${data.discount_amount || 0}" class="form-control" onchange="SalesHistoryPage.updateEditRow(${index})" style="font-size:13px;text-align:right;width:100%;">
         </div>
         <div class="sub-col" style="font-size:14px;font-weight:600;text-align:right;padding:8px 4px;">${Formatters.formatCurrency(data.subtotal || 0, App.currency)}</div>
         <div class="act-col">
@@ -429,9 +455,11 @@ const SalesHistoryPage = {
     const inputs = row.querySelectorAll("input");
     const qty = parseInt(inputs[0].value) || 0;
     const price = parseFloat(inputs[1].value) || 0;
-    const subtotal = qty * price;
+    const discount = parseFloat(inputs[2].value) || 0;
+    const subtotal = qty * price - discount;
     st.items[index].quantity = qty;
     st.items[index].unit_price = price;
+    st.items[index].discount_amount = discount;
     st.items[index].subtotal = subtotal;
     const subEl = row.querySelector(".sub-col");
     if (subEl) subEl.textContent = Formatters.formatCurrency(subtotal, App.currency);
@@ -449,8 +477,22 @@ const SalesHistoryPage = {
   updateEditSummary() {
     const st = this.editSaleState;
     if (!st) return;
+    if (st.hasReturns) return;
     const valid = st.items.filter(i => i && i.product_id && i.quantity > 0);
-    const total = valid.reduce((sum, i) => sum + (i.subtotal || 0), 0);
+    const type = document.getElementById("es-disc-type")?.value || "none";
+    const value = parseFloat(document.getElementById("es-disc-value")?.value) || 0;
+    let total = 0;
+    let error = "";
+    if (valid.length > 0) {
+      try {
+        total = computeSaleTotals(valid.map(i => ({ quantity: i.quantity, unit_price: i.unit_price, discount_amount: i.discount_amount || 0 })), type, value).total;
+      } catch (err) {
+        error = err.message;
+        total = valid.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
+      }
+    }
+    const errEl = document.getElementById("es-summary-error");
+    if (errEl) errEl.textContent = error;
     const el = document.getElementById("es-total-amount");
     if (el) el.textContent = Formatters.formatCurrency(total, App.currency);
   },
@@ -479,6 +521,7 @@ const SalesHistoryPage = {
       transaction_type: document.getElementById("es-type")?.value || "Sale",
       ledger_type: ledgerType,
       paid_amount: paidAmount,
+      payment_method: document.getElementById("es-pay-method")?.value || "Cash",
       notes: document.getElementById("es-notes")?.value?.trim() || ""
     };
 
@@ -486,13 +529,16 @@ const SalesHistoryPage = {
       const items = st.items.filter(i => i && i.product_id && i.quantity > 0).map(i => ({
         product_id: i.product_id,
         quantity: i.quantity,
-        unit_price: i.unit_price
+        unit_price: i.unit_price,
+        discount_amount: i.discount_amount || 0
       }));
       if (items.length === 0) {
         Toast.error("Please add at least one product.");
         return;
       }
       data.items = items;
+      data.discount_type = document.getElementById("es-disc-type")?.value || "none";
+      data.discount_value = parseFloat(document.getElementById("es-disc-value")?.value) || 0;
     }
 
     const btn = document.getElementById("modal-save-btn");
@@ -579,7 +625,11 @@ const SalesHistoryPage = {
           <table><thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
             <tbody>${(l.items || []).map(item => `<tr><td>${this.escapeHtml(item.product_name)}</td><td>${item.quantity}</td><td>${Formatters.formatCurrency(item.unit_price, currency)}</td><td>${Formatters.formatCurrency(item.subtotal, currency)}</td></tr>`).join('')}</tbody>
           </table>
-          <div class="invoice-totals"><div class="grand-total">Total: ${Formatters.formatCurrency(l.total_amount, currency)}</div></div>
+          <div class="invoice-totals">
+            ${l.discount_amount > 0 ? `<div>Subtotal: ${Formatters.formatCurrency((l.items || []).reduce((s, i) => s + i.subtotal, 0), currency)}</div>
+            <div>Discount${l.discount_type === 'percent' ? ' (' + l.discount_value + '%)' : ''}: -${Formatters.formatCurrency(l.discount_amount, currency)}</div>` : ''}
+            <div class="grand-total">Total: ${Formatters.formatCurrency(l.total_amount, currency)}</div>
+          </div>
           <div class="invoice-footer"><p>Thank you for your business!</p></div>
           <script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script>
         </body></html>

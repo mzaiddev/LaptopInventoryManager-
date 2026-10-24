@@ -427,9 +427,7 @@ const LedgersPage = {
           <label>Payment Method</label>
           <select class="form-control" id="ledger-pay-method">
             <option value="Cash">Cash</option>
-            <option value="Bank">Bank</option>
-            <option value="Online">Online</option>
-            <option value="Other">Other</option>
+            <option value="Bank Transfer">Bank Transfer</option>
           </select>
         </div>
         <div class="form-group">
