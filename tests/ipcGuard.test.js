@@ -39,3 +39,23 @@ test("other auth channels (password changes) need a session", async () => {
   guardIpc(ipc, { isLoggedIn: () => false }).handle("auth:changePassword", async () => ({ success: true }));
   assert.strictEqual((await ipc.handlers["auth:changePassword"]({})).error, "AUTH_REQUIRED");
 });
+
+test("audited channels report successful calls, with the first argument as the entity id", async () => {
+  const ipc = fakeIpc();
+  const logged = [];
+  const g = guardIpc(ipc, { isLoggedIn: () => true }, (channel, args) => logged.push([channel, args[0]]));
+  g.handle("sale:delete", async () => ({ success: true }));
+  g.handle("inventory:getAll", async () => ({ success: true }));
+  await ipc.handlers["sale:delete"]({}, 42);
+  await ipc.handlers["inventory:getAll"]({}, 1);
+  assert.deepStrictEqual(logged, [["sale:delete", 42]]);
+});
+
+test("failed calls are not audited", async () => {
+  const ipc = fakeIpc();
+  const logged = [];
+  const g = guardIpc(ipc, { isLoggedIn: () => true }, (c, a) => logged.push(c));
+  g.handle("sale:delete", async () => ({ success: false, error: "no" }));
+  await ipc.handlers["sale:delete"]({}, 1);
+  assert.deepStrictEqual(logged, []);
+});

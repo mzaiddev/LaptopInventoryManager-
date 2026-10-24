@@ -2,6 +2,22 @@ const { app, BrowserWindow, Menu } = require('electron');
 const path = require('path');
 const { initDatabase, closeDatabase } = require('../database/dbInit');
 const { registerIpcHandlers } = require('../ipc/ipcHandlers');
+const { logError } = require('../utils/logger');
+
+// One copy at a time: two windows on the same database file would corrupt data.
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+}
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
+
+process.on('uncaughtException', (err) => logError('uncaughtException', err));
+process.on('unhandledRejection', (err) => logError('unhandledRejection', err));
 
 let mainWindow = null;
 
@@ -18,8 +34,7 @@ function createMenu() {
     {
       label: 'View',
       submenu: [
-        { role: 'toggleDevTools', label: 'Developer Tools' },
-        { type: 'separator' },
+        ...(app.isPackaged ? [] : [{ role: 'toggleDevTools', label: 'Developer Tools' }, { type: 'separator' }]),
         { role: 'resetZoom', label: 'Reset Zoom' },
         { role: 'zoomIn', label: 'Zoom In' },
         { role: 'zoomOut', label: 'Zoom Out' },
@@ -92,9 +107,12 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  if (!gotLock) return;
+
   // Initialize database
   try {
     initDatabase();
+    require('../services/backupService').runAutoBackup();
     console.log('Database initialized successfully.');
   } catch (err) {
     console.error('Failed to initialize database:', err);
@@ -119,6 +137,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  require('../services/backupService').runAutoBackup();
   closeDatabase();
   if (process.platform !== 'darwin') {
     app.quit();

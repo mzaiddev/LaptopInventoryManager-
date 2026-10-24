@@ -1,14 +1,33 @@
 // Every IPC channel needs a logged-in session except these.
 const PUBLIC = new Set(["auth:login", "auth:status", "vendor:provision", "vendor:installId"]);
 
-function guardIpc(ipcMain, auth) {
+// Successful calls on these channels go to the audit log: channel -> [action, entity].
+const AUDITED = {
+  "inventory:update": ["product.edit", "product"],
+  "inventory:delete": ["product.delete", "product"],
+  "sale:delete": ["sale.delete", "sale"],
+  "sale:update": ["sale.edit", "sale"],
+  "sale:deletePayment": ["payment.delete", "payment"],
+  "sale:updatePayment": ["payment.edit", "payment"],
+  "ledger:deleteEntry": ["ledger.delete", "ledger_entry"],
+  "ledger:deleteCustomer": ["customer.delete", "customer"],
+  "oldBalance:delete": ["old_balance.delete", "old_balance"],
+  "expense:delete": ["expense.delete", "expense"],
+  "auth:changePassword": ["password.change", "user"],
+  "auth:changeSuperPassword": ["super_password.change", "user"],
+  "vendor:provision": ["owner.provision", "user"],
+};
+
+function guardIpc(ipcMain, auth, audit) {
   return {
     handle(channel, fn) {
-      ipcMain.handle(channel, (event, ...args) => {
+      ipcMain.handle(channel, async (event, ...args) => {
         if (!PUBLIC.has(channel) && !auth.isLoggedIn()) {
           return { success: false, error: "AUTH_REQUIRED" };
         }
-        return fn(event, ...args);
+        const result = await fn(event, ...args);
+        if (audit && AUDITED[channel] && !(result && result.success === false)) audit(channel, args);
+        return result;
       });
     },
   };
@@ -25,4 +44,4 @@ function requireSuper(auth, fn) {
   };
 }
 
-module.exports = { guardIpc, requireSuper };
+module.exports = { guardIpc, requireSuper, AUDITED };

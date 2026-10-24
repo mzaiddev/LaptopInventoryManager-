@@ -90,6 +90,9 @@ contextBridge.exposeInMainWorld("api", {
   updateOldBalance: (id, data) => ipcRenderer.invoke("oldBalance:update", id, data),
   deleteOldBalance: (id) => ipcRenderer.invoke("oldBalance:delete", id),
 
+  // Activity log
+  listAudit: (opts) => ipcRenderer.invoke("audit:list", opts),
+
   // Statements
   shareStatement: (payload) => ipcRenderer.invoke("statement:share", payload),
 

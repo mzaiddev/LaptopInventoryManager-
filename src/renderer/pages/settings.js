@@ -55,9 +55,28 @@ const SettingsPage = {
           <small>The super-password protects editing and deleting products and viewing purchase prices.</small>
         </div>
       </div>
+      <div class="card" style="margin-bottom:24px;">
+        <div class="card-header"><h3>Activity Log</h3></div>
+        <div class="card-body" id="audit-log"><div class="loading"><div class="spinner"></div></div></div>
+      </div>
     `;
 
     await this.loadSettings();
+    await this.loadAudit();
+  },
+
+  async loadAudit() {
+    const el = document.getElementById("audit-log");
+    if (!el) return;
+    const r = await window.api.listAudit({ page: 1, pageSize: 30 });
+    if (!r.success || r.data.length === 0) {
+      el.innerHTML = '<p style="color:var(--text-muted);">No activity recorded yet.</p>';
+      return;
+    }
+    const label = (a) => a.replace(/[._]/g, " ");
+    el.innerHTML = `<div class="table-wrapper"><table><thead><tr><th>When</th><th>What</th><th>Record</th></tr></thead><tbody>${r.data
+      .map((x) => `<tr><td>${this.escapeHtml(x.at)}</td><td>${this.escapeHtml(label(x.action))}</td><td>${x.entity_id === null ? "-" : "#" + x.entity_id}</td></tr>`)
+      .join("")}</tbody></table></div>`;
   },
 
   async _change(apiFn, currentId, newId, okMsg) {

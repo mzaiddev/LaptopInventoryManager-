@@ -1,13 +1,28 @@
 const fs = require('fs');
 const path = require('path');
-const { app } = require('electron');
-const { getDatabase } = require('../database/dbInit');
+const { getDatabase, closeDatabase, initDatabase } = require('../database/dbInit');
 const { getDbPath, getBackupDir } = require('../config/appConfig');
+const backupFiles = require('./backupFiles');
+const settingsService = require('./settingsService');
 
 class BackupService {
+  // Settings > Backup Folder wins when set and usable; otherwise the default folder.
+  resolveBackupDir() {
+    const custom = (settingsService.getSetting('backup_folder') || '').trim();
+    if (custom) {
+      try {
+        fs.mkdirSync(custom, { recursive: true });
+        return custom;
+      } catch (err) {
+        console.error('Backup folder unusable, using default:', err.message);
+      }
+    }
+    return getBackupDir();
+  }
+
   async createBackup() {
     const db = getDatabase();
-    const backupDir = getBackupDir();
+    const backupDir = this.resolveBackupDir();
 
     if (!fs.existsSync(backupDir)) {
       fs.mkdirSync(backupDir, { recursive: true });
@@ -34,27 +49,29 @@ class BackupService {
     }
   }
 
-  restoreBackup(backupPath) {
-    if (!fs.existsSync(backupPath)) {
-      throw new Error('Backup file not found.');
+  // Daily file refreshed at start-up and on exit; the shop never depends on remembering to back up.
+  runAutoBackup() {
+    try {
+      return backupFiles.autoBackup(getDatabase(), path.join(this.resolveBackupDir(), 'auto'));
+    } catch (err) {
+      console.error('Automatic backup failed:', err.message);
+      return null;
     }
+  }
 
-    const db = getDatabase();
-    db.close();
+  // Checks the file BEFORE touching the live database, keeps a safety copy, and reopens the
+  // old database if anything fails after it was closed.
+  restoreBackup(backupPath) {
+    const check = backupFiles.verify(backupPath);
+    if (!check.ok) throw new Error(check.error);
 
     const dbPath = getDbPath();
-    const tempDbPath = dbPath + '.tmp';
-
+    closeDatabase();
     try {
-      fs.copyFileSync(backupPath, tempDbPath);
-      fs.copyFileSync(tempDbPath, dbPath);
-      fs.unlinkSync(tempDbPath);
-
-      return { success: true, message: 'Database restored successfully. Restarting application...' };
+      const { safetyPath } = backupFiles.restoreFile(backupPath, dbPath, path.join(this.resolveBackupDir(), 'safety'));
+      return { success: true, safetyPath, message: 'Database restored successfully. Restarting application...' };
     } catch (err) {
-      if (fs.existsSync(tempDbPath)) {
-        fs.unlinkSync(tempDbPath);
-      }
+      initDatabase();
       throw new Error(`Restore failed: ${err.message}`);
     }
   }

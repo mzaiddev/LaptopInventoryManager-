@@ -1,6 +1,7 @@
 const { ipcMain: rawIpcMain, dialog, app } = require("electron");
 const authService = require("../services/authService");
-const { guardIpc, requireSuper } = require("./guard");
+const { guardIpc, requireSuper, AUDITED } = require("./guard");
+const auditService = require("../services/auditService");
 const { stripCost } = require("../services/costMask");
 const inventoryService = require("../services/inventoryService");
 const dashboardService = require("../services/dashboardService");
@@ -11,7 +12,18 @@ const oldBalanceService = require("../services/oldBalanceService");
 const fs = require("fs");
 
 function registerIpcHandlers() {
-  const ipcMain = guardIpc(rawIpcMain, authService);
+  const ipcMain = guardIpc(rawIpcMain, authService, (channel, args) => {
+    const [action, entity] = AUDITED[channel];
+    auditService.log(action, entity, typeof args[0] === "number" ? args[0] : null);
+  });
+
+  ipcMain.handle("audit:list", async (event, opts) => {
+    try {
+      return { success: true, data: auditService.list(opts || {}) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
 
   // Auth
   ipcMain.handle("auth:status", async () => ({
