@@ -355,13 +355,14 @@ const ReportsPage = {
         if (damages.length === 0) { Toast.warning('No damage records.'); printWindow.close(); return; }
         const totalQty = damages.reduce((sum, d) => sum + d.quantity, 0);
         const totalValue = damages.reduce((sum, d) => sum + (d.quantity * (d.purchase_price || 0)), 0);
+        const showCost = App.costVisible;
         title = 'Damage Report';
         
         content = `
-        <div style="margin-bottom:10px;font-size:13px;color:#000;">${damages.length} records | Total Qty: ${totalQty} | Value Lost: ${currencyFmt(totalValue)}</div>
+        <div style="margin-bottom:10px;font-size:13px;color:#000;">${damages.length} records | Total Qty: ${totalQty}${showCost ? ' | Value Lost: ' + currencyFmt(totalValue) : ''}</div>
         <table>
           <thead><tr>
-            <th>Ref</th><th>Product</th><th>Category</th><th>Qty</th><th>Type</th><th>Date</th><th>Reason</th><th>Value Lost</th>
+            <th>Ref</th><th>Product</th><th>Category</th><th>Qty</th><th>Type</th><th>Date</th><th>Reason</th>${showCost ? '<th>Value Lost</th>' : ''}
           </tr></thead>
           <tbody>
             ${damages.map(d => `<tr>
@@ -372,7 +373,7 @@ const ReportsPage = {
               <td>${this.escapeHtml(d.damage_type)}</td>
               <td>${Formatters.formatDate(d.recorded_date)}</td>
               <td>${this.escapeHtml(d.reason) || '-'}</td>
-              <td style="text-align:right;">${currencyFmt(d.quantity * (d.purchase_price || 0))}</td>
+              ${showCost ? `<td style="text-align:right;">${currencyFmt(d.quantity * (d.purchase_price || 0))}</td>` : ''}
             </tr>`).join('')}
           </tbody>
         </table>`;
@@ -592,7 +593,7 @@ const ReportsPage = {
             <div class="stat-label">Total Damaged Quantity</div>
           </div>
           <div class="ledger-stat-card stat-danger">
-            <div class="stat-value">${Formatters.formatCurrency(totalValue, currency)}</div>
+            <div class="stat-value">${App.costVisible ? Formatters.formatCurrency(totalValue, currency) : "••••"}</div>
             <div class="stat-label">Total Value Lost</div>
           </div>
         </div>
@@ -620,7 +621,7 @@ const ReportsPage = {
                   <td><span class="badge badge-damaged">${this.escapeHtml(d.damage_type)}</span></td>
                   <td>${Formatters.formatDate(d.recorded_date)}</td>
                   <td style="max-width:150px;">${this.escapeHtml(d.reason) || '-'}</td>
-                  <td style="font-weight:600;color:var(--danger);">${Formatters.formatCurrency(d.quantity * (d.purchase_price || 0), currency)}</td>
+                  <td style="font-weight:600;color:var(--danger);">${App.costVisible ? Formatters.formatCurrency(d.quantity * (d.purchase_price || 0), currency) : "••••"}</td>
                 </tr>
               `).join('')}
             </tbody>

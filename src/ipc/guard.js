@@ -14,4 +14,15 @@ function guardIpc(ipcMain, auth) {
   };
 }
 
-module.exports = { guardIpc };
+// Edit/delete handlers run only right after the owner entered the super-password (one use per grant).
+function requireSuper(auth, fn) {
+  return async (event, ...args) => {
+    if (!auth.consumeSuper()) return { success: false, error: "SUPER_REQUIRED" };
+    const result = await fn(event, ...args);
+    // A rejected save (validation) keeps the grant so the form can be fixed and saved again.
+    if (result && result.success === false) auth.restoreSuper();
+    return result;
+  };
+}
+
+module.exports = { guardIpc, requireSuper };

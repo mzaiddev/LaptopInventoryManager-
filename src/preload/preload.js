@@ -107,6 +107,7 @@ contextBridge.exposeInMainWorld("api", {
   grantSuper: (password) => ipcRenderer.invoke("auth:grantSuper", password),
   revealCost: (password) => ipcRenderer.invoke("auth:revealCost", password),
   hideCost: () => ipcRenderer.invoke("auth:hideCost"),
+  revokeSuper: () => ipcRenderer.invoke("auth:revokeSuper"),
 
   // ============ NEW LEDGER SYSTEM ============
   getCustomerLedger: (customerId, filters) => ipcRenderer.invoke("ledger:getCustomerLedger", customerId, filters),

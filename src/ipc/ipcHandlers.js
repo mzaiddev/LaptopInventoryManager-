@@ -1,6 +1,7 @@
 const { ipcMain: rawIpcMain, dialog, app } = require("electron");
 const authService = require("../services/authService");
-const { guardIpc } = require("./guard");
+const { guardIpc, requireSuper } = require("./guard");
+const { stripCost } = require("../services/costMask");
 const inventoryService = require("../services/inventoryService");
 const dashboardService = require("../services/dashboardService");
 const backupService = require("../services/backupService");
@@ -78,6 +79,10 @@ function registerIpcHandlers() {
       ? { success: true }
       : { success: false, error: "Wrong super-password" },
   );
+  ipcMain.handle("auth:revokeSuper", async () => {
+    authService.revokeSuper();
+    return { success: true };
+  });
   ipcMain.handle("auth:hideCost", async () => {
     authService.hideCost();
     return { success: true };
@@ -96,7 +101,7 @@ function registerIpcHandlers() {
   ipcMain.handle("inventory:getAll", async (event, filters) => {
     try {
       const result = inventoryService.getAllProducts(filters);
-      return { success: true, data: result };
+      return { success: true, data: stripCost(result, authService.isCostVisible()) };
     } catch (err) {
       return { success: false, error: err.message };
     }
@@ -106,7 +111,9 @@ function registerIpcHandlers() {
   ipcMain.handle("inventory:getById", async (event, id) => {
     try {
       const product = inventoryService.getProductById(id);
-      return { success: true, data: product };
+      // Editing needs the cost, and the owner just gave the super-password for it.
+      const visible = authService.isCostVisible() || authService.isSuperPending();
+      return { success: true, data: stripCost(product, visible) };
     } catch (err) {
       return { success: false, error: err.message };
     }
@@ -127,7 +134,7 @@ function registerIpcHandlers() {
   });
 
   // Inventory - Update Product
-  ipcMain.handle("inventory:update", async (event, id, productData) => {
+  ipcMain.handle("inventory:update", requireSuper(authService, async (event, id, productData) => {
     try {
       const errors = validateProduct(productData);
       if (errors.length > 0) {
@@ -138,17 +145,17 @@ function registerIpcHandlers() {
     } catch (err) {
       return { success: false, error: err.message };
     }
-  });
+  }));
 
   // Inventory - Delete Product
-  ipcMain.handle("inventory:delete", async (event, id) => {
+  ipcMain.handle("inventory:delete", requireSuper(authService, async (event, id) => {
     try {
       inventoryService.deleteProduct(id);
       return { success: true };
     } catch (err) {
       return { success: false, error: err.message };
     }
-  });
+  }));
 
   // Inventory - Change Status
   ipcMain.handle("inventory:changeStatus", async (event, id, status) => {
@@ -478,7 +485,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle("damage:getAll", async (event, filters) => {
     try {
-      return { success: true, data: ledgerService.getAllDamages(filters) };
+      return { success: true, data: stripCost(ledgerService.getAllDamages(filters), authService.isCostVisible()) };
     } catch (err) {
       return { success: false, error: err.message };
     }

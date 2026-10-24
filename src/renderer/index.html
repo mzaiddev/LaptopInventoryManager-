@@ -104,6 +104,7 @@
           <div id="shop-name">Laptop Inventory Manager</div>
         </div>
         <div class="topbar-right">
+          <button id="cost-toggle" class="btn btn-secondary btn-sm" style="margin-right:12px;" onclick="App.toggleCost()">Show Purchase Prices</button>
           <div class="theme-toggle">
             <button onclick="App.toggleTheme()" title="Toggle Theme">
               <svg class="theme-icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -145,6 +146,7 @@
   <!-- 2. Components (depend on utilities) -->
   <script src="components/Toast.js"></script>
   <script src="components/Modal.js"></script>
+  <script src="components/SuperPrompt.js"></script>
   <script src="components/Pagination.js"></script>
   <script src="components/Table.js"></script>
   

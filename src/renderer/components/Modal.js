@@ -56,13 +56,13 @@ class ModalComponent {
     }
   }
 
-  showForm(title, formHtml, onSave, size = "") {
+  showForm(title, formHtml, onSave, size = "", onClose = null) {
     const footer = `
       <button class="btn btn-secondary" onclick="window.Modal.close()">Cancel</button>
       <button class="btn btn-primary" id="modal-save-btn">Save</button>
     `;
 
-    this.show({ title, body: formHtml, footer, size });
+    this.show({ title, body: formHtml, footer, size, onClose });
 
     const saveBtn = document.getElementById("modal-save-btn");
     if (saveBtn) {
@@ -268,10 +268,13 @@ class ModalComponent {
             return;
           }
         }
+        this.currentCallback = null; // saving is not cancelling
         this.close();
         if (onSave) onSave(data);
       },
       "lg",
+      // Cancelling an edit gives the super-password grant back.
+      isEdit ? () => window.api.revokeSuper() : null,
     );
   }
 

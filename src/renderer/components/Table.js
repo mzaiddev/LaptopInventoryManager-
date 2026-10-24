@@ -75,6 +75,7 @@ class TableComponent {
     }
 
     if (col.type === 'currency') {
+      if (col.secret && (value === null || value === undefined)) return '••••';
       return Formatters.formatCurrency(value, App.currency || 'USD');
     }
 

@@ -106,6 +106,19 @@ class AuthService {
     return ok;
   }
 
+  restoreSuper() {
+    this.superGranted = true;
+  }
+
+  revokeSuper() {
+    this.superGranted = false;
+  }
+
+  // Product details for editing need the cost once the super-password was given.
+  isSuperPending() {
+    return this.superGranted;
+  }
+
   revealCost(pw) {
     this.costVisible = this._verifySuper(pw);
     return this.costVisible;

@@ -14,6 +14,26 @@ const App = {
     await this.start();
   },
 
+  // Purchase prices are hidden until the owner reveals them with the super-password.
+  costVisible: false,
+
+  async syncCostVisibility() {
+    const s = await window.api.authStatus();
+    this.costVisible = !!(s.success && s.data.costVisible);
+    const btn = document.getElementById("cost-toggle");
+    if (btn) btn.textContent = this.costVisible ? "Hide Purchase Prices" : "Show Purchase Prices";
+  },
+
+  async toggleCost() {
+    if (this.costVisible) {
+      await window.api.hideCost();
+    } else if (!(await SuperPrompt.ask("Show purchase prices", (pw) => window.api.revealCost(pw)))) {
+      return;
+    }
+    await this.syncCostVisibility();
+    await this.refreshCurrentPage();
+  },
+
   async start() {
     // Load settings first
     try {
@@ -42,6 +62,8 @@ const App = {
         this.categories = catsRes.data;
       }
     } catch (e) {}
+
+    await this.syncCostVisibility();
 
     // Navigate to dashboard
     this.navigate("dashboard");
@@ -153,6 +175,7 @@ const App = {
         label: "Purchase",
         sortable: true,
         type: "currency",
+        secret: true,
       },
       // Selling Price column removed - managed from Sales module
       {

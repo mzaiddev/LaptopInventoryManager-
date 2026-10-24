@@ -396,11 +396,13 @@ const InventoryPage = {
     })();
   },
 
-  editProduct(id) {
+  async editProduct(id) {
+    if (!(await SuperPrompt.requireForAction("Super-password to edit product"))) return;
     window.api
       .getProduct(id)
       .then((result) => {
         if (!result.success || !result.data) {
+          window.api.revokeSuper();
           Toast.error("Failed to load product.");
           return;
         }
@@ -421,6 +423,7 @@ const InventoryPage = {
           Modal.showProductForm(product, async (data) => {
             try {
               const updateResult = await window.api.updateProduct(id, data);
+              window.api.revokeSuper();
               if (updateResult.success) {
                 Toast.success("Product updated successfully.");
                 await this.refresh();
@@ -447,6 +450,7 @@ const InventoryPage = {
       "Delete Product",
       `Are you sure you want to delete "${name}"? This action cannot be undone.`,
       async () => {
+        if (!(await SuperPrompt.requireForAction("Super-password to delete product"))) return;
         try {
           const result = await window.api.deleteProduct(id);
           if (result.success) {
@@ -499,7 +503,7 @@ const InventoryPage = {
           </div>
           <div class="detail-field">
             <div class="detail-label">Purchase Price</div>
-            <div class="detail-value">${Formatters.formatCurrency(p.purchase_price, currency)}</div>
+            <div class="detail-value">${p.purchase_price === null ? "••••" : Formatters.formatCurrency(p.purchase_price, currency)}</div>
           </div>
           <!-- Selling Price removed - managed from Sales module -->
           <div class="detail-field">
@@ -899,7 +903,7 @@ const InventoryPage = {
           <td><span class="badge ${typeClass}">${this.escapeHtml(d.display_type || d.damage_type)}</span></td>
           <td>${this.escapeHtml(d.reason) || '-'}</td>
           <td>${Formatters.formatDate(d.recorded_date)}</td>
-          <td style="text-align:right;">${Formatters.formatCurrency(valueLost, currency)}</td>
+          <td style="text-align:right;">${d.purchase_price === null ? "••••" : Formatters.formatCurrency(valueLost, currency)}</td>
           <td style="text-align:center;"><span style="font-weight:600;color:${(d.current_qty || 0) > 0 ? 'var(--success)' : 'var(--danger)'};">${d.current_qty || 0}</span></td>
           <td>
             <div class="action-buttons">
@@ -975,6 +979,7 @@ const InventoryPage = {
 
       const currency = App.currency || 'PKR';
       const totalValue = products.reduce((s, p) => s + ((p.purchase_price || 0) * p.quantity), 0);
+      const showCost = App.costVisible;
       const totalQty = products.reduce((s, p) => s + p.quantity, 0);
 
       // Get ALL categories - merge default options with actual data categories
@@ -989,7 +994,7 @@ const InventoryPage = {
           { field: 'model', label: 'Model', width: '100px' },
           { field: 'serial_number', label: 'Serial No.', width: '110px' },
           { field: 'quantity', label: 'Qty', width: '50px', align: 'center' },
-          { field: 'purchase_price', label: 'Purchase Price', width: '90px', align: 'right', format: 'currency' },
+          ...(showCost ? [{ field: 'purchase_price', label: 'Purchase Price', width: '90px', align: 'right', format: 'currency' }] : []),
           { field: 'status', label: 'Status', width: '70px', format: 'status' },
           { field: 'condition', label: 'Condition', width: '70px', format: 'condition' },
           { field: 'storage_location', label: 'Location', width: '80px' },
@@ -1003,7 +1008,7 @@ const InventoryPage = {
         summaryItems: [
           { label: 'Total Products', value: products.length },
           { label: 'Total Quantity', value: totalQty },
-          { label: 'Total Value', value: Formatters.formatCurrency(totalValue, currency) },
+          ...(showCost ? [{ label: 'Total Value', value: Formatters.formatCurrency(totalValue, currency) }] : []),
         ],
         getCompanyHeader: () => this.getCompanyHeader()
       });
@@ -1048,7 +1053,7 @@ const InventoryPage = {
             { field: 'model', label: 'Model' },
             { field: 'serial_number', label: 'Serial No.' },
             { field: 'quantity', label: 'Qty', align: 'center' },
-            { field: 'purchase_price', label: 'Purchase Price', align: 'right', format: 'currency' },
+            ...(App.costVisible ? [{ field: 'purchase_price', label: 'Purchase Price', align: 'right', format: 'currency' }] : []),
             { field: 'status', label: 'Status', format: 'status' },
             { field: 'condition', label: 'Condition', format: 'condition' },
             { field: 'storage_location', label: 'Location' },
