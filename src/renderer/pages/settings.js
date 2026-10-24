@@ -145,6 +145,15 @@ const SettingsPage = {
               </select>
             </div>
           </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Short Numbers (12.5K, 3.2M)</label>
+              <select class="form-control" id="set-compact">
+                <option value="1" ${settings.compact_numbers !== "0" ? "selected" : ""}>On</option>
+                <option value="0" ${settings.compact_numbers === "0" ? "selected" : ""}>Off</option>
+              </select>
+            </div>
+          </div>
           <div class="form-group">
             <label>Backup Folder</label>
             <div style="display:flex;gap:8px;">
@@ -168,6 +177,7 @@ const SettingsPage = {
       email: document.getElementById("set-email")?.value?.trim() || "",
       currency: document.getElementById("set-currency")?.value || "USD",
       theme: document.getElementById("set-theme")?.value || "light",
+      compact_numbers: document.getElementById("set-compact")?.value || "1",
       backup_folder:
         document.getElementById("set-backup-folder")?.value?.trim() || "",
     };
@@ -205,6 +215,7 @@ const SettingsPage = {
 
         // Update currency
         App.currency = settings.currency;
+        Formatters.compact = settings.compact_numbers !== "0";
       } else {
         Toast.error(result.error || "Failed to save settings.");
       }

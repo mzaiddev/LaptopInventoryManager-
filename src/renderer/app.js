@@ -20,6 +20,7 @@ const App = {
       const result = await window.api.getSettings();
       if (result.success) {
         this.currency = result.data.currency || "USD";
+        Formatters.compact = result.data.compact_numbers !== "0";
         const theme = result.data.theme || "light";
         if (theme === "dark") {
           document.body.classList.add("dark-mode");

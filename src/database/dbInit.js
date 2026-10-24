@@ -1007,6 +1007,7 @@ function seedDefaults() {
     currency: "USD",
     backup_folder: "",
     theme: "light",
+    compact_numbers: "1",
   };
 
   const insertSetting = db.prepare(

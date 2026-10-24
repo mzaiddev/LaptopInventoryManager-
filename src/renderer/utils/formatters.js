@@ -1,14 +1,22 @@
 // Formatting Utilities
 const Formatters = {
-  formatCurrency(amount, currency = 'USD') {
+  // Settings > "Short numbers" (12.5K, 3.2M). Set from App.start().
+  compact: true,
+
+  formatCurrency(amount, currency = 'USD', exact = false) {
     if (amount === undefined || amount === null) return '-';
     try {
-      return new Intl.NumberFormat('en-US', {
+      const fmt = new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: currency,
         minimumFractionDigits: 0,
         maximumFractionDigits: 2
-      }).format(amount);
+      });
+      if (!this.compact || exact) return fmt.format(amount);
+      const short = window.formatCompact(amount);
+      if (short === '-') return '-';
+      const symbol = fmt.formatToParts(1).find((p) => p.type === 'currency').value;
+      return short.startsWith('-') ? `-${symbol} ${short.slice(1)}` : `${symbol} ${short}`;
     } catch {
       return `${amount} ${currency}`;
     }
