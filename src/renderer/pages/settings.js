@@ -56,6 +56,13 @@ const SettingsPage = {
         </div>
       </div>
       <div class="card" style="margin-bottom:24px;">
+        <div class="card-header"><h3>Data Check</h3></div>
+        <div class="card-body">
+          <button class="btn btn-secondary" onclick="SettingsPage.runIntegrityCheck()">Check my data</button>
+          <div id="integrity-result" style="margin-top:12px;"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:24px;">
         <div class="card-header"><h3>Activity Log</h3></div>
         <div class="card-body" id="audit-log"><div class="loading"><div class="spinner"></div></div></div>
       </div>
@@ -63,6 +70,19 @@ const SettingsPage = {
 
     await this.loadSettings();
     await this.loadAudit();
+  },
+
+  async runIntegrityCheck() {
+    const el = document.getElementById("integrity-result");
+    const r = await window.api.checkIntegrity();
+    if (!r.success) {
+      el.textContent = r.error;
+    } else if (r.data.ok) {
+      el.innerHTML = '<span style="color:var(--success);">All sales, payments, ledgers and stock add up.</span>';
+    } else {
+      el.innerHTML = '<span style="color:var(--danger);">Found ' + r.data.problems.length + ' problem(s):</span><ul>' +
+        r.data.problems.map((p) => "<li>" + this.escapeHtml(p.detail) + "</li>").join("") + "</ul>";
+    }
   },
 
   async loadAudit() {
@@ -175,6 +195,16 @@ const SettingsPage = {
           </div>
           <div class="form-row">
             <div class="form-group">
+              <label>Opening Cash in Hand</label>
+              <input type="number" step="0.01" class="form-control" id="set-opening-cash" value="${this.escapeHtml(settings.opening_cash || "0")}">
+            </div>
+            <div class="form-group">
+              <label>Opening Bank Balance</label>
+              <input type="number" step="0.01" class="form-control" id="set-opening-bank" value="${this.escapeHtml(settings.opening_bank || "0")}">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
               <label>Phone Country Code (for WhatsApp)</label>
               <input type="text" class="form-control" id="set-country-code" value="${this.escapeHtml(settings.default_country_code || "92")}" placeholder="92">
             </div>
@@ -203,6 +233,8 @@ const SettingsPage = {
       currency: document.getElementById("set-currency")?.value || "USD",
       theme: document.getElementById("set-theme")?.value || "light",
       compact_numbers: document.getElementById("set-compact")?.value || "1",
+      opening_cash: String(parseFloat(document.getElementById("set-opening-cash")?.value) || 0),
+      opening_bank: String(parseFloat(document.getElementById("set-opening-bank")?.value) || 0),
       default_country_code: (document.getElementById("set-country-code")?.value || "").replace(/\D/g, "") || "92",
       backup_folder:
         document.getElementById("set-backup-folder")?.value?.trim() || "",
