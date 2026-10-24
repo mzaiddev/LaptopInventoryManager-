@@ -1,11 +1,15 @@
 const { getDatabase } = require("../database/dbInit");
 
+// Never exposed to or writable from the renderer.
+const PROTECTED = new Set(["super_password_hash"]);
+
 class SettingsService {
   getAllSettings() {
     const db = getDatabase();
     const rows = db.prepare("SELECT * FROM settings").all();
     const settings = {};
     for (const row of rows) {
+      if (PROTECTED.has(row.key)) continue;
       settings[row.key] = row.value;
     }
     return settings;
@@ -33,6 +37,7 @@ class SettingsService {
 
     const updateAll = db.transaction(() => {
       for (const [key, value] of Object.entries(settings)) {
+        if (PROTECTED.has(key)) continue;
         stmt.run(String(value), key);
       }
     });
