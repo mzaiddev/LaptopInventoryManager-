@@ -98,8 +98,10 @@ const DashboardPage = {
     }
   },
 
+  reveal: '<a href="#" class="reveal-link" onclick="App.toggleCost(); return false;" title="Click and enter the super-password to show">••••</a>',
+
   money(v) {
-    return v === null || v === undefined ? "••••" : Formatters.formatCurrency(v, App.currency);
+    return v === null || v === undefined ? this.reveal : Formatters.formatCurrency(v, App.currency);
   },
 
   card(color, icon, value, label, sub = "", page = "", valueColor = "") {
@@ -134,7 +136,7 @@ const DashboardPage = {
           ${this.card("green", I.cash, this.money(d.received.total), "Received", `Cash ${this.money(d.received.cash)} · Bank ${this.money(d.received.bank)}`, "ledgers")}
           ${this.card("red", I.exp, this.money(d.expenses.total), "Expenses", `Cash ${this.money(d.expenses.cash)} · Bank ${this.money(d.expenses.bank)}`, "expenses")}
           ${this.card("yellow", I.ret, this.money(d.returns.total), "Returns", `${d.returns.count} returns`, "returns")}
-          ${this.card("green", I.profit, this.money(d.netProfit), "Net Profit", d.netProfit === null ? "Show purchase prices to see" : "Sales − cost − expenses", "", profitColor)}
+          ${this.card("green", I.profit, this.money(d.netProfit), "Net Profit", d.netProfit === null ? "Click •••• and enter super-password" : "Sales − cost − expenses", "", profitColor)}
         </div>
       </div>
       <div class="dashboard-section">
@@ -149,7 +151,7 @@ const DashboardPage = {
         <h2>Stock</h2>
         <div class="stats-grid">
           ${this.card("blue", I.box, d.stock.itemsInStock, "Items in Stock", "", "inventory")}
-          ${this.card("yellow", I.box, this.money(d.stock.stockValue), "Stock Value (cost)", d.stock.stockValue === null ? "Show purchase prices to see" : "")}
+          ${this.card("yellow", I.box, this.money(d.stock.stockValue), "Stock Value (cost)", d.stock.stockValue === null ? "Click •••• and enter super-password" : "")}
         </div>
       </div>
       <div class="dashboard-section">

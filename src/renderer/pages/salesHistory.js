@@ -147,6 +147,9 @@ const SalesHistoryPage = {
                       <button class="btn btn-sm btn-secondary" onclick="SalesHistoryPage.printInvoice(${l.sale_id})" title="Print Invoice">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                       </button>
+                      <button class="btn btn-sm btn-success" onclick="SalesHistoryPage.printInvoice(${l.sale_id}, true)" title="Send invoice on WhatsApp">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 11.5a8.5 8.5 0 0 1-12.6 7.4L3 21l2.1-5.2A8.5 8.5 0 1 1 21 11.5z"/></svg>
+                      </button>
                       <button class="btn btn-sm btn-success" onclick="SalesHistoryPage.editSale(${l.sale_id})" title="Edit Sale">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                       </button>
@@ -575,7 +578,8 @@ const SalesHistoryPage = {
     }
   },
 
-  async printInvoice(saleId) {
+  // share=true: save the invoice as PDF and open WhatsApp instead of printing.
+  async printInvoice(saleId, share = false) {
     try {
       const settingsResult = await window.api.getSettings();
       const company = settingsResult.success ? settingsResult.data : {};
@@ -589,9 +593,8 @@ const SalesHistoryPage = {
       }
       const l = result.data;
       const currency = App.currency || "USD";
-      const printWindow = window.open('', '_blank', 'width=800,height=600');
-      printWindow.document.write(`
-        <html><head><title>Invoice - ${l.reference_no}</title>
+      const html = `
+        <html><head><meta charset="utf-8"><title>Invoice - ${this.escapeHtml(l.reference_no)}</title>
         <style>
           @page { margin: 10mm; }
           body { font-family: Arial, Helvetica, sans-serif; padding: 20px; color: #000; font-size: 15px; }
@@ -623,7 +626,7 @@ const SalesHistoryPage = {
             <div style="text-align:right;"><strong>Date:</strong> ${Formatters.formatDate(l.issue_date || l.transaction_date)}<br><strong>Type:</strong> ${l.ledger_type}</div>
           </div>
           <table><thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
-            <tbody>${(l.items || []).map(item => `<tr><td>${this.escapeHtml(item.product_name)}</td><td>${item.quantity}</td><td>${Formatters.formatCurrency(item.unit_price, currency)}</td><td>${Formatters.formatCurrency(item.subtotal, currency)}</td></tr>`).join('')}</tbody>
+            <tbody>${(l.items || []).map(item => `<tr><td>${this.escapeHtml(item.product_name)}</td><td>${item.quantity}</td><td>${Formatters.formatCurrency(item.unit_price, currency)}</td><td>${Formatters.formatCurrency(item.subtotal, currency)}${item.discount_amount > 0 ? '<br><small>after discount -' + Formatters.formatCurrency(item.discount_amount, currency) + '</small>' : ''}</td></tr>`).join('')}</tbody>
           </table>
           <div class="invoice-totals">
             ${l.discount_amount > 0 ? `<div>Subtotal: ${Formatters.formatCurrency((l.items || []).reduce((s, i) => s + i.subtotal, 0), currency)}</div>
@@ -631,10 +634,25 @@ const SalesHistoryPage = {
             <div class="grand-total">Total: ${Formatters.formatCurrency(l.total_amount, currency)}</div>
           </div>
           <div class="invoice-footer"><p>Thank you for your business!</p></div>
-          <script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script>
+          ${share ? '' : '<script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script>'}
         </body></html>
-      `);
-      printWindow.document.close();
+      `;
+      if (!share) {
+        const printWindow = window.open('', '_blank', 'width=800,height=600');
+        printWindow.document.write(html);
+        printWindow.document.close();
+        return;
+      }
+      const message =
+        'Dear ' + l.customer_name + ',\n\nInvoice ' + l.reference_no + ' (' + Formatters.formatDate(l.issue_date) + ')\n' +
+        'Total: ' + Formatters.formatCurrency(l.total_amount, currency) + '\n' +
+        'Paid: ' + Formatters.formatCurrency(l.paid_amount, currency) + '\n' +
+        'Balance: ' + Formatters.formatCurrency(l.remaining_amount, currency) + '\n\nThank you!\n- ' + shopName;
+      const r = await window.api.shareStatement({ html, customerName: 'Invoice-' + l.reference_no, phone: l.phone || '', message });
+      if (!r.success) Toast.error(r.error || 'Could not create the PDF.');
+      else if (r.data.chat === 'none') Toast.warning('PDF saved. This customer has no valid phone number, so WhatsApp was not opened.');
+      else if (r.data.clipboardOk) Toast.success('PDF copied. In the WhatsApp chat press Ctrl+V, then Send.');
+      else Toast.warning('WhatsApp opened. The PDF is in the folder that just opened: drag it into the chat.');
     } catch (err) {
       Toast.error(err.message);
     }

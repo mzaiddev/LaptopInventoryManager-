@@ -330,8 +330,12 @@ const SalesPage = {
         <div class="price-col">
           <input type="number" step="0.01" min="0" value="${product ? product.price : 0}" class="form-control" onchange="SalesPage.updateRow(${index})" style="font-size:13px;text-align:right;width:100%;">
         </div>
-        <div class="disc-col">
-          <input type="number" step="0.01" min="0" value="${product && product.discount ? product.discount : 0}" class="form-control" onchange="SalesPage.updateRow(${index})" style="font-size:13px;text-align:right;width:100%;">
+        <div class="disc-col" style="display:flex;gap:2px;">
+          <input type="number" step="0.01" min="0" value="0" class="form-control" onchange="SalesPage.updateRow(${index})" style="font-size:13px;text-align:right;min-width:0;flex:1;">
+          <select class="form-control" onchange="SalesPage.updateRow(${index})" style="font-size:12px;width:52px;padding:2px;" title="Discount as an amount or a percent">
+            <option value="amount">Amt</option>
+            <option value="percent">%</option>
+          </select>
         </div>
         <div class="sub-col" style="font-size:14px;font-weight:600;text-align:right;padding:8px 4px;">0</div>
         <div class="act-col">
@@ -403,7 +407,10 @@ const SalesPage = {
     const inputs = row.querySelectorAll("input");
     const qty = parseInt(inputs[0].value) || 0;
     const price = parseFloat(inputs[1].value) || 0;
-    const discount = parseFloat(inputs[2].value) || 0;
+    const discValue = parseFloat(inputs[2].value) || 0;
+    const percent = row.querySelector(".disc-col select").value === "percent";
+    // The server only sees the amount; percent is converted here.
+    const discount = percent ? Math.round(qty * price * discValue) / 100 : discValue;
     const subtotal = qty * price - discount;
     const subEl = row.querySelector(".sub-col");
     if (subEl) {

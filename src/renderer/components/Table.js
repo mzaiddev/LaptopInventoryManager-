@@ -75,7 +75,9 @@ class TableComponent {
     }
 
     if (col.type === 'currency') {
-      if (col.secret && (value === null || value === undefined)) return '••••';
+      if (col.secret && (value === null || value === undefined)) {
+        return '<a href="#" class="reveal-link" onclick="App.toggleCost(); return false;" title="Click and enter the super-password to show">••••</a>';
+      }
       return Formatters.formatCurrency(value, App.currency || 'USD');
     }
 

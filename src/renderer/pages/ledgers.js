@@ -13,6 +13,10 @@ const LedgersPage = {
           <p>Track customer payments, sales, and running balances</p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-success" onclick="LedgersPage.shareWhatsApp()" title="Send this customer's statement on WhatsApp">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M21 11.5a8.5 8.5 0 0 1-12.6 7.4L3 21l2.1-5.2A8.5 8.5 0 1 1 21 11.5z"/></svg>
+            WhatsApp Statement
+          </button>
           <button class="btn btn-secondary" onclick="LedgersPage.printCustomerLedgerReport()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
               <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
@@ -170,6 +174,14 @@ const LedgersPage = {
     } catch (err) {
       container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${err.message}</p></div>`;
     }
+  },
+
+  shareWhatsApp() {
+    if (!this.currentCustomerId) {
+      Toast.error("Select a customer first.");
+      return;
+    }
+    CustomersPage.shareStatementWhatsApp(this.currentCustomerId);
   },
 
   onCustomerSearch() {
