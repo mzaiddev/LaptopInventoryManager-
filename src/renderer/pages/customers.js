@@ -675,9 +675,8 @@ const CustomersPage = {
           'Summary:\n' +
           'Total Sales: ' + Formatters.formatCurrency(stmt.balance.total_sales, currency) + '\n' +
           'Total Paid: ' + Formatters.formatCurrency(stmt.balance.total_paid, currency) + '\n' +
-          'Remaining Balance: ' + Formatters.formatCurrency(stmt.balance.total_outstanding, currency) + '\n' +
           'Old Balance: ' + Formatters.formatCurrency(stmt.balance.old_balance_net || 0, currency) + '\n' +
-          'Total Due: ' + Formatters.formatCurrency((stmt.balance.total_outstanding || 0) + (stmt.balance.old_balance_net || 0), currency) + '\n\n' +
+          'Total Due (what you owe us now): ' + Formatters.formatCurrency(stmt.balance.total_due || 0, currency) + '\n\n' +
           'For any queries, please contact us. Thank you for your business!\n\n' +
           '- ' + shopName + ' | ' + dateStr
         );
@@ -803,7 +802,7 @@ const CustomersPage = {
           total_paid: balance.total_paid || 0,
           outstanding: balance.total_outstanding || 0,
           old_balance: balance.old_balance_net || 0,
-          total_due: (balance.total_outstanding || 0) + (balance.old_balance_net || 0),
+          total_due: balance.total_due || 0,
           sales_count: sales.length,
         };
       });
