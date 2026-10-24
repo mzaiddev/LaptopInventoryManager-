@@ -84,6 +84,9 @@ const App = {
         case "returns":
           await ReturnsPage.load();
           break;
+        case "expenses":
+          await ExpensesPage.load();
+          break;
         case "backup":
           await BackupPage.load();
           break;

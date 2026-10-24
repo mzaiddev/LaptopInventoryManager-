@@ -34,6 +34,20 @@ function registerIpcHandlers() {
       return { success: false, error: err.message };
     }
   });
+  const expenseService = require("../services/expenseService");
+  const wrap = (fn) => async (event, ...args) => {
+    try {
+      return { success: true, data: fn(...args) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  };
+  ipcMain.handle("expense:add", wrap((d) => expenseService.add(d)));
+  ipcMain.handle("expense:update", wrap((id, d) => expenseService.update(id, d)));
+  ipcMain.handle("expense:delete", wrap((id) => expenseService.remove(id)));
+  ipcMain.handle("expense:list", wrap((f) => expenseService.list(f)));
+  ipcMain.handle("expense:totals", wrap((f) => expenseService.totals(f)));
+
   ipcMain.handle("auth:logout", async () => {
     authService.logout();
     return { success: true };

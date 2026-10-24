@@ -90,6 +90,13 @@ contextBridge.exposeInMainWorld("api", {
   updateOldBalance: (id, data) => ipcRenderer.invoke("oldBalance:update", id, data),
   deleteOldBalance: (id) => ipcRenderer.invoke("oldBalance:delete", id),
 
+  // Expenses
+  addExpense: (d) => ipcRenderer.invoke("expense:add", d),
+  updateExpense: (id, d) => ipcRenderer.invoke("expense:update", id, d),
+  deleteExpense: (id) => ipcRenderer.invoke("expense:delete", id),
+  listExpenses: (f) => ipcRenderer.invoke("expense:list", f),
+  expenseTotals: (f) => ipcRenderer.invoke("expense:totals", f),
+
   // Auth
   authStatus: () => ipcRenderer.invoke("auth:status"),
   login: (username, password) => ipcRenderer.invoke("auth:login", username, password),
