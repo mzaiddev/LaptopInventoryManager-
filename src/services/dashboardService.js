@@ -32,6 +32,7 @@ class DashboardService {
       netProfit: costVisible ? roundMoney(sales.total - cogs - expenses.total) : null,
       ...this.getBalances(db),
       outstanding: this.getOutstanding(db),
+      oldBalance: this.getOldBalance(db),
       stock: this.getStock(db, costVisible),
       recentSales: this.getRecentSales(db),
       recentPayments: this.getRecentPayments(db),
@@ -148,6 +149,16 @@ class DashboardService {
         SELECT customer_id FROM customer_ledger GROUP BY customer_id HAVING SUM(debit) - SUM(credit) > 0.005
       )`).get().c;
     return { amount: roundMoney(amount), customersOwing: owing };
+  }
+
+  // Debts from before the shop used the app (not sales, so never part of profit).
+  getOldBalance(db) {
+    const r = db.prepare(`
+      SELECT COALESCE(SUM(CASE WHEN reference_type='OldBalanceDebit' THEN debit ELSE 0 END),0)
+           - COALESCE(SUM(CASE WHEN reference_type='OldBalanceCredit' THEN credit ELSE 0 END),0) amount,
+             COUNT(DISTINCT customer_id) customers
+      FROM customer_ledger WHERE reference_type IN ('OldBalanceDebit','OldBalanceCredit')`).get();
+    return { amount: roundMoney(r.amount), customers: r.customers };
   }
 
   getStock(db, costVisible) {

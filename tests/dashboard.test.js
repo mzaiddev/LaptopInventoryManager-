@@ -121,3 +121,20 @@ test("details on an empty database are all zero", () => {
   assert.deepStrictEqual(d.owe, { old_balance: 0, sales: 0, returns: 0, payments: 0, other: 0, balance: 0 });
   assert.deepStrictEqual(d.received, { onSales: 0, onLedger: 0 });
 });
+
+test("old balances are shown on their own, with how many customers have one", () => {
+  freshDb();
+  const a = addCustomer("A");
+  const b = addCustomer("B");
+  ledger.addLedgerOldBalance({ customer_id: a, amount: 100000, balance_type: "Debit", entry_date: "2026-08-01" });
+  ledger.addLedgerOldBalance({ customer_id: b, amount: 30000, balance_type: "Debit", entry_date: "2026-08-01" });
+  ledger.addLedgerOldBalance({ customer_id: b, amount: 5000, balance_type: "Credit", entry_date: "2026-08-02" });
+  const d = dashboard.getDashboardData({}, { costVisible: true });
+  assert.deepStrictEqual(d.oldBalance, { amount: 125000, customers: 2 });
+  assert.strictEqual(d.netProfit, 0); // an old balance is not profit
+});
+
+test("no old balances gives zero", () => {
+  freshDb();
+  assert.deepStrictEqual(dashboard.getDashboardData({}, {}).oldBalance, { amount: 0, customers: 0 });
+});

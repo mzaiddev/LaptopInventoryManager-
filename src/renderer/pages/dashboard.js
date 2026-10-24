@@ -148,6 +148,7 @@ const DashboardPage = {
         <div class="stats-grid">
           ${this.card("green", I.cash, this.money(d.cashInHand), "Cash in Hand", "All time", "", "", "Cash that should be in your drawer now.", "cash")}
           ${this.card("blue", I.bank, this.money(d.bankBalance), "Bank Balance", "All time", "", "", "Money that should be in your bank now.", "bank")}
+          ${this.card("yellow", I.due, this.money(d.oldBalance.amount), "Old Balances", `${d.oldBalance.customers} customers`, "ledgers", "", "Money customers owed you before you started using this system. It is not part of Net Profit.", "old")}
           ${this.card("red", I.due, this.money(d.outstanding.amount), "Customers Owe You", `${d.outstanding.customersOwing} customers`, "ledgers", d.outstanding.amount > 0 ? "var(--danger)" : "", "What customers still have to pay you, including old balances.", "owe")}
         </div>
       </div>
@@ -217,6 +218,13 @@ const DashboardPage = {
         title = key === "cash" ? "Cash in Hand" : "Bank Balance";
         body = this.sumTable([["", key === "cash" ? "Opening cash (Settings)" : "Opening bank balance (Settings)", c.opening], ["+", key === "cash" ? "Cash received" : "Bank received", c.received], ["−", key === "cash" ? "Cash expenses" : "Bank expenses", c.expenses]], title, key === "cash" ? d.cashInHand : d.bankBalance) +
           note("All time. If you paid money back to a customer, it is not recorded here.");
+        break;
+      }
+      case "old": {
+        title = "Old Balances";
+        body = this.sumTable([["", "Old balances recorded for customers", d.oldBalance.amount]], "Old Balances", d.oldBalance.amount) +
+          this.sumTable([["", "Paid on the ledger in this period (not linked to a sale)", x.received.onLedger]], "For your information", x.received.onLedger) +
+          note("This is money from before you used the system, so it is not profit. When a customer pays it, the money counts in Received and Cash in Hand, but not in Net Profit. It is also included in Customers Owe You.");
         break;
       }
       case "owe": {
