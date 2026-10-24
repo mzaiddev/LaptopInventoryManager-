@@ -200,4 +200,4 @@ docker-compose.override.yml
 # ==========================================
 .local/
 config.local.*
-.history/
+.history/.superpowers/

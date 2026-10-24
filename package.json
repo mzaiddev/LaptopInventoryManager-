@@ -7,6 +7,7 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
+    "test": "node scripts/run-tests.js",
     "dev": "electron . --dev",
     "build": "electron-builder",
     "build:portable": "electron-builder --win portable",

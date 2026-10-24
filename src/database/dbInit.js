@@ -1,16 +1,17 @@
 const path = require("path");
 const fs = require("fs");
 const Database = require("better-sqlite3");
-const { getDbPath, getDataDir } = require("../config/appConfig");
+const { getDbPath, getBackupDir } = require("../config/appConfig");
+const { runMigrations } = require("./migrate");
 
 let db = null;
 
-function initDatabase() {
-  const dbPath = getDbPath();
-  const dataDir = getDataDir();
+function initDatabase(dbPathOverride) {
+  const dbPath = dbPathOverride || getDbPath();
+  const inMemory = dbPath === ":memory:";
 
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
+  if (!inMemory) {
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   }
 
   db = new Database(dbPath);
@@ -45,7 +46,25 @@ function initDatabase() {
   createIndexes();
   seedDefaults();
 
+  runMigrations(db, require("./migrations"), {
+    backupFn: inMemory
+      ? undefined
+      : (version) =>
+          backupBeforeMigration(
+            dbPath,
+            dbPathOverride ? path.join(path.dirname(dbPath), "backups") : getBackupDir(),
+            version,
+          ),
+  });
+
   return db;
+}
+
+function backupBeforeMigration(dbPath, dir, version) {
+  db.pragma("wal_checkpoint(TRUNCATE)");
+  fs.mkdirSync(dir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  fs.copyFileSync(dbPath, path.join(dir, `pre-migration-v${version}-${stamp}.db`));
 }
 
 function getDatabase() {
