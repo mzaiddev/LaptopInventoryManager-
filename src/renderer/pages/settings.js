@@ -154,6 +154,12 @@ const SettingsPage = {
               </select>
             </div>
           </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Phone Country Code (for WhatsApp)</label>
+              <input type="text" class="form-control" id="set-country-code" value="${this.escapeHtml(settings.default_country_code || "92")}" placeholder="92">
+            </div>
+          </div>
           <div class="form-group">
             <label>Backup Folder</label>
             <div style="display:flex;gap:8px;">
@@ -178,6 +184,7 @@ const SettingsPage = {
       currency: document.getElementById("set-currency")?.value || "USD",
       theme: document.getElementById("set-theme")?.value || "light",
       compact_numbers: document.getElementById("set-compact")?.value || "1",
+      default_country_code: (document.getElementById("set-country-code")?.value || "").replace(/\D/g, "") || "92",
       backup_folder:
         document.getElementById("set-backup-folder")?.value?.trim() || "",
     };

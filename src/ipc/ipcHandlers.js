@@ -49,6 +49,13 @@ function registerIpcHandlers() {
   ipcMain.handle("expense:list", wrap((f) => expenseService.list(f)));
   ipcMain.handle("expense:totals", wrap((f) => expenseService.totals(f)));
 
+  ipcMain.handle("statement:share", async (event, payload) => {
+    try {
+      return { success: true, data: await require("../services/statementShare").exportAndShare(payload) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
   ipcMain.handle("auth:logout", async () => {
     authService.logout();
     return { success: true };

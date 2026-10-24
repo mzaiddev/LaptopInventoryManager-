@@ -1008,6 +1008,7 @@ function seedDefaults() {
     backup_folder: "",
     theme: "light",
     compact_numbers: "1",
+    default_country_code: "92",
   };
 
   const insertSetting = db.prepare(

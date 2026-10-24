@@ -613,16 +613,13 @@ const CustomersPage = {
     this._openPdfWindow(customerName, printContent);
   },
 
-  _openPdfWindow(customerName, printContent) {
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (!printWindow) {
-      Toast.error('Please allow pop-ups for printing.');
-      return;
-    }
-    printWindow.document.write(`
+  // Full HTML page for a statement; autoPrint adds the print-on-load script for the print window.
+  _statementDocument(customerName, printContent, autoPrint) {
+    return `
       <html>
       <head>
-        <title>Statement - ${customerName}</title>
+        <meta charset="utf-8">
+        <title>Statement - ${this.escapeHtml(customerName)}</title>
         <style>
           @page { margin: 10mm; }
           * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -639,12 +636,19 @@ const CustomersPage = {
       </head>
       <body>
         ${printContent}
-        <script>
-          window.onload = function() { setTimeout(function() { window.print(); }, 500); };
-        <\/script>
+        ${autoPrint ? '<script>window.onload = function() { setTimeout(function() { window.print(); }, 500); };<\/script>' : ''}
       </body>
       </html>
-    `);
+    `;
+  },
+
+  _openPdfWindow(customerName, printContent) {
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    if (!printWindow) {
+      Toast.error('Please allow pop-ups for printing.');
+      return;
+    }
+    printWindow.document.write(this._statementDocument(customerName, printContent, true));
     printWindow.document.close();
   },
 
@@ -662,12 +666,10 @@ const CustomersPage = {
       const customerName = stmt.customer.customer_name;
       const phone = stmt.customer.phone || '';
 
-      this._openPdfWindow(customerName, printContent);
-
-      if (phone) {
+      {
         const shopName = document.getElementById('shop-name')?.textContent || 'Laptop Inventory Manager';
         const dateStr = new Date().toLocaleDateString();
-        const message = encodeURIComponent(
+        const message = (
           'Dear ' + customerName + ',\n\n' +
           'Please find attached your detailed account statement from ' + shopName + '.\n\n' +
           'Summary:\n' +
@@ -679,10 +681,21 @@ const CustomersPage = {
           'For any queries, please contact us. Thank you for your business!\n\n' +
           '- ' + shopName + ' | ' + dateStr
         );
-        const waUrl = 'https://wa.me/' + phone.replace(/[^\d]/g, '') + '?text=' + message;
-        window.open(waUrl, '_blank');
-      } else {
-        Toast.warning('Customer has no phone number. WhatsApp cannot be opened.');
+        const r = await window.api.shareStatement({
+          html: this._statementDocument(customerName, printContent, false),
+          customerName,
+          phone,
+          message,
+        });
+        if (!r.success) {
+          Toast.error(r.error || 'Could not create the PDF.');
+        } else if (r.data.chat === 'none') {
+          Toast.warning('PDF saved. This customer has no valid phone number, so WhatsApp was not opened.');
+        } else if (r.data.clipboardOk) {
+          Toast.success('PDF copied. In the WhatsApp chat press Ctrl+V, then Send.');
+        } else {
+          Toast.warning('WhatsApp opened. The PDF is in the folder that just opened: drag it into the chat.');
+        }
       }
     } catch (err) {
       Toast.error(err.message);
