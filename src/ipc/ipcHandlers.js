@@ -26,6 +26,14 @@ function registerIpcHandlers() {
     const r = authService.login(username, password);
     return r.ok ? { success: true } : { success: false, error: "Wrong username or password" };
   });
+  ipcMain.handle("vendor:provision", async (event, data) => {
+    try {
+      require("../services/vendorService").provision(data);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
   ipcMain.handle("auth:logout", async () => {
     authService.logout();
     return { success: true };

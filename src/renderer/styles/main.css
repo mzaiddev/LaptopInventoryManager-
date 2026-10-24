@@ -1185,3 +1185,13 @@ body.dark-mode .badge-for-parts { background: #374151; color: #d1d5db; }
 .login-logo svg { width: 48px; height: 48px; color: var(--primary); }
 .login-btn { width: 100%; margin-top: 8px; }
 .login-note { color: var(--text-secondary, #64748b); margin: 16px 0 0; }
+#vendor-screen {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.6);
+  z-index: 4000;
+}
+.vendor-card { width: 440px; max-height: 90vh; overflow: auto; }

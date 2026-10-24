@@ -94,6 +94,7 @@ contextBridge.exposeInMainWorld("api", {
   authStatus: () => ipcRenderer.invoke("auth:status"),
   login: (username, password) => ipcRenderer.invoke("auth:login", username, password),
   logout: () => ipcRenderer.invoke("auth:logout"),
+  vendorProvision: (data) => ipcRenderer.invoke("vendor:provision", data),
   changePassword: (current, next) => ipcRenderer.invoke("auth:changePassword", current, next),
   changeSuperPassword: (current, next) => ipcRenderer.invoke("auth:changeSuperPassword", current, next),
   grantSuper: (password) => ipcRenderer.invoke("auth:grantSuper", password),
