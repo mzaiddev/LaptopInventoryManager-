@@ -34,7 +34,8 @@ class DashboardService {
       supplierPaid: supplierService.paymentsBySource({ from, to }),
       payables: supplierService.totals(),
       netProfit: costVisible ? roundMoney(sales.total - cogs - expenses.total) : null,
-      ...this.getBalances(db),
+      // Cash and bank balances stay hidden until the super-password is entered, like profit and stock cost.
+      ...(costVisible ? this.getBalances(db) : { cashInHand: null, bankBalance: null }),
       outstanding: this.getOutstanding(db),
       oldBalance: this.getOldBalance(db),
       stock: this.getStock(db, costVisible),
@@ -79,8 +80,8 @@ class DashboardService {
       sales: { discounts: roundMoney(discounts), returns: returns.total },
       received: { onSales: roundMoney(onSales), onLedger: roundMoney(onLedger) },
       profit: costVisible ? { sales: sales.total, cogs, expenses: expenses.total } : null,
-      cash: { opening: opening("opening_cash"), received: paid.cash, expenses: spent.cash, suppliers: supp.cash },
-      bank: { opening: opening("opening_bank"), received: paid.bank, expenses: spent.bank, suppliers: supp.bank },
+      cash: costVisible ? { opening: opening("opening_cash"), received: paid.cash, expenses: spent.cash, suppliers: supp.cash } : null,
+      bank: costVisible ? { opening: opening("opening_bank"), received: paid.bank, expenses: spent.bank, suppliers: supp.bank } : null,
       owe,
     };
   }

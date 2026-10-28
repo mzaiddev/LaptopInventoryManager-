@@ -147,9 +147,9 @@ const DashboardPage = {
       <div class="dashboard-section">
         <h2>Cash, Bank and Dues</h2>
         <div class="stats-grid">
-          ${this.card("green", I.cash, this.money(d.cashInHand + d.bankBalance), "Total Money (Cash + Bank)", "All time", "", "", "Cash in hand and bank balance added together.", "total")}
-          ${this.card("green", I.cash, this.money(d.cashInHand), "Cash in Hand", "All time", "", "", "Cash that should be in your drawer now.", "cash")}
-          ${this.card("blue", I.bank, this.money(d.bankBalance), "Bank Balance", "All time", "", "", "Money that should be in your bank now.", "bank")}
+          ${this.card("green", I.cash, this.money(d.cashInHand === null ? null : d.cashInHand + d.bankBalance), "Total Money (Cash + Bank)", d.cashInHand === null ? "Click •••• and enter super-password" : "All time", "", "", "Cash in hand and bank balance added together.", "total")}
+          ${this.card("green", I.cash, this.money(d.cashInHand), "Cash in Hand", d.cashInHand === null ? "Click •••• and enter super-password" : "All time", "", "", "Cash that should be in your drawer now.", "cash")}
+          ${this.card("blue", I.bank, this.money(d.bankBalance), "Bank Balance", d.bankBalance === null ? "Click •••• and enter super-password" : "All time", "", "", "Money that should be in your bank now.", "bank")}
           ${this.card("yellow", I.due, this.money(d.oldBalance.amount), "Old Balances", `${d.oldBalance.customers} customers`, "ledgers", "", "Money customers owed you before you started using this system. It is not part of Net Profit.", "old")}
           ${this.card("red", I.due, this.money(d.payables.payable), "You Owe Suppliers", `${d.payables.suppliersOwed} suppliers${d.payables.advance ? " · Advance " + this.money(d.payables.advance) : ""}`, "suppliers", d.payables.payable > 0 ? "var(--danger)" : "", "What you still have to pay suppliers for goods bought on credit. It is not part of Net Profit.", "payable")}
           ${this.card("red", I.due, this.money(d.outstanding.amount), "Customers Owe You", `${d.outstanding.customersOwing} customers`, "ledgers", d.outstanding.amount > 0 ? "var(--danger)" : "", "What customers still have to pay you, including old balances.", "owe")}
@@ -219,13 +219,13 @@ const DashboardPage = {
       case "bank": {
         const c = key === "cash" ? x.cash : x.bank;
         title = key === "cash" ? "Cash in Hand" : "Bank Balance";
-        body = this.sumTable([["", key === "cash" ? "Opening cash (Settings)" : "Opening bank balance (Settings)", c.opening], ["+", key === "cash" ? "Cash received" : "Bank received", c.received], ["−", key === "cash" ? "Cash expenses" : "Bank expenses", c.expenses], ["−", "Paid to suppliers", c.suppliers]], title, key === "cash" ? d.cashInHand : d.bankBalance) +
+        body = c === null ? note("This figure is hidden. Click •••• and enter the super-password to see it.") : this.sumTable([["", key === "cash" ? "Opening cash (Settings)" : "Opening bank balance (Settings)", c.opening], ["+", key === "cash" ? "Cash received" : "Bank received", c.received], ["−", key === "cash" ? "Cash expenses" : "Bank expenses", c.expenses], ["−", "Paid to suppliers", c.suppliers]], title, key === "cash" ? d.cashInHand : d.bankBalance) +
           note("All time. If you paid money back to a customer, it is not recorded here.");
         break;
       }
       case "total":
         title = "Total Money (Cash + Bank)";
-        body = this.sumTable([["", "Cash in hand", d.cashInHand], ["+", "Bank balance", d.bankBalance]], "Total Money", d.cashInHand + d.bankBalance) +
+        body = d.cashInHand === null ? note("This figure is hidden. Click •••• and enter the super-password to see it.") : this.sumTable([["", "Cash in hand", d.cashInHand], ["+", "Bank balance", d.bankBalance]], "Total Money", d.cashInHand + d.bankBalance) +
           note("All time. Expenses and supplier payments are already taken out of cash and bank.");
         break;
       case "suppliers":

@@ -182,7 +182,7 @@ const SuppliersPage = {
 
   async loadFunds() {
     const r = await window.api.getDashboardData({});
-    this.funds = r.success ? { Cash: r.data.cashInHand, Bank: r.data.bankBalance } : null;
+    this.funds = r.success && r.data.cashInHand !== null ? { Cash: r.data.cashInHand, Bank: r.data.bankBalance } : null;
   },
 
   // Shows the account balance and the supplier balance after this payment.

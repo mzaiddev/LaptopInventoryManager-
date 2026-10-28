@@ -94,7 +94,8 @@ test("opening cash and bank amounts from Settings are added to the balances", ()
 test("a junk opening balance setting is treated as zero", () => {
   const db = fixture();
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('opening_cash', 'abc')").run();
-  assert.strictEqual(dashboard.getDashboardData(OCT, {}).cashInHand, 1100);
+  assert.strictEqual(dashboard.getDashboardData(OCT, { costVisible: true }).cashInHand, 1100);
+  assert.strictEqual(dashboard.getDashboardData(OCT, {}).cashInHand, null);
 });
 
 test("details give the lines behind each card, and they add up", () => {
