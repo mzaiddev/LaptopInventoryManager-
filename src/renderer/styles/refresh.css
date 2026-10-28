@@ -1,0 +1,184 @@
+/* UI refresh: calm light workspace, clear grouped navigation, tidy tables, tabs and status pills.
+   Loaded last so it restyles every page through the shared tokens and component classes.
+   Light and dark themes both live here; Urdu (RTL) mirrors the sidebar and table alignment. */
+
+:root {
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-light: #eef2ff;
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+  --success: #16a34a;
+  --success-light: #dcfce7;
+  --warning: #d97706;
+  --warning-light: #fef3c7;
+
+  --sidebar-width: 248px;
+  --topbar-height: 64px;
+
+  --bg-primary: #ffffff;
+  --bg-secondary: #f6f7fb;
+  --bg-tertiary: #eef0f6;
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #6b7280;
+  --border-color: #e6e8f0;
+  --card-bg: #ffffff;
+  --card-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --card-shadow-hover: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --sidebar-bg: #ffffff;
+  --sidebar-text: #4b5563;
+  --sidebar-active: #4f46e5;
+  --sidebar-hover: #f3f4f9;
+  --topbar-bg: #ffffff;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-lg: 16px;
+}
+
+body.dark-mode {
+  --primary: #818cf8;
+  --primary-hover: #6366f1;
+  --primary-light: #272a52;
+  --danger: #f87171;
+  --success: #4ade80;
+  --warning: #fbbf24;
+
+  --bg-primary: #0f1424;
+  --bg-secondary: #0b1020;
+  --bg-tertiary: #1b2238;
+  --text-primary: #e8eaf2;
+  --text-secondary: #b4bacb;
+  --text-muted: #8b93a8;
+  --border-color: #252d45;
+  --card-bg: #141a2e;
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --card-shadow-hover: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --sidebar-bg: #0f1424;
+  --sidebar-text: #b4bacb;
+  --sidebar-active: #818cf8;
+  --sidebar-hover: #1b2238;
+  --topbar-bg: #0f1424;
+}
+
+body { background: var(--bg-secondary); color: var(--text-primary); }
+#main-content, #page-content { background: var(--bg-secondary); }
+#page-content { padding: 28px 32px 40px; }
+
+/* ---------- Sidebar ---------- */
+#sidebar { border-right: 1px solid var(--border-color); }
+.sidebar-header { padding: 18px 20px; border-bottom: 1px solid var(--border-color); }
+.sidebar-header h2 { color: var(--text-primary); font-size: 15px; font-weight: 700; letter-spacing: 0.1px; }
+.sidebar-logo svg { width: 28px; height: 28px; color: var(--primary); }
+.sidebar-nav { padding: 10px 12px; gap: 2px; overflow-y: auto; }
+.nav-section {
+  margin: 14px 10px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.nav-section:first-child { margin-top: 4px; }
+.nav-item { padding: 9px 12px; font-size: 14px; font-weight: 500; gap: 12px; border-radius: 10px; color: var(--sidebar-text); }
+.nav-item svg { width: 18px; height: 18px; stroke-width: 1.8; }
+.nav-item:hover { background: var(--sidebar-hover); color: var(--text-primary); }
+.nav-item.active { background: var(--primary-light); color: var(--primary); font-weight: 600; }
+.sidebar-footer { border-top: 1px solid var(--border-color); padding: 12px 16px; }
+.developer-credit { color: var(--text-muted); }
+
+/* ---------- Top bar ---------- */
+#topbar { padding: 0 28px; box-shadow: none; }
+.topbar-left #shop-name { font-size: 16px; font-weight: 700; }
+
+/* ---------- Page header ---------- */
+.page-header { margin-bottom: 22px; gap: 16px; flex-wrap: wrap; }
+.page-header h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.2px; }
+.page-header p { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
+
+/* ---------- Cards ---------- */
+.card { border: 1px solid var(--border-color); border-radius: var(--radius-lg); box-shadow: var(--card-shadow); }
+.card:hover { box-shadow: var(--card-shadow); }
+.card-header { padding: 16px 20px; }
+.card-header h3 { font-size: 15px; font-weight: 700; }
+
+/* ---------- Buttons ---------- */
+.btn { padding: 9px 16px; border-radius: 10px; font-weight: 600; font-size: 14px; line-height: 1.2; }
+.btn-sm { padding: 6px 11px; font-size: 13px; border-radius: 8px; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+body.dark-mode .btn-primary { color: #0b1020; }
+.btn-secondary { background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); }
+.btn-secondary:hover { background: var(--bg-tertiary); }
+.btn:disabled, .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+.btn:focus-visible, .nav-item:focus-visible, .tab-item:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* ---------- Form controls ---------- */
+.form-control { border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); padding: 9px 12px; }
+.form-control:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent); outline: none; }
+select.form-control { padding-right: 28px; }
+
+/* ---------- Tabs (reports, lists, any .tab-bar) ---------- */
+.tab-bar { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); overflow-x: auto; }
+.tab-item {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tab-item:hover { color: var(--text-primary); }
+.tab-item.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+/* ---------- Tables ---------- */
+table th {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  padding: 11px 12px;
+  font-size: 11.5px;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+}
+table td { padding: 12px; border-bottom: 1px solid var(--border-color); }
+table tr:hover td { background: var(--bg-secondary); }
+table tr:last-child td { border-bottom: none; }
+.table-wrapper table th:last-child, .table-wrapper table td:last-child {
+  position: sticky;
+  right: 0;
+  background: var(--card-bg);
+  box-shadow: -6px 0 8px -8px rgba(16, 24, 40, 0.18);
+}
+.table-wrapper table th:last-child { background: var(--bg-secondary); }
+.table-wrapper table tr:hover td:last-child { background: var(--bg-secondary); }
+
+/* ---------- Status pills ---------- */
+.badge { border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; gap: 6px; }
+.badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.85; }
+
+/* ---------- Modals ---------- */
+.modal-content { border-radius: 18px; border: 1px solid var(--border-color); }
+.modal-header { border-bottom: 1px solid var(--border-color); }
+
+/* ---------- Empty states ---------- */
+.empty-state { padding: 48px 16px; text-align: center; color: var(--text-muted); }
+.empty-state h3 { color: var(--text-primary); font-size: 16px; margin-bottom: 6px; }
+
+/* ---------- Right-to-left (Urdu) ---------- */
+html[dir="rtl"] #sidebar { left: auto; right: 0; border-right: none; border-left: 1px solid var(--border-color); }
+html[dir="rtl"] #main-content { margin-left: 0; margin-right: var(--sidebar-width); }
+html[dir="rtl"] .nav-item { text-align: right; }
+html[dir="rtl"] table th, html[dir="rtl"] table td { text-align: right; }
+html[dir="rtl"] .table-wrapper table th:last-child, html[dir="rtl"] .table-wrapper table td:last-child { right: auto; left: 0; box-shadow: 6px 0 8px -8px rgba(16, 24, 40, 0.18); }
+
+@media (max-width: 1100px) {
+  #page-content { padding: 20px 18px 32px; }
+  .page-header h1 { font-size: 21px; }
+}

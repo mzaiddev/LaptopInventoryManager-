@@ -1,28 +1,10 @@
 // Inventory Page
-const DEFAULT_CATEGORY_OPTIONS = [
-  "Laptop",
-  "Charger",
-  "Adapter",
-  "Mouse",
-  "Keyboard",
-  "SSD",
-  "HDD",
-  "RAM",
-  "Monitor",
-  "Printer",
-  "Router",
-  "UPS",
-  "Networking Equipment",
-  "Accessories",
-  "Other",
-];
-
 const InventoryPage = {
   currentFilters: {
     search: "",
     category: "",
     supplier: "",
-    status: "",
+    status: "available", // everyday view; "All Status" shows sold and empty rows too
     condition: "",
     sortBy: "created_at",
     sortOrder: "desc",
@@ -112,6 +94,7 @@ const InventoryPage = {
                   <option value="">All Suppliers</option>
                 </select>
                 <select id="filter-status" onchange="InventoryPage.onFilter()">
+                  <option value="available">Available to sell</option>
                   <option value="">All Status</option>
                   <option value="In Stock">In Stock</option>
                   <option value="Reserved">Reserved</option>
@@ -168,6 +151,14 @@ const InventoryPage = {
       </div>
     `;
 
+    // The owner's last status choice (Available / All) is remembered on this PC.
+    try {
+      const saved = localStorage.getItem("lim_inventory_status");
+      if (saved !== null) this.currentFilters.status = saved;
+    } catch (e) { /* default view */ }
+    const statusSelect = document.getElementById("filter-status");
+    if (statusSelect) statusSelect.value = this.currentFilters.status;
+
     // Setup table and pagination
     App.setupInventoryTable();
     App.setupPagination();
@@ -196,7 +187,7 @@ const InventoryPage = {
       if (selectId === "filter-category") {
         const values = Array.isArray(result?.data) ? result.data : [];
         const optionsToRender = [
-          ...new Set([...DEFAULT_CATEGORY_OPTIONS, ...values]),
+          ...new Set(values),
         ];
 
         optionsToRender.forEach((value) => {
@@ -238,7 +229,7 @@ const InventoryPage = {
         const res = await window.api.getCategories();
         if (res && res.success && Array.isArray(res.data)) {
           App.categories = [
-            ...new Set([...DEFAULT_CATEGORY_OPTIONS, ...res.data]),
+            ...new Set(res.data),
           ];
           cats = App.categories;
           const sel = document.getElementById("filter-category");
@@ -552,6 +543,7 @@ const InventoryPage = {
     this.currentFilters.supplier =
       document.getElementById("filter-supplier").value;
     this.currentFilters.status = document.getElementById("filter-status").value;
+    try { localStorage.setItem("lim_inventory_status", this.currentFilters.status); } catch (e) { /* not remembered */ }
     this.currentFilters.condition =
       document.getElementById("filter-condition").value;
     this.currentFilters.page = 1;
@@ -1189,7 +1181,7 @@ const InventoryPage = {
       const totalQty = products.reduce((s, p) => s + p.quantity, 0);
 
       // Get ALL categories - merge default options with actual data categories
-      const allCategories = [...new Set([...DEFAULT_CATEGORY_OPTIONS, ...products.map(p => p.category).filter(Boolean)])];
+      const allCategories = [...new Set([...(App.categories || []), ...products.map(p => p.category).filter(Boolean)])];
 
       PrintService.showPrintDialog({
         title: 'Inventory Report',
@@ -1288,7 +1280,7 @@ const InventoryPage = {
 
       // Get ALL system categories from the master list + any extra from products
       const allProductCats = [...new Set(products.filter(p => p.category).map(p => p.category))];
-      const allCategories = [...new Set([...DEFAULT_CATEGORY_OPTIONS, ...allProductCats])].sort();
+      const allCategories = [...new Set([...(App.categories || []), ...allProductCats])].sort();
 
       // For each category, calculate In Stock quantity only
       let grandTotal = 0;

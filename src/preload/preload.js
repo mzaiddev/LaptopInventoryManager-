@@ -24,6 +24,15 @@ contextBridge.exposeInMainWorld("api", {
   getCategories: () => ipcRenderer.invoke("inventory:getCategories"),
   getSuppliers: () => ipcRenderer.invoke("inventory:getSuppliers"),
 
+  // Lists & Setup
+  getList: (key, opts) => ipcRenderer.invoke("lists:get", key, opts),
+  addListItem: (key, name) => ipcRenderer.invoke("lists:add", key, name),
+  renameListItem: (id, name) => ipcRenderer.invoke("lists:rename", id, name),
+  mergeListItems: (fromId, intoId) => ipcRenderer.invoke("lists:merge", fromId, intoId),
+  setListItemActive: (id, active) => ipcRenderer.invoke("lists:setActive", id, active),
+  removeListItem: (id) => ipcRenderer.invoke("lists:remove", id),
+  reorderList: (key, ids) => ipcRenderer.invoke("lists:reorder", key, ids),
+
   // Settings
   getSettings: () => ipcRenderer.invoke("settings:getAll"),
   updateSettings: (settings) => ipcRenderer.invoke("settings:update", settings),

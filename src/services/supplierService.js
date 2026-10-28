@@ -132,7 +132,8 @@ class SupplierService {
     };
   }
 
-  list({ search, status } = {}) {
+  // hasBalance: only suppliers we owe or have paid ahead (the default view); settled ones are hidden.
+  list({ search, status, hasBalance } = {}) {
     const db = getDatabase();
     const where = [];
     const args = [];
@@ -149,7 +150,8 @@ class SupplierService {
         COALESCE(SUM(CASE WHEN l.entry_type='Opening' THEN l.charge ELSE 0 END),0) opening
       FROM suppliers s LEFT JOIN supplier_ledger l ON l.supplier_id = s.id
       ${where.length ? "WHERE " + where.join(" AND ") : ""}
-      GROUP BY s.id ORDER BY s.name COLLATE NOCASE`).all(...args).map((r) => ({
+      GROUP BY s.id${hasBalance ? " HAVING ABS(COALESCE(SUM(l.charge),0) - COALESCE(SUM(l.paid),0)) >= 0.005" : ""}
+      ORDER BY s.name COLLATE NOCASE`).all(...args).map((r) => ({
       id: r.id, name: r.name, phone: r.phone, phone2: r.phone2, address: r.address, notes: r.notes, status: r.status,
       opening: roundMoney(r.opening), purchased: roundMoney(r.purchased), paid: roundMoney(r.paid),
       balance: roundMoney(r.charged - r.paid),

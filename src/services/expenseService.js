@@ -1,5 +1,6 @@
 const { getDatabase } = require("../database/dbInit");
 const { roundMoney } = require("../utils/money");
+const lists = require("./listService");
 
 function clean(data) {
   const amount = roundMoney(data.amount);
@@ -26,6 +27,7 @@ function rangeWhere({ from, to, search } = {}) {
 class ExpenseService {
   add(data) {
     const d = clean(data);
+    lists.ensure("expense_category", d.category);
     const r = getDatabase()
       .prepare("INSERT INTO expenses (expense_date, category, amount, payment_source, note) VALUES (?, ?, ?, ?, ?)")
       .run(d.expense_date, d.category, d.amount, d.payment_source, d.note);
@@ -34,6 +36,7 @@ class ExpenseService {
 
   update(id, data) {
     const d = clean(data);
+    lists.ensure("expense_category", d.category);
     const r = getDatabase()
       .prepare("UPDATE expenses SET expense_date = ?, category = ?, amount = ?, payment_source = ?, note = ? WHERE id = ?")
       .run(d.expense_date, d.category, d.amount, d.payment_source, d.note, id);

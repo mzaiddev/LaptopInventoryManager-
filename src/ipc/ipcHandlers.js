@@ -73,6 +73,15 @@ function registerIpcHandlers() {
       return { success: false, error: err.message };
     }
   };
+  // Lists & Setup: categories and locations the owner manages in Settings
+  const listService = require("../services/listService");
+  ipcMain.handle("lists:get", wrap((key, opts) => listService.list(key, opts || {})));
+  ipcMain.handle("lists:add", wrap((key, name) => listService.add(key, name)));
+  ipcMain.handle("lists:rename", wrap((id, name) => listService.rename(id, name)));
+  ipcMain.handle("lists:merge", wrap((fromId, intoId) => listService.merge(fromId, intoId)));
+  ipcMain.handle("lists:setActive", wrap((id, active) => listService.setActive(id, active)));
+  ipcMain.handle("lists:remove", wrap((id) => listService.remove(id)));
+  ipcMain.handle("lists:reorder", wrap((key, ids) => listService.reorder(key, ids)));
   ipcMain.handle("expense:add", wrap((d) => expenseService.add(d)));
   ipcMain.handle("expense:update", wrap((id, d) => expenseService.update(id, d)));
   ipcMain.handle("expense:delete", wrap((id) => expenseService.remove(id)));

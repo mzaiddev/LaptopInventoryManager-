@@ -122,6 +122,9 @@ const App = {
         case "backup":
           await BackupPage.load();
           break;
+        case "lists":
+          await ListsPage.load();
+          break;
         case "settings":
           await SettingsPage.load();
           break;
@@ -163,6 +166,9 @@ const App = {
         break;
       case "backup":
         await BackupPage.refresh();
+        break;
+      case "lists":
+        await ListsPage.refresh();
         break;
       case "settings":
         await SettingsPage.refresh();

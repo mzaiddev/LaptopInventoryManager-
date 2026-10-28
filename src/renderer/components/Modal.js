@@ -120,30 +120,9 @@ class ModalComponent {
       "Damaged",
       "For Parts",
     ];
-    const defaultCategories = [
-      "Laptop",
-      "Charger",
-      "Adapter",
-      "Mouse",
-      "Keyboard",
-      "SSD",
-      "HDD",
-      "RAM",
-      "Monitor",
-      "Printer",
-      "Router",
-      "UPS",
-      "Networking Equipment",
-      "Accessories",
-      "Other",
-    ];
-    // Use categories from App if available, otherwise fall back to defaults
+    // Categories come from Settings > Lists & Setup, loaded into App.categories at start.
     const categories =
-      window.App &&
-      Array.isArray(window.App.categories) &&
-      window.App.categories.length > 0
-        ? window.App.categories
-        : defaultCategories;
+      window.App && Array.isArray(window.App.categories) ? window.App.categories : [];
 
     const catOptions = categories
       .map(

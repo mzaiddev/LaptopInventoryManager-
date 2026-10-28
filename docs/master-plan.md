@@ -1,7 +1,24 @@
 # Master Plan — Shop Manager (today: Laptop Inventory Manager)
 
-Status: DRAFT for owner review. Written 2026-10-28 after reading every page, service and migration.
-Nothing in this file is built yet. Each phase gets its own short spec, task list and test-first build.
+Status: IN PROGRESS. Written 2026-10-28 after reading every page, service and migration; progress updated below.
+Each phase gets its own short spec, task list and test-first build.
+
+## Progress (what is built)
+
+| Item | State |
+|---|---|
+| F1 Smart defaults | Customers (due filter, Due column, print default) done. Suppliers "With balance" default and Inventory "Available to sell" default done, both remembered per PC. Reports and ledger pickers still to do |
+| F2 Task Center | Built (jobs tables, queue service, top-right panel, WhatsApp and product import tasks). Export tasks and scheduled work still to do |
+| F3 Lists & Setup | Built: product categories, expense categories, storage locations; rename, merge, hide, delete-if-unused, reorder, usage counts. Units, conditions, payment accounts, price tiers still to do |
+| F4 Business profile | Not started |
+| F5 Attention center and health page | Not started (global search is built) |
+| F6 Undo, recycle bin, day lock | Not started |
+| F7 Import/Export engine | Product CSV import built; shared engine for customers, suppliers and exports still to do |
+| A Google Drive backup | Service and Backup page built; needs the app's Google client ID configured before real use |
+| UI refresh | Shared stylesheet built (light and dark, grouped sidebar, tabs, tables, status pills). Page-by-page polish and the floating bulk-action bar still to do |
+| Phases 5 to 11 | Not started |
+
+Release 1 is phases 0 to 4. Phases 5 and later start after real client feedback on Release 1.
 This file replaces `docs/client-value-roadmap.md`.
 
 Sizes: **S** 1–2 days · **M** 3–5 days · **L** 1–2 weeks · **XL** more than 2 weeks.
@@ -283,8 +300,8 @@ Notes: Use the narrowest suitable Drive scope and verify Google's current consen
 
 - H1 Template manager: English/Urdu templates with placeholders (`{customer}`, `{due}`, `{shop}`) in Lists & Setup (S)
 - H2 Reminders and receipts (B4, B5) use templates
-- H3 **Scheduled messages:** "send overdue reminders every Monday 10:00" — runs while the app is open, shown in the Task Center (M)
-- H4 Owner summary: daily/weekly WhatsApp to the owner's number (S)
+- H3 Scheduled messages — deferred. The owner starts every sending task (decision 8); unattended campaigns wait until clients ask.
+- H4 Owner summary: a "Send me today's summary" button that sends to the owner's own number; the owner clicks it (S)
 - H5 Price list to customers: in-stock items with the customer's tier price, PDF, sent as a task (M)
 - H6 Risk control: WhatsApp sending uses the unofficial WhatsApp Web protocol. Keep the pacing, the daily cap setting, and the manual one-by-one fallback; show a plain warning in Settings. SMS gateway or email as another channel — only if clients ask (L)
 
@@ -331,8 +348,9 @@ Owner phone view (read-only dashboard) · multi-PC or branch sync · online paym
 | 7 | Closing and reports | F-1 to F-5, G1–G5, F8 documents | 2 | L |
 | 8 | Sales speed and documents | C1–C7, B8 cheques, B9 instalments | 5, 7 | L |
 | 9 | Owner controls | F6, J2–J5 | 0 | M |
-| 10 | Dealer modules | I1–I3, H3–H5 | 5, 6 | L |
+| 10 | Dealer modules | I1–I3, H4–H5 | 5, 6 | L |
 | 11 | Platform polish | K1–K10 | all | L |
+| T | Tech health (runs alongside 0 and 1) | Keep Electron current; check contextIsolation, sandbox and CSP; add CI; modernise screens gradually (small build step and a light UI library for new screens only); type-check services and IPC file by file | — | M |
 | 12 | Later | section L | — | — |
 
 **Order logic.** Phase 0 fixes what the client asked for first. Phase 1 is the engine that phases 3, 4 and 5 sit on. Phase 2 makes the system adaptable and gives bulk import real categories to land in. Phases 3 and 4 can swap if a client is worried about data loss more than about typing stock; Drive backup then runs first and shows its status in a simple banner until the Task Center is ready.
@@ -378,7 +396,7 @@ Changes to existing tables: `products.category/unit/min_stock/warranty_months`, 
 
 ## 9. Decisions needed from you
 
-1. **Order:** follow the roadmap's staged order; Phase 0 and catalog/bulk foundations precede broad expansion.
+1. **Order:** 0 smart defaults, 1 Task Center, 2 Lists & Business profile, 3 bulk product tools, 4 Google Drive backup. Drive can move earlier if clients worry more about data loss.
 2. **Google Drive:** owner connects their own account in the app; the app uploads database backups to that owner's Drive automatically when online. No shared vendor Drive.
 3. **Import:** support spreadsheet-based workflows; decide CSV-first vs `.xlsx` based on client need. Both require preview, validation, duplicate policy, and errors output.
 4. **Business types:** which presets should ship first besides laptop dealer (mobile shop, general store, others)?

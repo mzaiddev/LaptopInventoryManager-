@@ -25,7 +25,10 @@ const SuppliersPage = {
   },
 
   async load() {
-    this.filters = { search: "", status: "" };
+    // Default view: only suppliers with a balance. The owner's choice is remembered on this PC.
+    let showAll = false;
+    try { showAll = localStorage.getItem("lim_suppliers_view") === "all"; } catch (e) { /* default view */ }
+    this.filters = { search: "", status: "", hasBalance: !showAll };
     document.getElementById("page-content").innerHTML = `
       <div class="page-header">
         <div>
@@ -45,11 +48,17 @@ const SuppliersPage = {
             <input type="text" id="sup-search" placeholder="Search by name, phone, address..." oninput="SuppliersPage.onSearch()">
           </div>
           <div class="filter-group">
+            <select id="sup-view" onchange="SuppliersPage.onFilter()">
+              <option value="balance" ${this.filters.hasBalance ? "selected" : ""}>With balance</option><option value="all" ${this.filters.hasBalance ? "" : "selected"}>All suppliers</option>
+            </select>
+          </div>
+          <div class="filter-group">
             <select id="sup-status" onchange="SuppliersPage.onFilter()">
               <option value="">All Status</option><option value="Active">Active</option><option value="Inactive">Inactive</option>
             </select>
           </div>
         </div>
+        <div id="sup-hint" style="font-size:13px;color:var(--text-muted);margin-bottom:10px;"></div>
         <div id="sup-table"></div>
       </div></div>`;
     await this.refresh();
@@ -63,6 +72,11 @@ const SuppliersPage = {
       return;
     }
     this.rows = list.data;
+    const hint = document.getElementById("sup-hint");
+    if (hint) {
+      const hidden = totals.success && this.filters.hasBalance && !this.filters.search && !this.filters.status ? totals.data.suppliers - this.rows.length : 0;
+      hint.innerHTML = hidden > 0 ? `${hidden} supplier${hidden === 1 ? "" : "s"} with no balance hidden. <a href="#" onclick="SuppliersPage.showEveryone();return false;" style="color:var(--primary);">Show all</a>` : "";
+    }
     if (totals.success) {
       const t = totals.data;
       document.getElementById("sup-totals").innerHTML = `
@@ -78,7 +92,9 @@ const SuppliersPage = {
   renderTable() {
     const el = document.getElementById("sup-table");
     if (this.rows.length === 0) {
-      el.innerHTML = '<div class="empty-state"><h3>No suppliers yet</h3><p>Add a supplier to record bills and payments.</p></div>';
+      el.innerHTML = this.filters.hasBalance && !this.filters.search && !this.filters.status
+        ? '<div class="empty-state"><h3>No supplier has a balance</h3><p>Every supplier is settled. Choose All suppliers to see them.</p></div>'
+        : '<div class="empty-state"><h3>No suppliers yet</h3><p>Add a supplier to record bills and payments.</p></div>';
       return;
     }
     el.innerHTML = `
@@ -111,8 +127,15 @@ const SuppliersPage = {
     }, 300);
   },
 
+  showEveryone() {
+    document.getElementById("sup-view").value = "all";
+    this.onFilter();
+  },
+
   onFilter() {
     this.filters.status = document.getElementById("sup-status").value;
+    this.filters.hasBalance = document.getElementById("sup-view").value !== "all";
+    try { localStorage.setItem("lim_suppliers_view", this.filters.hasBalance ? "balance" : "all"); } catch (e) { /* not remembered */ }
     this.refresh();
   },
 

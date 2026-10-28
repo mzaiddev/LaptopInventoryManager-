@@ -2,7 +2,7 @@
 const ExpensesPage = {
   filters: { from: "", to: "", search: "", page: 1, pageSize: 25 },
   rows: [],
-  categories: ["Rent", "Salary", "Electricity", "Transport", "Tea / Food", "Repairs", "Other"],
+  categories: [], // loaded from Settings > Lists & Setup
 
   async load() {
     this.filters = { from: "", to: "", search: "", page: 1, pageSize: 25 };
@@ -108,7 +108,9 @@ const ExpensesPage = {
     }, 300);
   },
 
-  showForm(id = null) {
+  async showForm(id = null) {
+    const res = await window.api.getList("expense_category");
+    this.categories = res.success ? res.data.map((i) => i.name) : [];
     const r = id ? this.rows.find((x) => x.id === id) : null;
     const v = r || { expense_date: new Date().toISOString().split("T")[0], category: "", amount: "", payment_source: "Cash", note: "" };
     const body = `
@@ -121,8 +123,11 @@ const ExpensesPage = {
         </div>
         <div class="form-row">
           <div class="form-group"><label>Category *</label>
-            <input class="form-control" id="ef-category" list="ef-cats" value="${this.esc(v.category)}">
-            <datalist id="ef-cats">${this.categories.map((c) => `<option value="${c}">`).join("")}</datalist></div>
+            <select class="form-control" id="ef-category">
+              <option value="">Select category</option>
+              ${[...new Set([...this.categories, ...(v.category ? [v.category] : [])])].map((c) => `<option value="${this.esc(c)}" ${c === v.category ? "selected" : ""}>${this.esc(c)}</option>`).join("")}
+            </select>
+            <small style="color:var(--text-muted);">Add or hide categories in Lists &amp; Setup.</small></div>
           <div class="form-group"><label>Paid From *</label>
             <select class="form-control" id="ef-source">
               <option value="Cash" ${v.payment_source === "Cash" ? "selected" : ""}>Cash</option>

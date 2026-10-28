@@ -1,39 +1,6 @@
 const { getDatabase } = require("../database/dbInit");
 
-const DEFAULT_CATEGORIES = [
-  "Laptop",
-  "Charger",
-  "Adapter",
-  "Mouse",
-  "Keyboard",
-  "SSD",
-  "HDD",
-  "RAM",
-  "Monitor",
-  "Printer",
-  "Router",
-  "UPS",
-  "Networking Equipment",
-  "Accessories",
-  "Other",
-];
-
-const normalizeCategories = (categories = []) => {
-  const seen = new Set();
-  const normalized = [];
-
-  [...DEFAULT_CATEGORIES, ...categories]
-    .filter((value) => typeof value === "string" && value.trim())
-    .map((value) => value.trim())
-    .forEach((value) => {
-      if (!seen.has(value)) {
-        seen.add(value);
-        normalized.push(value);
-      }
-    });
-
-  return normalized;
-};
+const lists = require("./listService");
 
 class InventoryService {
   getAllProducts(filters = {}) {
@@ -58,7 +25,10 @@ class InventoryService {
       params.push(filters.supplier);
     }
 
-    if (filters.status) {
+    // "available" is the everyday view: what can still be sold. Sold, damaged and empty rows stay out of it.
+    if (filters.status === "available") {
+      query += " AND status IN ('In Stock', 'Reserved') AND quantity > 0";
+    } else if (filters.status) {
       query += " AND status = ?";
       params.push(filters.status);
     }
@@ -141,6 +111,8 @@ class InventoryService {
 
     const suppliers = require("./supplierService");
     return db.transaction(() => {
+    lists.ensure("product_category", category);
+    lists.ensure("storage_location", storage_location);
     const stmt = db.prepare(`
       INSERT INTO products (product_name, category, model, serial_number, supplier,
         purchase_price, selling_price, quantity, purchase_date, warranty,
@@ -204,6 +176,8 @@ class InventoryService {
 
     const suppliers = require("./supplierService");
     return db.transaction(() => {
+    lists.ensure("product_category", category);
+    lists.ensure("storage_location", storage_location);
     const before = db.prepare("SELECT quantity FROM products WHERE id = ?").get(id);
     const stmt = db.prepare(`
       UPDATE products SET
@@ -336,16 +310,9 @@ class InventoryService {
     return { success: true };
   }
 
+  // Active categories from Settings > Lists, plus archived ones still used by products (so filters never lose them).
   getCategories() {
-    const db = getDatabase();
-    const dbCategories = db
-      .prepare(
-        'SELECT DISTINCT category FROM products WHERE category != "" ORDER BY category',
-      )
-      .all()
-      .map((r) => r.category);
-
-    return normalizeCategories(dbCategories);
+    return lists.usedNames("product_category");
   }
 
   getSuppliers() {
