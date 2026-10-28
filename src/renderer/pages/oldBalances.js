@@ -52,6 +52,7 @@ const OldBalancesPage = {
               </select>
             </div>
           </div>
+          ${BulkShare.barHtml('oldbal', 'OldBalancesPage.sendSelected()', 'OldBalancesPage.sendAll()', 'WhatsApp All')}
           <div id="old-balances-table-container"><div class="loading"><div class="spinner"></div></div></div>
           <div id="old-balances-pagination"></div>
         </div>
@@ -130,12 +131,14 @@ const OldBalancesPage = {
       }
 
       const currency = App.currency || 'USD';
+      BulkShare.register('oldbal', data.balances.map(b => ({ id: b.id, customerId: b.customer_id, label: b.customer_name || 'Unknown', phone: b.phone })));
 
       container.innerHTML = `
         <div class="table-wrapper">
           <table>
             <thead>
               <tr>
+                ${BulkShare.headerCheckbox('oldbal')}
                 <th>Customer</th>
                 <th>Phone</th>
                 <th>Amount</th>
@@ -150,6 +153,7 @@ const OldBalancesPage = {
                 const isDebit = b.balance_type === 'Debit';
                 return `
                 <tr>
+                  ${BulkShare.rowCheckbox('oldbal', b.id)}
                   <td><strong>${this.escapeHtml(b.customer_name) || 'Unknown'}</strong></td>
                   <td>${this.escapeHtml(b.phone) || '-'}</td>
                   <td style="font-weight:600;color:${isDebit ? 'var(--danger)' : 'var(--success)'};">${isDebit ? '' : ''}${Formatters.formatCurrency(b.amount, currency)}</td>
@@ -173,6 +177,7 @@ const OldBalancesPage = {
         </div>
       `;
 
+      BulkShare.refreshBar('oldbal');
       // Pagination
       const paginationContainer = document.getElementById("old-balances-pagination");
       if (paginationContainer && data.totalPages > 1) {
@@ -182,6 +187,37 @@ const OldBalancesPage = {
       }
     } catch (err) {
       container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${err.message}</p></div>`;
+    }
+  },
+
+  // Several old-balance rows can belong to one customer: send each customer once.
+  _uniqueCustomers(items) {
+    const seen = new Set();
+    return items.filter(i => i.customerId && !seen.has(i.customerId) && seen.add(i.customerId))
+      .map(i => ({ id: i.customerId, label: i.label, phone: i.phone }));
+  },
+
+  sendSelected() {
+    BulkShare.start({
+      title: 'Send statements on WhatsApp',
+      items: this._uniqueCustomers(BulkShare.selectedItems('oldbal')),
+      prepare: (item) => CustomersPage.buildStatementShare(item.id),
+    });
+  },
+
+  async sendAll() {
+    try {
+      const { search, balance_type } = this.currentFilters;
+      const result = await window.api.getAllOldBalances({ search, balance_type });
+      if (!result.success) throw new Error(result.error);
+      const rows = Array.isArray(result.data) ? result.data : result.data.balances || [];
+      BulkShare.start({
+        title: 'Send statements on WhatsApp',
+        items: this._uniqueCustomers(rows.map(b => ({ customerId: b.customer_id, label: b.customer_name || 'Unknown', phone: b.phone }))),
+        prepare: (item) => CustomersPage.buildStatementShare(item.id),
+      });
+    } catch (err) {
+      Toast.error(err.message);
     }
   },
 

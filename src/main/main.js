@@ -112,6 +112,7 @@ app.whenReady().then(() => {
   // Initialize database
   try {
     initDatabase();
+    require('../services/authService').seedDefaultOwner();
     require('../services/backupService').runAutoBackup();
     console.log('Database initialized successfully.');
   } catch (err) {

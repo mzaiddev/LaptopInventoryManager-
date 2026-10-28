@@ -59,6 +59,14 @@ class AuthService {
     return !!getDatabase().prepare("SELECT 1 FROM users LIMIT 1").get();
   }
 
+  // Friend edition: a fresh copy starts with a known owner so no activation key is needed.
+  // The owner changes both passwords in Settings. An existing owner is never touched.
+  seedDefaultOwner() {
+    if (this.hasOwner()) return false;
+    this.setOwner({ username: "admin", password: "admin123", superPassword: "super123" });
+    return true;
+  }
+
   // Replaces any existing owner: used by the vendor console and first-run setup.
   setOwner({ username, password, superPassword }) {
     if (!username || !String(username).trim()) throw new Error("Username is required");

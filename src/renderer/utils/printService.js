@@ -543,9 +543,9 @@ const PrintService = {
     const shopInfo = `
       <div style="text-align:center;margin-bottom:4px;">
         <h1 style="font-size:24px;color:#000;margin-bottom:2px;">${this.escapeHtml(company.shopName)}</h1>
-        ${company.address ? `<p style="font-size:14px;color:#000;margin:1px 0;">${this.escapeHtml(company.address)}</p>` : ""}
+        ${company.raw ? ShopInfo.contactHtml(company.raw) : (company.address ? `<p style="font-size:14px;color:#000;margin:1px 0;">${this.escapeHtml(company.address)}</p>` : "")}
         <div style="font-size:12px;color:#000;">
-          ${company.phone ? `Phone: ${this.escapeHtml(company.phone)} | ` : ""}
+          ${!company.raw && company.phone ? `Phone: ${this.escapeHtml(company.phone)} | ` : ""}
           ${company.email ? `Email: ${this.escapeHtml(company.email)} | ` : ""}
           Printed: ${dateStr} ${timeStr}
         </div>

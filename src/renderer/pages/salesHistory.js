@@ -51,6 +51,7 @@ const SalesHistoryPage = {
               <input type="date" id="filter-sale-date-to" onchange="SalesHistoryPage.onFilter()" title="Date To" style="padding:8px;border:1px solid var(--border-color);border-radius:var(--radius);font-size:13px;background:var(--card-bg);color:var(--text-primary);">
             </div>
           </div>
+          ${BulkShare.barHtml('sales', 'SalesHistoryPage.sendSelected()', 'SalesHistoryPage.sendAll()', 'WhatsApp All Invoices')}
           <div id="sales-table-container"><div class="loading"><div class="spinner"></div></div></div>
           <div id="sales-pagination"></div>
         </div>
@@ -98,11 +99,13 @@ const SalesHistoryPage = {
         return;
       }
 
+      BulkShare.register('sales', data.sales.map(l => ({ id: l.sale_id, label: l.sale_reference + ' - ' + (l.customer_name || 'N/A'), phone: l.customer_phone })));
       container.innerHTML = `
         <div class="table-wrapper">
           <table>
             <thead>
               <tr>
+                ${BulkShare.headerCheckbox('sales')}
                 <th>Reference</th>
                 <th>Customer</th>
                 <th>Date</th>
@@ -118,6 +121,7 @@ const SalesHistoryPage = {
             <tbody>
               ${data.sales.map(l => `
                 <tr>
+                  ${BulkShare.rowCheckbox('sales', l.sale_id)}
                   <td><strong>${this.escapeHtml(l.sale_reference)}</strong></td>
                   <td>
                     <a href="#" onclick="SalesHistoryPage.viewCustomerLedger(${l.customer_id});return false;" style="color:var(--primary);text-decoration:none;">
@@ -165,6 +169,7 @@ const SalesHistoryPage = {
         </div>
       `;
 
+      BulkShare.refreshBar('sales');
       const paginationContainer = document.getElementById("sales-pagination");
       if (paginationContainer && data.totalPages > 1) {
         paginationContainer.innerHTML = this.renderPagination(data);
@@ -578,16 +583,38 @@ const SalesHistoryPage = {
     }
   },
 
+  sendSelected() {
+    BulkShare.start({
+      title: 'Send invoices on WhatsApp',
+      items: BulkShare.selectedItems('sales'),
+      prepare: (item) => this.printInvoice(item.id, true, true),
+    });
+  },
+
+  // Every invoice matching the current filters, not just this page.
+  async sendAll() {
+    try {
+      const result = await window.api.getAllSales({ ...this.currentFilters, page: 1, limit: 5000 });
+      if (!result.success) throw new Error(result.error);
+      BulkShare.start({
+        title: 'Send invoices on WhatsApp',
+        items: result.data.sales.map(l => ({ id: l.sale_id, label: l.sale_reference + ' - ' + (l.customer_name || 'N/A'), phone: l.customer_phone })),
+        prepare: (item) => this.printInvoice(item.id, true, true),
+      });
+    } catch (err) {
+      Toast.error(err.message);
+    }
+  },
+
   // share=true: save the invoice as PDF and open WhatsApp instead of printing.
-  async printInvoice(saleId, share = false) {
+  async printInvoice(saleId, share = false, payloadOnly = false) {
     try {
       const settingsResult = await window.api.getSettings();
       const company = settingsResult.success ? settingsResult.data : {};
       const shopName = company.shop_name || 'Laptop Inventory Manager';
-      const shopAddress = company.shop_address || '';
-      const shopPhone = company.phone_number || '';
       const result = await window.api.getSaleById(saleId);
       if (!result.success || !result.data) {
+        if (payloadOnly) throw new Error('Failed to load sale.');
         Toast.error("Failed to load sale for printing.");
         return;
       }
@@ -614,8 +641,7 @@ const SalesHistoryPage = {
         </style></head>
         <body>
           <div class="shop-header"><h1>${this.escapeHtml(shopName)}</h1>
-            ${shopAddress ? `<p>${this.escapeHtml(shopAddress)}</p>` : ''}
-            ${shopPhone ? `<p>Phone: ${this.escapeHtml(shopPhone)}</p>` : ''}
+            ${ShopInfo.contactHtml(company, 'font-size:14px;color:#000;margin:1px 0;')}
           </div>
           <div class="invoice-header"><h2>INVOICE</h2><p>${this.escapeHtml(l.reference_no)}</p></div>
           <div class="invoice-info">
@@ -633,6 +659,7 @@ const SalesHistoryPage = {
             <div>Discount${l.discount_type === 'percent' ? ' (' + l.discount_value + '%)' : ''}: -${Formatters.formatCurrency(l.discount_amount, currency)}</div>` : ''}
             <div class="grand-total">Total: ${Formatters.formatCurrency(l.total_amount, currency)}</div>
           </div>
+          ${ShopInfo.paymentHtml(company)}
           <div class="invoice-footer"><p>Thank you for your business!</p></div>
           ${share ? '' : '<script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script>'}
         </body></html>
@@ -649,8 +676,12 @@ const SalesHistoryPage = {
         t('Dear ' + l.customer_name + ',') + '\n\n' + t('Invoice ' + l.reference_no + ' (' + Formatters.formatDate(l.issue_date) + ')') + '\n' +
         t('Total:') + ' ' + money(l.total_amount) + '\n' +
         t('Paid:') + ' ' + money(l.paid_amount) + '\n' +
-        t('Balance:') + ' ' + money(l.remaining_amount) + '\n\n' + t('Thank you!') + '\n- ' + shopName;
-      const r = await window.api.shareStatement({ html: I18n.translateHtml(html), customerName: 'Invoice-' + l.reference_no, phone: l.phone || '', message });
+        t('Balance:') + ' ' + money(l.remaining_amount) + '\n\n' +
+        (ShopInfo.hasPayment(company) ? t('Payment Details') + ':\n' + ShopInfo.paymentText(company, t) + '\n\n' : '') +
+        t('Thank you!') + '\n- ' + shopName;
+      const payload = { html: I18n.translateHtml(html), customerName: 'Invoice-' + l.reference_no, phone: l.phone || '', message };
+      if (payloadOnly) return payload;
+      const r = await window.api.shareStatement(payload);
       if (!r.success) Toast.error(r.error || 'Could not create the PDF.');
       else if (r.data.chat === 'none') Toast.warning('PDF saved. This customer has no valid phone number, so WhatsApp was not opened.');
       else if (r.data.clipboardOk) Toast.success('PDF copied. In the WhatsApp chat press Ctrl+V, then Send.');

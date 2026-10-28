@@ -47,6 +47,7 @@ const CustomersPage = {
               </select>
             </div>
           </div>
+          ${BulkShare.barHtml('customers', 'CustomersPage.sendSelected()', 'CustomersPage.sendAll()', 'WhatsApp All Customers')}
           <div id="customers-table-container"><div class="loading"><div class="spinner"></div></div></div>
           <div id="customers-pagination"></div>
         </div>
@@ -77,11 +78,13 @@ const CustomersPage = {
         return;
       }
 
+      BulkShare.register('customers', data.customers.map(c => ({ id: c.id, label: c.customer_name, phone: c.phone })));
       container.innerHTML = `
         <div class="table-wrapper">
           <table>
             <thead>
               <tr>
+                ${BulkShare.headerCheckbox('customers')}
                 <th>Name</th>
                 <th>Phone</th>
                 <th>Address</th>
@@ -93,6 +96,7 @@ const CustomersPage = {
             <tbody>
               ${data.customers.map(c => `
                 <tr>
+                  ${BulkShare.rowCheckbox('customers', c.id)}
                   <td><strong>${this.escapeHtml(c.customer_name)}</strong></td>
                   <td>${this.escapeHtml(c.phone) || '-'}</td>
                   <td>${this.escapeHtml(c.address) || '-'}</td>
@@ -121,6 +125,7 @@ const CustomersPage = {
         </div>
       `;
 
+      BulkShare.refreshBar('customers');
       const paginationContainer = document.getElementById("customers-pagination");
       if (paginationContainer && data.totalPages > 1) {
         paginationContainer.innerHTML = this.renderPagination(data);
@@ -586,8 +591,7 @@ const CustomersPage = {
       <div class="customer-statement" style="font-family:Arial, Helvetica, sans-serif;padding:15px;">
         <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid #000;">
           <h2 style="font-size:24px;margin-bottom:6px;color:#000;">${this.escapeHtml(stmt.shopName)}</h2>
-          ${stmt.shopAddress ? '<p style="font-size:15px;color:#000;margin:2px 0;">' + this.escapeHtml(stmt.shopAddress) + '</p>' : ''}
-          ${stmt.shopPhone ? '<p style="font-size:15px;color:#000;margin:2px 0;">Phone: ' + this.escapeHtml(stmt.shopPhone) + '</p>' : ''}
+          ${ShopInfo.contactHtml(stmt.shop, 'font-size:15px;color:#000;margin:2px 0;')}
           <h3 style="margin-top:10px;font-size:24px;color:#000;">Customer Statement</h3>
         </div>
         <div style="margin-bottom:16px;font-size:15px;">
@@ -607,6 +611,7 @@ const CustomersPage = {
         ${salesHtml}
         ` : ''}
         ${returnsHtml}
+        ${ShopInfo.paymentHtml(stmt.shop)}
         <div style="text-align:center;margin-top:30px;padding-top:16px;border-top:1px solid #000;font-size:13px;color:#000;">
           <p>Generated on ${Formatters.formatDateTime(new Date().toISOString())}</p>
           <p>This is a computer-generated statement from ${this.escapeHtml(stmt.shopName)}</p>
@@ -662,48 +667,74 @@ const CustomersPage = {
     printWindow.document.close();
   },
 
+  // Builds everything shareStatement needs for one customer: { html, customerName, phone, message }.
+  async buildStatementShare(customerId) {
+    const result = await window.api.getCustomerStatement(customerId);
+    if (!result.success || !result.data) throw new Error('Failed to load statement.');
+
+    const stmt = result.data;
+    const currency = stmt.currency || App.currency || 'USD';
+    const printContent = this.buildStatementHtml(stmt, currency);
+    const customerName = stmt.customer.customer_name;
+    const shopName = document.getElementById('shop-name')?.textContent || 'Laptop Inventory Manager';
+    const dateStr = new Date().toLocaleDateString();
+    const sum = this.summaryLines(stmt.balance.statement);
+    const money = (n) => Formatters._formatCurrency(n, currency, true);
+    const t = (s) => I18n.t(s); // the message is written in the language the app is in
+    const pay = ShopInfo.paymentText(stmt.shop, t);
+    const message =
+      t('Dear ' + customerName + ',') + '\n\n' +
+      t('Here is your account statement from ' + shopName + ' (' + dateStr + ').') + '\n\n' +
+      sum.lines.map((l) => (l.sign ? l.sign + ' ' : '') + t(l.label) + ': ' + money(l.amount)).join('\n') + '\n' +
+      '= ' + t(sum.totalLabel) + ': ' + money(sum.total) + '\n\n' +
+      (pay ? t('Payment Details') + ':\n' + pay + '\n\n' : '') +
+      t('The attached PDF lists every entry. For any questions please contact us. Thank you!') + '\n- ' + shopName;
+    return {
+      html: I18n.translateHtml(this._statementDocument(customerName, printContent, false)),
+      customerName,
+      phone: stmt.customer.phone || '',
+      message,
+    };
+  },
+
   async shareStatementWhatsApp(customerId) {
     try {
-      const result = await window.api.getCustomerStatement(customerId);
-      if (!result.success || !result.data) {
-        Toast.error('Failed to load statement.');
-        return;
+      const payload = await this.buildStatementShare(customerId);
+      const r = await window.api.shareStatement(payload);
+      if (!r.success) {
+        Toast.error(r.error || 'Could not create the PDF.');
+      } else if (r.data.chat === 'none') {
+        Toast.warning('PDF saved. This customer has no valid phone number, so WhatsApp was not opened.');
+      } else if (r.data.clipboardOk) {
+        Toast.success('PDF copied. In the WhatsApp chat press Ctrl+V, then Send.');
+      } else {
+        Toast.warning('WhatsApp opened. The PDF is in the folder that just opened: drag it into the chat.');
       }
+    } catch (err) {
+      Toast.error(err.message);
+    }
+  },
 
-      const stmt = result.data;
-      const currency = stmt.currency || App.currency || 'USD';
-      const printContent = this.buildStatementHtml(stmt, currency);
-      const customerName = stmt.customer.customer_name;
-      const phone = stmt.customer.phone || '';
+  sendSelected() {
+    BulkShare.start({
+      title: 'Send statements on WhatsApp',
+      items: BulkShare.selectedItems('customers'),
+      prepare: (item) => this.buildStatementShare(item.id),
+    });
+  },
 
-      {
-        const shopName = document.getElementById('shop-name')?.textContent || 'Laptop Inventory Manager';
-        const dateStr = new Date().toLocaleDateString();
-        const sum = this.summaryLines(stmt.balance.statement);
-        const money = (n) => Formatters._formatCurrency(n, currency, true);
-        const t = (s) => I18n.t(s); // the message is written in the language the app is in
-        const message =
-          t('Dear ' + customerName + ',') + '\n\n' +
-          t('Here is your account statement from ' + shopName + ' (' + dateStr + ').') + '\n\n' +
-          sum.lines.map((l) => (l.sign ? l.sign + ' ' : '') + t(l.label) + ': ' + money(l.amount)).join('\n') + '\n' +
-          '= ' + t(sum.totalLabel) + ': ' + money(sum.total) + '\n\n' +
-          t('The attached PDF lists every entry. For any questions please contact us. Thank you!') + '\n- ' + shopName;
-        const r = await window.api.shareStatement({
-          html: I18n.translateHtml(this._statementDocument(customerName, printContent, false)),
-          customerName,
-          phone,
-          message,
-        });
-        if (!r.success) {
-          Toast.error(r.error || 'Could not create the PDF.');
-        } else if (r.data.chat === 'none') {
-          Toast.warning('PDF saved. This customer has no valid phone number, so WhatsApp was not opened.');
-        } else if (r.data.clipboardOk) {
-          Toast.success('PDF copied. In the WhatsApp chat press Ctrl+V, then Send.');
-        } else {
-          Toast.warning('WhatsApp opened. The PDF is in the folder that just opened: drag it into the chat.');
-        }
-      }
+  // Every customer matching the current search/status filter, not just this page.
+  async sendAll() {
+    try {
+      const { search, status } = this.currentFilters;
+      const result = await window.api.getAllCustomers({ search, status });
+      if (!result.success) throw new Error(result.error);
+      const list = Array.isArray(result.data) ? result.data : result.data.customers || [];
+      BulkShare.start({
+        title: 'Send statements on WhatsApp',
+        items: list.map(c => ({ id: c.id, label: c.customer_name, phone: c.phone })),
+        prepare: (item) => this.buildStatementShare(item.id),
+      });
     } catch (err) {
       Toast.error(err.message);
     }

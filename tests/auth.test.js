@@ -80,3 +80,15 @@ test("hasOwner and installId", () => {
   auth.setOwner({ username: "o", password: "pppp", superPassword: "ssss" });
   assert.strictEqual(auth.hasOwner(), true);
 });
+
+test("a fresh copy gets the default owner, and an existing owner is kept", () => {
+  freshDb();
+  const auth = require("../src/services/authService");
+  assert.strictEqual(auth.seedDefaultOwner(), true);
+  assert.deepStrictEqual(auth.login("admin", "admin123"), { ok: true });
+  assert.strictEqual(auth._verifySuper("super123"), true);
+  auth.changePassword("admin123", "mynewpass");
+  assert.strictEqual(auth.seedDefaultOwner(), false);
+  assert.strictEqual(auth.login("admin", "admin123").ok, false);
+  assert.strictEqual(auth.login("admin", "mynewpass").ok, true);
+});

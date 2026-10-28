@@ -1025,7 +1025,8 @@ const InventoryPage = {
           shopName: result.data.shop_name || 'Laptop Inventory Manager',
           address: result.data.shop_address || '',
           phone: result.data.phone_number || '',
-          email: result.data.email || ''
+          email: result.data.email || '',
+          raw: result.data
         };
       }
     } catch(e) {}
@@ -1148,9 +1149,9 @@ const InventoryPage = {
       '<div class="print-actions"><button class="btn-print" onclick="window.print()">Print</button><button class="btn-pdf" onclick="window.print()">Download PDF</button></div>' +
       '<div class="print-header">' +
         '<h1>' + this.escapeHtml(company.shopName) + '</h1>' +
-        (company.address ? '<p style="font-size:11px;color:#64748b;">' + this.escapeHtml(company.address) + '</p>' : '') +
+        (company.raw ? ShopInfo.contactHtml(company.raw, 'font-size:12px;color:#000;') : (company.address ? '<p style="font-size:11px;color:#64748b;">' + this.escapeHtml(company.address) + '</p>' : '')) +
         '<div style="font-size:13px;color:#000;">' +
-          (company.phone ? 'Phone: ' + this.escapeHtml(company.phone) + ' | ' : '') +
+          (!company.raw && company.phone ? 'Phone: ' + this.escapeHtml(company.phone) + ' | ' : '') +
           (company.email ? 'Email: ' + this.escapeHtml(company.email) + ' | ' : '') +
           'Printed: ' + dateStr + ' ' + timeStr +
         '</div>' +

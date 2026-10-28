@@ -839,6 +839,7 @@ const LedgersPage = {
           address: result.data.shop_address || "",
           phone: result.data.phone_number || "",
           email: result.data.email || "",
+          raw: result.data,
         };
       }
     } catch (e) {}

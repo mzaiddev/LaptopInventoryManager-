@@ -217,8 +217,6 @@ const ReportsPage = {
       const settingsResult = await window.api.getSettings();
       const company = settingsResult.success ? settingsResult.data : {};
       const shopName = company.shop_name || 'Laptop Inventory Manager';
-      const shopAddress = company.shop_address || '';
-      const shopPhone = company.phone_number || '';
       const dateStr = new Date().toLocaleDateString();
       
       const printWindow = window.open('', '_blank', 'width=1100,height=800');
@@ -410,8 +408,7 @@ const ReportsPage = {
   </div>
   <div class="header">
     <h1>${this.escapeHtml(shopName)}</h1>
-    ${shopAddress ? `<div class="company-info">${this.escapeHtml(shopAddress)}</div>` : ''}
-    ${shopPhone ? `<div class="company-info">Phone: ${this.escapeHtml(shopPhone)}</div>` : ''}
+    ${ShopInfo.contactHtml(company, 'font-size:13px;color:#000;margin-top:2px;')}
     <div class="sub">${this.escapeHtml(title)} | ${dateStr}</div>
   </div>
   ${content}

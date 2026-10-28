@@ -161,6 +161,30 @@ const SettingsPage = {
           </div>
           <div class="form-row">
             <div class="form-group">
+              <label>Second Phone Number</label>
+              <input type="text" class="form-control" id="set-phone-2" value="${this.escapeHtml(settings.phone_number_2 || "")}">
+            </div>
+            <div class="form-group">
+              <label>Google Map Link</label>
+              <input type="text" class="form-control" id="set-map-link" placeholder="https://maps.google.com/..." value="${this.escapeHtml(settings.google_map_link || "")}">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>EasyPaisa Number</label>
+              <input type="text" class="form-control" id="set-easypaisa" value="${this.escapeHtml(settings.easypaisa_number || "")}">
+            </div>
+            <div class="form-group">
+              <label>Bank Name</label>
+              <input type="text" class="form-control" id="set-bank-name" value="${this.escapeHtml(settings.bank_name || "")}">
+            </div>
+            <div class="form-group">
+              <label>Bank Account Number</label>
+              <input type="text" class="form-control" id="set-bank-account" value="${this.escapeHtml(settings.bank_account_number || "")}">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
               <label>Currency</label>
               <select class="form-control" id="set-currency">
                 <option value="USD" ${settings.currency === "USD" ? "selected" : ""}>USD ($)</option>
@@ -239,6 +263,11 @@ const SettingsPage = {
         document.getElementById("set-shop-address")?.value?.trim() || "",
       phone_number: document.getElementById("set-phone")?.value?.trim() || "",
       email: document.getElementById("set-email")?.value?.trim() || "",
+      phone_number_2: document.getElementById("set-phone-2")?.value?.trim() || "",
+      google_map_link: document.getElementById("set-map-link")?.value?.trim() || "",
+      easypaisa_number: document.getElementById("set-easypaisa")?.value?.trim() || "",
+      bank_name: document.getElementById("set-bank-name")?.value?.trim() || "",
+      bank_account_number: document.getElementById("set-bank-account")?.value?.trim() || "",
       currency: document.getElementById("set-currency")?.value || "USD",
       theme: document.getElementById("set-theme")?.value || "light",
       compact_numbers: document.getElementById("set-compact")?.value || "1",
