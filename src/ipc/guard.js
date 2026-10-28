@@ -20,6 +20,19 @@ const AUDITED = {
   "supplier:addPayment": ["supplier.payment", "supplier_entry"],
   "supplier:updateEntry": ["supplier_entry.edit", "supplier_entry"],
   "supplier:deleteEntry": ["supplier_entry.delete", "supplier_entry"],
+  "closing:save": ["day.close", "day_closing"],
+  "service:add": ["service_job.add", "service_job"],
+  "service:update": ["service_job.edit", "service_job"],
+  "service:setStatus": ["service_job.status", "service_job"],
+  "service:addPayment": ["service_job.payment", "service_job"],
+  "tradein:add": ["trade_in.add", "trade_in"],
+  "instalment:create": ["instalment.create", "instalment_plan"],
+  "instalment:cancel": ["instalment.cancel", "instalment_plan"],
+  "import:customers": ["customer.import", "import"],
+  "import:suppliers": ["supplier.import", "import"],
+  "recycle:restore": ["recycle.restore", "recycle_bin"],
+  "recycle:purge": ["recycle.purge", "recycle_bin"],
+  "lock:set": ["day.lock", "setting"],
   "lists:add": ["list.add", "list_item"],
   "lists:rename": ["list.rename", "list_item"],
   "lists:merge": ["list.merge", "list_item"],
@@ -61,4 +74,13 @@ function requireSuper(auth, fn) {
   };
 }
 
-module.exports = { guardIpc, requireSuper, AUDITED };
+// Cash and bank amounts stay hidden until the owner unlocks them with the super-password (Show Purchase Prices).
+// Unlike requireSuper this does not use up the unlock: it lasts until Hide or logout.
+function requireCostVisible(auth, fn) {
+  return async (event, ...args) => {
+    if (!auth.isCostVisible()) return { success: false, error: "SUPER_REQUIRED" };
+    return fn(event, ...args);
+  };
+}
+
+module.exports = { guardIpc, requireSuper, requireCostVisible, AUDITED };

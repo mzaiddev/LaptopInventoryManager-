@@ -122,9 +122,12 @@ class ModalComponent {
     ];
     // Categories come from Settings > Lists & Setup, loaded into App.categories at start.
     const categories =
-      window.App && Array.isArray(window.App.categories) ? window.App.categories : [];
+      typeof App !== "undefined" && Array.isArray(App.categories) ? App.categories : [];
 
-    const catOptions = categories
+    // Fields this shop does not use are hidden, not removed, so their stored values are kept when a product is saved.
+    const hide = (k) => (typeof App !== "undefined" && App.fields && App.fields[k] === false ? ' style="display:none;"' : "");
+
+    const catOptions = [...new Set([...categories, ...(pd.category ? [pd.category] : [])])]
       .map(
         (c) =>
           `<option value="${c}"${pd.category === c ? " selected" : ""}>${c}</option>`,
@@ -166,11 +169,11 @@ class ModalComponent {
           <!-- Brand field removed -->
         </div>
         <div class="form-row-3">
-          <div class="form-group">
+          <div class="form-group"${hide("model")}>
             <label>Model</label>
             <input type="text" class="form-control" id="pf-model" value="${this.escapeHtml(pd.model || "")}">
           </div>
-          <div class="form-group">
+          <div class="form-group"${hide("serial")}>
             <label>Serial Number</label>
             <input type="text" class="form-control" id="pf-serial" value="${this.escapeHtml(pd.serial_number || "")}">
           </div>
@@ -201,11 +204,11 @@ class ModalComponent {
             <label>Purchase Date</label>
             <input type="date" class="form-control" id="pf-purchase-date" value="${pd.purchase_date || ""}">
           </div>
-          <div class="form-group">
+          <div class="form-group"${hide("warranty")}>
             <label>Warranty</label>
             <input type="text" class="form-control" id="pf-warranty" value="${this.escapeHtml(pd.warranty || "")}" placeholder="e.g., 1 year">
           </div>
-          <div class="form-group">
+          <div class="form-group"${hide("location")}>
             <label>Storage Location</label>
             <input type="text" class="form-control" id="pf-location" value="${this.escapeHtml(pd.storage_location || "")}" placeholder="Shelf/Rack">
           </div>
@@ -217,7 +220,7 @@ class ModalComponent {
               ${statusOpts}
             </select>
           </div>
-          <div class="form-group">
+          <div class="form-group"${hide("condition")}>
             <label>Condition</label>
             <select class="form-control" id="pf-condition">
               ${conditionOpts}

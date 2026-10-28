@@ -84,6 +84,8 @@ const BulkShare = {
     const n = this._scope(scopeName).selected.size;
     const count = document.getElementById(`bs-count-${scopeName}`);
     if (count) count.textContent = n + " selected";
+    const bar = document.getElementById(`bs-bar-${scopeName}`);
+    if (bar) bar.classList.toggle("bulk-floating", n > 0);
     const send = document.getElementById(`bs-send-${scopeName}`);
     if (send) send.disabled = n === 0;
     const clear = document.getElementById(`bs-clear-${scopeName}`);

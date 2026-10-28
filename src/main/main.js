@@ -113,7 +113,9 @@ app.whenReady().then(() => {
   let startupBackupPath = null;
   try {
     initDatabase();
+    require('../services/recycleService').purgeOld(30);
     require('../services/authService').seedDefaultOwner();
+    require('../services/authService').restoreSession();
     startupBackupPath = require('../services/backupService').runAutoBackup({ upload: false });
     console.log('Database initialized successfully.');
   } catch (err) {

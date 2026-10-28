@@ -10,13 +10,19 @@ Each phase gets its own short spec, task list and test-first build.
 | F1 Smart defaults | Customers (due filter, Due column, print default) done. Suppliers "With balance" default and Inventory "Available to sell" default done, both remembered per PC. Reports and ledger pickers still to do |
 | F2 Task Center | Built (jobs tables, queue service, top-right panel, WhatsApp and product import tasks). Export tasks and scheduled work still to do |
 | F3 Lists & Setup | Built: product categories, expense categories, storage locations; rename, merge, hide, delete-if-unused, reorder, usage counts. Units, conditions, payment accounts, price tiers still to do |
-| F4 Business profile | Not started |
-| F5 Attention center and health page | Not started (global search is built) |
-| F6 Undo, recycle bin, day lock | Not started |
-| F7 Import/Export engine | Product CSV import built; shared engine for customers, suppliers and exports still to do |
-| A Google Drive backup | Service and Backup page built; needs the app's Google client ID configured before real use |
+| F4 Business profile | Built: business type presets (Laptop dealer, General store, Custom) and per-field switches for model, serial, warranty, location and condition in Settings; hidden fields keep their data. Wording changes (Item/Client) still to do |
+| F5 Attention center and health page | Built: bell with backup, overdue customers, low stock, failed tasks and negative cash; System Health page. Global search is built too |
+| F6 Undo, recycle bin, day lock | Built. Recycle Bin for deleted products and expenses (30 days, restore, Undo toast). Day lock enforced by database triggers; moving it needs the super-password. Deleted customers, sales and payments are not in the bin: deleting a customer is still permanent |
+| F7 Import/Export engine | Built as CSV (opens in Excel): customer and supplier import with preview and row-by-row reasons; CSV export on customers, suppliers, products, expenses, ageing, profit. A real .xlsx file would need one extra package |
+| A Google Drive backup | Built, plus client-secret support and docs/google-drive-setup.md. Needs your Google Cloud client ID before real use (the one step only you can do) |
 | UI refresh | Shared stylesheet built (light and dark, grouped sidebar, tabs, tables, status pills). Page-by-page polish and the floating bulk-action bar still to do |
-| Phases 5 to 11 | Not started |
+| Ageing report | Built: Overdue Ageing tab (0-30, 31-60, 61-90, 90+ days; payments clear the oldest charges first). The Reports page also got its missing sidebar entry |
+| Daily closing | Built: Close the day on the Cash & Bank Book (expected vs counted cash, difference saved). The Cash & Bank Book now needs the super-password |
+| Floating bulk bar | Built (inventory and customers/sales lists) |
+| Profit by product | Built: Reports > Profit by Product (needs the super-password; discount spread across lines; returns taken off) |
+| Dealer modules | Built: Service Jobs (billed on delivery), Trade-ins (credit, cash or bank; cash recorded as a supplier payment so it is not counted twice), Instalments (plans, overdue list, bell alert). Hidden for the General store type |
+| Wording | Built: General store says Item instead of Product on labels (saved data is never rewritten) |
+| Phases 5 to 11 | Still not built: WhatsApp reminder templates, quotations, price tiers, scheduled messages, staff roles, first-run wizard, auto-update |
 
 Release 1 is phases 0 to 4. Phases 5 and later start after real client feedback on Release 1.
 This file replaces `docs/client-value-roadmap.md`.

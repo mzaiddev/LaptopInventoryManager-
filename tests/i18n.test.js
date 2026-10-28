@@ -108,3 +108,12 @@ test("report headings and footers joined with a bar, times, and item counts", ()
 test("a date followed by the sale type", () => {
   assert.strictEqual(t("Oct 24, 2026 - Sale"), "24 اکتوبر 2026 - فروخت");
 });
+
+test("messages that carry numbers translate, singular and plural", () => {
+  assert.strictEqual(t("1 supplier with no balance hidden."), "1 سپلائرز جن کا بیلنس صفر ہے چھپائے گئے ہیں۔");
+  assert.strictEqual(t("3 customers overdue"), "3 گاہکوں کی رقم مدت سے زیادہ باقی ہے");
+  assert.strictEqual(t("1 instalment overdue"), "1 اقساط کی مدت گزر چکی ہے");
+  assert.strictEqual(t("Last backup was 4 days ago."), "آخری بیک اپ 4 دن پہلے لیا گیا تھا۔");
+  assert.strictEqual(t("Short by 200"), "کمی: 200");
+  assert.strictEqual(t("Job SRV-20261020-0001 created."), "جاب SRV-20261020-0001 بن گئی۔");
+});

@@ -76,9 +76,12 @@ class WhatsAppLink {
     });
   }
 
+  // Linking by QR code never sets `registered` (only phone-number linking does), so a stored `me` also counts.
+  // Without this the link looked "not saved" after every restart and the QR had to be scanned again.
   _registered() {
     try {
-      return JSON.parse(fs.readFileSync(path.join(this.sessionDir, "creds.json"), "utf8")).registered === true;
+      const creds = JSON.parse(fs.readFileSync(path.join(this.sessionDir, "creds.json"), "utf8"));
+      return creds.registered === true || !!(creds.me && creds.me.id);
     } catch {
       return false;
     }

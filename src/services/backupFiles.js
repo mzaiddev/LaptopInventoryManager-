@@ -68,4 +68,18 @@ function autoBackup(db, dir, now = new Date()) {
   return file;
 }
 
-module.exports = { verify, restoreFile, pruneOld, autoBackup };
+// Time of the newest backup file in a backup folder or its auto/ subfolder (null if none).
+function newestBackupTime(dir) {
+  let newest = null;
+  for (const folder of [dir, path.join(dir, "auto")]) {
+    if (!fs.existsSync(folder)) continue;
+    for (const f of fs.readdirSync(folder)) {
+      if (!f.endsWith(".db")) continue;
+      const t = fs.statSync(path.join(folder, f)).mtime;
+      if (!newest || t > newest) newest = t;
+    }
+  }
+  return newest;
+}
+
+module.exports = { verify, restoreFile, pruneOld, autoBackup, newestBackupTime };

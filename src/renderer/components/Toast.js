@@ -38,6 +38,14 @@ class ToastComponent {
     this.timeouts.set(toast, timeout);
   }
 
+  // A message with one button (for example Undo). Stays a little longer so there is time to click it.
+  action(message, label, handler, duration = 9000) {
+    this.show(`${message} <button class="toast-action-btn" style="margin-left:10px;background:none;border:1px solid currentColor;color:inherit;border-radius:6px;padding:2px 10px;cursor:pointer;font:inherit;font-weight:600;">${label}</button>`, 'success', duration);
+    const toast = this.container.lastElementChild;
+    const btn = toast && toast.querySelector('.toast-action-btn');
+    if (btn) btn.addEventListener('click', () => { toast.remove(); handler(); });
+  }
+
   success(message) {
     this.show(message, 'success');
   }
@@ -48,6 +56,10 @@ class ToastComponent {
 
   warning(message) {
     this.show(message, 'warning', 5000);
+  }
+
+  info(message) {
+    this.show(message, 'success', 5000);
   }
 }
 

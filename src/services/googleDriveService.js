@@ -23,7 +23,23 @@ class GoogleDriveService {
     this._fetchImpl = deps.fetch || global.fetch;
   }
 
-  get clientId() { return String(this.settings.getSetting('google_drive_client_id') || process.env.LIM_GOOGLE_CLIENT_ID || '').trim(); }
+  get clientId() { return String(this.settings.getSetting('google_drive_client_id') || process.env.LIM_GOOGLE_CLIENT_ID || require('../config/googleClient').clientId || '').trim(); }
+  // Google's desktop-app clients come with a secret that is not confidential; it is never saved in the database.
+  // The secret typed on the Backup page is kept encrypted with Windows secure storage (never in the database).
+  get secretPath() { return path.join(this.userDataPath, 'drive-client-secret.bin'); }
+  _readSavedSecret() {
+    try { return this.safeStorage.decryptString(this.fs.readFileSync(this.secretPath)).trim(); } catch { return ''; }
+  }
+  saveClientSecret(secret) {
+    const value = String(secret || '').trim();
+    if (!value) return;
+    if (/\s/.test(value) || value.length < 10) throw new Error('That Client secret does not look right. Copy it again from Google Cloud.');
+    if (!this.safeStorage || !this.safeStorage.isEncryptionAvailable()) throw new Error('Windows secure storage is unavailable; the Client secret was not saved.');
+    this.fs.mkdirSync(path.dirname(this.secretPath), { recursive:true });
+    this.fs.writeFileSync(this.secretPath, this.safeStorage.encryptString(value));
+  }
+  get clientSecret() { return String(this._readSavedSecret() || process.env.LIM_GOOGLE_CLIENT_SECRET || require('../config/googleClient').clientSecret || '').trim(); }
+  _withSecret(params) { const secret = this.clientSecret; if (secret) params.client_secret = secret; return params; }
   get authPath() { return path.join(this.userDataPath, 'drive-auth.bin'); }
 
   _readAuth() {
@@ -44,6 +60,7 @@ class GoogleDriveService {
     const auth = this._readAuth();
     return {
       configured: !!this.clientId,
+      secretSaved: !!this.clientSecret,
       connected: !!(auth && auth.refresh_token),
       lastUploadedAt: this.settings.getSetting('drive_last_upload_at') || null,
       lastUploadedFile: this.settings.getSetting('drive_last_upload_file') || null,
@@ -52,7 +69,8 @@ class GoogleDriveService {
   }
 
   async connect() {
-    if (!this.clientId) throw new Error('Google Drive is not configured in this app build.');
+    if (!this.clientId) throw new Error('Enter the Google Client ID on the Backup page first.');
+    if (!this.clientSecret) throw new Error('Enter the Google Client secret on the Backup page too.');
     if (this.connecting) return this.connecting;
     this.connecting = this._connect().finally(() => { this.connecting = null; });
     return this.connecting;
@@ -94,7 +112,7 @@ class GoogleDriveService {
       });
       const response = await this._fetchImpl('https://oauth2.googleapis.com/token', {
         method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body:new URLSearchParams({ client_id:this.clientId, code, code_verifier:verifier, redirect_uri:redirectUri, grant_type:'authorization_code' }),
+        body:new URLSearchParams(this._withSecret({ client_id:this.clientId, code, code_verifier:verifier, redirect_uri:redirectUri, grant_type:'authorization_code' })),
       });
       const tokens = await response.json();
       if (!response.ok || !tokens.refresh_token) throw new Error(tokens.error_description || tokens.error || 'Google did not grant offline backup access.');
@@ -121,7 +139,7 @@ class GoogleDriveService {
     if (auth.access_token && auth.expires_at > Date.now() + 60000) return auth.access_token;
     const response = await this._fetchImpl('https://oauth2.googleapis.com/token', {
       method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body:new URLSearchParams({ client_id:this.clientId, refresh_token:auth.refresh_token, grant_type:'refresh_token' }),
+      body:new URLSearchParams(this._withSecret({ client_id:this.clientId, refresh_token:auth.refresh_token, grant_type:'refresh_token' })),
     });
     const tokens = await response.json();
     if (!response.ok || !tokens.access_token) {

@@ -14,8 +14,18 @@ const App = {
     await this.start();
   },
 
+  // Which optional product fields this shop uses (Settings > Business type). All on until the owner turns some off.
+  fields: { model: true, serial: true, warranty: true, location: true, condition: true },
+
   // Purchase prices are hidden until the owner reveals them with the super-password.
   costVisible: false,
+
+  // The dealer modules (service jobs, trade-ins, instalments) are hidden for a general store.
+  applyBusinessType(type) {
+    const hide = type === "general_store";
+    document.querySelectorAll(".dealer-only").forEach((el) => { el.style.display = hide ? "none" : ""; });
+    if (typeof Wording !== "undefined") Wording.start(type);
+  },
 
   async syncCostVisibility() {
     const s = await window.api.authStatus();
@@ -41,6 +51,8 @@ const App = {
       if (result.success) {
         this.currency = result.data.currency || "USD";
         Formatters.compact = result.data.compact_numbers !== "0";
+        this.fields = BusinessProfile.fieldsFromSettings(result.data);
+        this.applyBusinessType(result.data.business_type);
         // This PC's own choice wins; the saved setting only decides on a fresh PC.
         if (result.data.language && !I18n.hasLocalChoice()) await I18n.setLanguage(result.data.language, false);
         const theme = result.data.theme || "light";
@@ -67,6 +79,7 @@ const App = {
 
     await this.syncCostVisibility();
     try { await WhatsAppLink.init(); } catch (e) { /* sending falls back to the manual way */ }
+    try { await Attention.init(); } catch (e) { /* the bell is optional */ }
     try { await TaskCenter.init(); } catch (e) { /* task actions remain available on demand */ }
 
     // Navigate to dashboard
@@ -122,6 +135,24 @@ const App = {
         case "backup":
           await BackupPage.load();
           break;
+        case "reports":
+          await ReportsPage.load();
+          break;
+        case "service-jobs":
+          await ServiceJobsPage.load();
+          break;
+        case "trade-ins":
+          await TradeInsPage.load();
+          break;
+        case "instalments":
+          await InstalmentsPage.load();
+          break;
+        case "recycle":
+          await RecyclePage.load();
+          break;
+        case "health":
+          await HealthPage.load();
+          break;
         case "lists":
           await ListsPage.load();
           break;
@@ -167,6 +198,24 @@ const App = {
       case "backup":
         await BackupPage.refresh();
         break;
+      case "reports":
+        await ReportsPage.refresh();
+        break;
+      case "service-jobs":
+        await ServiceJobsPage.refresh();
+        break;
+      case "trade-ins":
+        await TradeInsPage.refresh();
+        break;
+      case "instalments":
+        await InstalmentsPage.refresh();
+        break;
+      case "recycle":
+        await RecyclePage.refresh();
+        break;
+      case "health":
+        await HealthPage.load();
+        break;
       case "lists":
         await ListsPage.refresh();
         break;
@@ -187,7 +236,7 @@ const App = {
       },
       { field: "product_name", label: "Product Name", sortable: true },
       { field: "category", label: "Category", sortable: true },
-      { field: "model", label: "Model" },
+      ...(this.fields.model ? [{ field: "model", label: "Model" }] : []),
       {
         field: "quantity",
         label: "Qty",
@@ -209,7 +258,7 @@ const App = {
         sortable: true,
         type: "status-select",
       },
-      { field: "condition", label: "Condition", type: "condition-select" },
+      ...(this.fields.condition ? [{ field: "condition", label: "Condition", type: "condition-select" }] : []),
       {
         field: "created_at",
         label: "Created",

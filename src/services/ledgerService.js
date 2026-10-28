@@ -42,7 +42,13 @@ class LedgerService {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(customerId, referenceType, referenceId, description, debit, credit, runningBalance, entryDate, paymentMethod);
 
-    return { ledgerId: result.lastInsertRowid, runningBalance };
+    // An entry dated before the latest one (a back-dated payment, a delivery after a payment) must not leave the
+    // stored running balances out of date order, so put the whole customer's ledger back in order.
+    this._updateLedgerRunningBalances(customerId);
+    const total = db.prepare("SELECT COALESCE(SUM(debit), 0) - COALESCE(SUM(credit), 0) AS t FROM customer_ledger WHERE customer_id = ?").get(customerId).t;
+
+    // The customer's balance after this entry, whatever its date.
+    return { ledgerId: result.lastInsertRowid, runningBalance: roundMoney(total) };
   }
 
   _updateLedgerRunningBalances(customerId) {

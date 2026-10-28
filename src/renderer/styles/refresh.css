@@ -182,3 +182,106 @@ html[dir="rtl"] .table-wrapper table th:last-child, html[dir="rtl"] .table-wrapp
   #page-content { padding: 20px 18px 32px; }
   .page-header h1 { font-size: 21px; }
 }
+
+/* ---------- Attention bell ---------- */
+.attention-root { position: relative; }
+.attention-toggle {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border: 1px solid var(--border-color); border-radius: 10px;
+  background: var(--card-bg); color: var(--text-secondary); cursor: pointer;
+}
+.attention-toggle:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.attention-toggle svg { width: 18px; height: 18px; }
+.attention-count {
+  position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px;
+  display: inline-flex; align-items: center; justify-content: center; border-radius: 9px;
+  background: var(--warning); color: #fff; font-size: 11px; font-weight: 700;
+}
+.attention-count.bad { background: var(--danger); }
+.attention-panel {
+  position: absolute; top: calc(100% + 8px); right: 0; width: 340px; z-index: 300;
+  background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(16, 24, 40, 0.16); overflow: hidden;
+}
+.attention-head { padding: 12px 16px; font-weight: 700; font-size: 13px; border-bottom: 1px solid var(--border-color); }
+.attention-empty { padding: 20px 16px; color: var(--text-muted); font-size: 14px; }
+.attention-item {
+  display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; padding: 12px 16px;
+  background: none; border: none; border-bottom: 1px solid var(--border-color); cursor: pointer; color: var(--text-primary); font: inherit;
+}
+.attention-item:last-child { border-bottom: none; }
+.attention-item:hover { background: var(--bg-secondary); }
+.attention-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 6px; flex: none; background: var(--warning); }
+.attention-item.bad .attention-dot { background: var(--danger); }
+.attention-item.info .attention-dot { background: var(--primary); }
+.attention-text { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.attention-text small { color: var(--text-muted); font-size: 12.5px; }
+html[dir="rtl"] .attention-panel { right: auto; left: 0; }
+html[dir="rtl"] .attention-item { text-align: right; }
+.health-ok { color: var(--success); } .health-warn { color: var(--warning); } .health-bad { color: var(--danger); }
+
+/* ---------- Floating bulk-action bar ---------- */
+/* Appears at the bottom centre of the work area as soon as rows are selected: "3 selected  Export  Edit  Delete". */
+.selection-action-bar,
+.bulk-floating {
+  position: fixed;
+  bottom: 24px;
+  left: calc(var(--sidebar-width) + (100vw - var(--sidebar-width)) / 2);
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: max-content;
+  max-width: calc(100vw - var(--sidebar-width) - 48px);
+  margin: 0;
+  padding: 10px 16px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(16, 24, 40, 0.2);
+}
+html[dir="rtl"] .selection-action-bar,
+html[dir="rtl"] .bulk-floating {
+  left: calc((100vw - var(--sidebar-width)) / 2);
+}
+@media (max-width: 1100px) {
+  .selection-action-bar, .bulk-floating { max-width: calc(100vw - 32px); left: 50%; }
+}
+
+/* Alert details: the people or items behind a bell alert */
+.attention-group { border-bottom: 1px solid var(--border-color); }
+.attention-group:last-child { border-bottom: 0; }
+.attention-entry { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 7px 14px 7px 34px; border: 0; background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.attention-entry:hover, .attention-entry:focus { outline: 0; background: var(--bg-tertiary); }
+.attention-entry-text { min-width: 0; display: flex; flex-direction: column; }
+.attention-entry-text strong { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.attention-entry-text small { color: var(--text-secondary); font-size: 11px; overflow-wrap: anywhere; }
+.attention-entry em { flex: none; font-style: normal; font-size: 12px; font-weight: 650; color: var(--danger); }
+.attention-more { display: block; width: 100%; padding: 7px 14px 9px 34px; border: 0; background: transparent; color: var(--primary); font: inherit; font-size: 12px; font-weight: 600; text-align: start; cursor: pointer; }
+.attention-more:hover { text-decoration: underline; }
+html[dir="rtl"] .attention-entry, html[dir="rtl"] .attention-more { padding: 7px 34px 7px 14px; }
+
+/* Task loader: a small spinner on the Tasks button and on each running task */
+@keyframes lim-spin { to { transform: rotate(360deg); } }
+.task-spin { display: inline-block; width: 14px; height: 14px; flex: none; border: 2px solid color-mix(in srgb, var(--primary) 25%, transparent); border-top-color: var(--primary); border-radius: 50%; animation: lim-spin .8s linear infinite; }
+.task-center-toggle.working { border-color: var(--primary); }
+.task-card.highlight { background: color-mix(in srgb, var(--primary) 9%, transparent); border-radius: 8px; }
+.task-card-state { display: inline-flex; align-items: center; gap: 6px; }
+@media (prefers-reduced-motion: reduce) { .task-spin { animation-duration: 2.4s; } }
+
+/* Bell: mark as read */
+.attention-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.attention-scroll { max-height: min(60vh, 460px); overflow-y: auto; }
+.attention-group-head { display: flex; align-items: flex-start; }
+.attention-group-head .attention-item { flex: 1; min-width: 0; border-bottom: 0; }
+.attention-mark { flex: none; margin: 10px 12px 0 0; padding: 3px 9px; border: 1px solid var(--border-color); border-radius: 7px; background: var(--card-bg); color: var(--text-secondary); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.attention-head .attention-mark { margin: 0; }
+.attention-mark:hover { color: var(--primary); border-color: var(--primary); }
+.attention-subhead { padding: 8px 16px; color: var(--text-muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: var(--bg-secondary); border-top: 1px solid var(--border-color); }
+.attention-group.is-read { opacity: .6; }
+.attention-group.is-read .attention-dot { background: var(--text-muted); }
+html[dir="rtl"] .attention-mark { margin: 10px 0 0 12px; }
+html[dir="rtl"] .attention-head .attention-mark { margin: 0; }

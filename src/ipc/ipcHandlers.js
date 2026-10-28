@@ -1,6 +1,6 @@
 const { ipcMain: rawIpcMain, dialog, app, BrowserWindow } = require("electron");
 const authService = require("../services/authService");
-const { guardIpc, requireSuper, AUDITED } = require("./guard");
+const { guardIpc, requireSuper, requireCostVisible, AUDITED } = require("./guard");
 const auditService = require("../services/auditService");
 const { stripCost } = require("../services/costMask");
 const inventoryService = require("../services/inventoryService");
@@ -73,6 +73,52 @@ function registerIpcHandlers() {
       return { success: false, error: err.message };
     }
   };
+  ipcMain.handle("reports:ageing", wrap((opts) => require("../services/ageingService").report(opts || {})));
+
+  const importService = require("../services/importService");
+  ipcMain.handle("import:customers", wrap((rows, dryRun) => importService.customers(rows, { dryRun: !!dryRun })));
+  ipcMain.handle("import:suppliers", wrap((rows, dryRun) => importService.suppliers(rows, { dryRun: !!dryRun })));
+
+  // Profit by product exposes purchase prices, so it needs the super-password unlock like profit on the dashboard.
+  ipcMain.handle("reports:profitByProduct", requireCostVisible(authService, wrap((range) => require("../services/profitService").byProduct(range || {}))));
+
+  // Dealer modules: service jobs, trade-ins, instalment plans
+  const serviceJobs = require("../services/serviceJobService");
+  const tradeInService = require("../services/tradeInService");
+  const instalmentService = require("../services/instalmentService");
+  ipcMain.handle("service:list", wrap((f) => serviceJobs.list(f || {})));
+  ipcMain.handle("service:add", wrap((d) => serviceJobs.add(d || {})));
+  ipcMain.handle("service:update", wrap((id, d) => serviceJobs.update(id, d || {})));
+  ipcMain.handle("service:setStatus", wrap((id, status, o) => serviceJobs.setStatus(id, status, o || {})));
+  ipcMain.handle("service:addPayment", wrap((id, d) => serviceJobs.addPayment(id, d || {})));
+  ipcMain.handle("tradein:list", wrap(() => tradeInService.list()));
+  ipcMain.handle("tradein:add", wrap((d) => tradeInService.add(d || {})));
+  ipcMain.handle("instalment:due", wrap((o) => instalmentService.due(o || {})));
+  ipcMain.handle("instalment:plans", wrap(() => instalmentService.plans()));
+  ipcMain.handle("instalment:getPlan", wrap((saleId) => instalmentService.getPlan(saleId)));
+  ipcMain.handle("instalment:candidates", wrap(() => instalmentService.candidates()));
+  ipcMain.handle("instalment:create", wrap((d) => instalmentService.createPlan(d || {})));
+  ipcMain.handle("instalment:cancel", wrap((saleId) => instalmentService.cancelPlan(saleId)));
+
+  // Recycle Bin and day lock
+  const recycleService = require("../services/recycleService");
+  const dayLockService = require("../services/dayLockService");
+  ipcMain.handle("recycle:list", wrap(() => recycleService.list()));
+  ipcMain.handle("recycle:restore", wrap((id) => recycleService.restore(id)));
+  ipcMain.handle("recycle:purge", wrap((id) => recycleService.purge(id)));
+  ipcMain.handle("lock:get", wrap(() => ({ lockedBefore: dayLockService.get() })));
+  ipcMain.handle("lock:set", requireSuper(authService, wrap((date) => dayLockService.set(date || null))));
+
+  // Attention bell and system health
+  const backupFiles = require("../services/backupFiles");
+  const lastBackupAt = () => backupFiles.newestBackupTime(backupService.resolveBackupDir());
+  ipcMain.handle("attention:get", wrap(() => require("../services/attentionService").get({
+    lastBackupAt: lastBackupAt(), costVisible: authService.isCostVisible(),
+    whatsapp: require("../services/whatsappLink").getLink().getStatus(),
+    drive: require("../services/googleDriveService").getGoogleDriveService().status(),
+  })));
+  ipcMain.handle("health:get", wrap(() => require("../services/healthService").report({ version: app.getVersion(), dbPath: require("../config/appConfig").getDbPath(), lastBackupAt: lastBackupAt() })));
+
   // Lists & Setup: categories and locations the owner manages in Settings
   const listService = require("../services/listService");
   ipcMain.handle("lists:get", wrap((key, opts) => listService.list(key, opts || {})));
@@ -101,7 +147,11 @@ function registerIpcHandlers() {
   ipcMain.handle("supplier:addPayment", wrap((d) => supplierService.addPayment(d)));
   ipcMain.handle("supplier:updateEntry", requireSuper(authService, wrap((id, d) => supplierService.updateEntry(id, d))));
   ipcMain.handle("supplier:deleteEntry", requireSuper(authService, wrap((id) => supplierService.removeEntry(id))));
-  ipcMain.handle("cashbook:get", wrap((f) => cashBookService.get(f || {})));
+  ipcMain.handle("cashbook:get", requireCostVisible(authService, wrap((f) => cashBookService.get(f || {}))));
+  const closingService = require("../services/dailyClosingService");
+  ipcMain.handle("closing:preview", requireCostVisible(authService, wrap((date) => closingService.preview(date))));
+  ipcMain.handle("closing:save", requireCostVisible(authService, wrap((d) => closingService.save(d || {}))));
+  ipcMain.handle("closing:list", requireCostVisible(authService, wrap(() => closingService.list())));
 
   // Linked WhatsApp: status is pushed to every window, so nothing has to poll.
   const waLink = require("../services/whatsappLink").getLink();
@@ -207,6 +257,8 @@ function registerIpcHandlers() {
     const retention = Math.max(1, Math.min(365, Number(data?.retention) || 30));
     if (clientId && !/^[\w.-]+\.apps\.googleusercontent\.com$/.test(clientId)) throw new Error('Enter a valid Google OAuth desktop client ID.');
     if (driveService.status().connected && clientId !== driveService.clientId) throw new Error('Disconnect Google Drive before changing the OAuth client ID.');
+    // An empty secret box means "keep the saved one"; the secret is never sent back to the screen.
+    driveService.saveClientSecret(data?.clientSecret);
     settingsService.updateSettings({ google_drive_client_id: clientId, drive_backup_retention: String(retention) });
     return driveService.status();
   }));

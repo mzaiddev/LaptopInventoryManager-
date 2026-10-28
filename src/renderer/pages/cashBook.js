@@ -13,7 +13,67 @@ const CashBookPage = {
     return d.innerHTML;
   },
 
+  // Amounts stay hidden until the owner unlocks them with the super-password.
+  lockedHtml() {
+    return '<div class="card"><div class="card-body"><div class="empty-state"><h3>Cash and bank amounts are hidden</h3><p>Enter the super-password to see the Cash &amp; Bank Book and close the day.</p><button class="btn btn-primary" style="margin-top:12px;" onclick="App.toggleCost()">Unlock</button></div></div></div>';
+  },
+
+  // End-of-day count: expected cash against what was counted.
+  async closeDay(date) {
+    const day = date || new Date().toLocaleDateString("sv-SE");
+    const r = await window.api.closingPreview(day);
+    if (!r.success) return Toast.error(r.error === "SUPER_REQUIRED" ? "Unlock amounts with the super-password first." : r.error);
+    const p = r.data;
+    const saved = p.closing;
+    Modal.showForm("Close the day", `
+      <div class="form-row">
+        <div class="form-group"><label>Day</label><input type="date" class="form-control" id="cd-date" value="${p.date}" onchange="CashBookPage.closeDay(this.value)"></div>
+        <div class="form-group"><label>Sales today</label><div style="padding-top:8px;"><strong>${this.money(p.salesTotal)}</strong> (${p.salesCount})</div></div>
+      </div>
+      <table style="margin-bottom:12px;"><tbody>
+        <tr><td>Cash at start of day</td><td style="text-align:right;">${this.money(p.openingCash)}</td></tr>
+        <tr><td>Cash in</td><td style="text-align:right;">+ ${this.money(p.cashIn)}</td></tr>
+        <tr><td>Cash out</td><td style="text-align:right;">- ${this.money(p.cashOut)}</td></tr>
+        <tr><td><strong>Should be in the drawer</strong></td><td style="text-align:right;"><strong>${this.money(p.expectedCash)}</strong></td></tr>
+      </tbody></table>
+      <div class="form-group"><label>Cash counted *</label><input type="number" min="0" step="0.01" class="form-control" id="cd-counted" value="${saved ? saved.counted_cash : ""}" oninput="CashBookPage.showDifference(${p.expectedCash})"></div>
+      <div id="cd-diff" style="margin-bottom:12px;font-weight:600;"></div>
+      <div class="form-group"><label>Note</label><input class="form-control" id="cd-note" value="${this.esc(saved ? saved.note : "")}"></div>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:400;margin-bottom:8px;"><input type="checkbox" id="cd-lock"> Also lock this day and every earlier day</label>
+      ${saved ? '<p style="color:var(--text-muted);font-size:13px;">This day was already closed. Saving replaces that count.</p>' : ""}
+    `, async () => {
+      const counted = parseFloat(document.getElementById("cd-counted").value);
+      if (!Number.isFinite(counted)) return Toast.warning("Enter the cash you counted.");
+      const res = await window.api.saveClosing({ date: document.getElementById("cd-date").value, countedCash: counted, note: document.getElementById("cd-note").value });
+      if (!res.success) return Toast.error(res.error);
+      const lockIt = document.getElementById("cd-lock")?.checked;
+      const closedDate = document.getElementById("cd-date").value;
+      Modal.close();
+      const d = res.data.difference;
+      Toast[d === 0 ? "success" : "warning"](d === 0 ? "Day closed. The drawer matches." : `Day closed. Difference ${d > 0 ? "+" : ""}${this.money(d)}.`);
+      if (lockIt && (await SuperPrompt.requireForAction("Super-password to lock the day"))) {
+        const lk = await window.api.setDayLock(closedDate);
+        if (lk.success) Toast.success("Days up to " + closedDate + " are locked."); else Toast.error(lk.error);
+      }
+    }, "sm");
+    if (saved) this.showDifference(p.expectedCash);
+  },
+
+  showDifference(expected) {
+    const counted = parseFloat(document.getElementById("cd-counted").value);
+    const el = document.getElementById("cd-diff");
+    if (!el) return;
+    if (!Number.isFinite(counted)) { el.textContent = ""; return; }
+    const diff = Math.round((counted - expected) * 100) / 100;
+    el.style.color = diff === 0 ? "var(--success)" : "var(--danger)";
+    el.textContent = diff === 0 ? "The drawer matches." : (diff > 0 ? "Over by " : "Short by ") + this.money(Math.abs(diff));
+  },
+
   async load() {
+    if (!App.costVisible) {
+      document.getElementById("page-content").innerHTML = '<div class="page-header"><div><h1>Cash &amp; Bank Book</h1><p>Every rupee in and out</p></div></div>' + this.lockedHtml();
+      return;
+    }
     this.filters = { from: "", to: "", account: "" };
     document.getElementById("page-content").innerHTML = `
       <div class="page-header">
@@ -21,7 +81,10 @@ const CashBookPage = {
           <h1>Cash &amp; Bank Book</h1>
           <p>Every rupee in and out: customer payments, expenses and supplier payments</p>
         </div>
-        <button class="btn btn-secondary" onclick="CashBookPage.print()">Print</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="CashBookPage.closeDay()">Close the day</button>
+          <button class="btn btn-secondary" onclick="CashBookPage.print()">Print</button>
+        </div>
       </div>
       <div class="card" style="margin-bottom:16px;"><div class="card-body">
         <div class="form-row">

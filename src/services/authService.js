@@ -1,7 +1,9 @@
 const crypto = require("crypto");
+const fs = require("fs");
 const { getDatabase } = require("../database/dbInit");
 
 const MIN_LEN = 4;
+const REMEMBER_DAYS = 30; // how long a sign-in is remembered on this PC unless the owner signs out
 
 function hash(plain) {
   const salt = crypto.randomBytes(16);
@@ -82,17 +84,83 @@ class AuthService {
       this._setSetting("super_password_hash", hash(superPassword));
     })();
     this._reset();
+    this._forget();
   }
 
   login(username, password) {
     const u = getDatabase().prepare("SELECT password_hash FROM users WHERE username = ?").get(String(username || "").trim());
     if (!u || !verify(password, u.password_hash)) return { ok: false, error: "INVALID" };
     this.loggedIn = true;
+    this._remember();
     return { ok: true };
   }
 
   logout() {
     this._reset();
+    this._forget();
+  }
+
+  // ---- Remembered sign-in
+  // After a sign-in the owner stays signed in for 30 days, across restarts, until they press Sign out.
+  // The marker is encrypted with Windows secure storage and tied to the current password, so changing the
+  // password or setting up a new owner ends it. Only the sign-in is remembered, never the super-password.
+  // Tests pass their own `store` ({ file, safeStorage, now }).
+  useSessionStore(store) {
+    this._store = store;
+  }
+
+  _sessionStore() {
+    if (this._store) return this._store;
+    try {
+      const electron = require("electron");
+      if (!electron || !electron.safeStorage) return null;
+      const path = require("path");
+      return { file: path.join(require("../config/appConfig").getUserDataPath(), "session.bin"), safeStorage: electron.safeStorage, now: Date.now };
+    } catch {
+      return null;
+    }
+  }
+
+  _fingerprint() {
+    const u = getDatabase().prepare("SELECT username, password_hash FROM users LIMIT 1").get();
+    return u ? crypto.createHash("sha256").update(`${u.username}:${u.password_hash}`).digest("hex") : null;
+  }
+
+  _remember() {
+    try {
+      const st = this._sessionStore();
+      if (!st || !st.safeStorage.isEncryptionAvailable()) return;
+      const now = (st.now || Date.now)();
+      const marker = JSON.stringify({ fp: this._fingerprint(), expiresAt: now + REMEMBER_DAYS * 24 * 60 * 60 * 1000 });
+      fs.mkdirSync(require("path").dirname(st.file), { recursive: true });
+      fs.writeFileSync(st.file, st.safeStorage.encryptString(marker));
+    } catch { /* not remembered: the owner just signs in again next time */ }
+  }
+
+  _forget() {
+    try {
+      const st = this._sessionStore();
+      if (st) fs.rmSync(st.file, { force: true });
+    } catch { /* already gone */ }
+  }
+
+  // Called once when the app starts: signs the owner straight back in when a valid marker exists.
+  restoreSession() {
+    try {
+      const st = this._sessionStore();
+      if (!st || !fs.existsSync(st.file)) return false;
+      const marker = JSON.parse(st.safeStorage.decryptString(fs.readFileSync(st.file)));
+      const now = (st.now || Date.now)();
+      if (!marker || !marker.fp || marker.fp !== this._fingerprint() || !(marker.expiresAt > now)) {
+        this._forget();
+        return false;
+      }
+      this.loggedIn = true;
+      return true;
+    } catch {
+      this._forget();
+      return false;
+    }
   }
 
   isLoggedIn() {
@@ -145,6 +213,7 @@ class AuthService {
     if (!u || !verify(current, u.password_hash)) throw new Error("Current password is incorrect");
     checkNew(next);
     getDatabase().prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hash(next), u.id);
+    if (this.loggedIn) this._remember();
   }
 
   changeSuperPassword(current, next) {

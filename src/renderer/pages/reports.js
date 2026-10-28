@@ -13,6 +13,8 @@ const ReportsPage = {
         <button class="tab-item active" data-tab="overview" onclick="ReportsPage.switchTab('overview')">Overview</button>
         <button class="tab-item" data-tab="sales" onclick="ReportsPage.switchTab('sales')">Sales Report</button>
         <button class="tab-item" data-tab="outstanding" onclick="ReportsPage.switchTab('outstanding')">Remaining Dues</button>
+        <button class="tab-item" data-tab="ageing" onclick="ReportsPage.switchTab('ageing')">Overdue Ageing</button>
+        <button class="tab-item" data-tab="profit" onclick="ReportsPage.switchTab('profit')">Profit by Product</button>
         <button class="tab-item" data-tab="customers" onclick="ReportsPage.switchTab('customers')">Customer Report</button>
         <button class="tab-item" data-tab="damage" onclick="ReportsPage.switchTab('damage')">Damages</button>
       </div>
@@ -42,9 +44,111 @@ const ReportsPage = {
       case "overview": await this.renderOverview(container); break;
       case "sales": await this.renderSalesReport(container); break;
       case "outstanding": await this.renderOutstanding(container); break;
+      case "ageing": await this.renderAgeing(container); break;
+      case "profit": await this.renderProfit(container); break;
       case "customers": await this.renderCustomerReport(container); break;
       case "damage": await this.renderDamageReport(container); break;
     }
+  },
+
+  // Who owes how much, and for how long. Payments clear the oldest charges first.
+  // What each product earned between two dates. Needs the super-password, because it works from purchase prices.
+  profitRange: null,
+
+  async renderProfit(container) {
+    if (!App.costVisible) {
+      container.innerHTML = '<div class="card"><div class="card-body"><div class="empty-state"><h3>Profit is hidden</h3><p>Enter the super-password to see what each product earned.</p><button class="btn btn-primary" style="margin-top:12px;" onclick="App.toggleCost()">Unlock</button></div></div></div>';
+      return;
+    }
+    if (!this.profitRange) {
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, "0");
+      this.profitRange = { from: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`, to: now.toLocaleDateString("sv-SE") };
+    }
+    const res = await window.api.getProductProfit(this.profitRange);
+    if (!res.success) {
+      container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${this.escapeHtml(res.error)}</p></div>`;
+      return;
+    }
+    const { rows, totals } = res.data;
+    const money = (v) => Formatters.formatCurrency(v, App.currency || "USD");
+    this._profitRows = rows;
+    container.innerHTML = `
+      <div class="card" style="margin-bottom:16px;"><div class="card-body"><div class="form-row">
+        <div class="form-group"><label>From</label><input type="date" class="form-control" id="pp-from" value="${this.profitRange.from}" onchange="ReportsPage.onProfitRange()"></div>
+        <div class="form-group"><label>To</label><input type="date" class="form-control" id="pp-to" value="${this.profitRange.to}" onchange="ReportsPage.onProfitRange()"></div>
+        <div class="form-group" style="align-self:flex-end;"><button class="btn btn-secondary" onclick="ReportsPage.exportProfit()">Export CSV</button></div>
+      </div></div></div>
+      <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-bottom:16px;">
+        <div class="stat-card"><div class="stat-value" style="font-size:22px;">${money(totals.revenue)}</div><div class="stat-label">Sales (after discounts and returns)</div></div>
+        <div class="stat-card"><div class="stat-value" style="font-size:22px;">${money(totals.cogs)}</div><div class="stat-label">Cost of goods</div></div>
+        <div class="stat-card"><div class="stat-value" style="font-size:22px;color:${totals.profit >= 0 ? "var(--success)" : "var(--danger)"};">${money(totals.profit)}</div><div class="stat-label">Profit on products</div></div>
+      </div>
+      ${rows.length ? `<div class="card"><div class="card-body"><div class="table-wrapper"><table>
+        <thead><tr><th>Product</th><th>Category</th><th style="text-align:right;">Sold</th><th style="text-align:right;">Sales</th><th style="text-align:right;">Cost</th><th style="text-align:right;">Profit</th><th style="text-align:right;">Margin</th></tr></thead>
+        <tbody>${rows.map((x) => `<tr>
+          <td><strong>${this.escapeHtml(x.product_name)}</strong></td><td>${this.escapeHtml(x.category)}</td>
+          <td style="text-align:right;">${x.qty}</td><td style="text-align:right;">${money(x.revenue)}</td><td style="text-align:right;">${money(x.cogs)}</td>
+          <td style="text-align:right;font-weight:600;color:${x.profit >= 0 ? "var(--success)" : "var(--danger)"};">${money(x.profit)}</td><td style="text-align:right;">${x.margin}%</td>
+        </tr>`).join("")}</tbody></table></div></div></div>` : '<div class="empty-state"><h3>No sales in this period</h3><p>Change the dates to see more.</p></div>'}`;
+  },
+
+  onProfitRange() {
+    this.profitRange = { from: document.getElementById("pp-from").value, to: document.getElementById("pp-to").value };
+    this.renderProfit(document.getElementById("reports-content"));
+  },
+
+  exportProfit() {
+    CsvTools.download("profit-by-product-" + CsvTools.stamp() + ".csv", [
+      ["Product", "Category", "Sold", "Sales", "Cost", "Profit", "Margin %"],
+      ...(this._profitRows || []).map((x) => [x.product_name, x.category, x.qty, x.revenue, x.cogs, x.profit, x.margin]),
+    ]);
+  },
+
+  async exportAgeing() {
+    const r = await window.api.getAgeing();
+    if (!r.success) return Toast.error(r.error);
+    CsvTools.download("overdue-ageing-" + CsvTools.stamp() + ".csv", [
+      ["Customer", "Phone", "0-30 days", "31-60 days", "61-90 days", "Over 90 days", "Total due", "Oldest (days)"],
+      ...r.data.rows.map((x) => [x.customer_name, x.phone, x.buckets.current, x.buckets.d31_60, x.buckets.d61_90, x.buckets.d90_plus, x.total, x.oldest_days]),
+    ]);
+  },
+
+  async renderAgeing(container) {
+    const result = await window.api.getAgeing();
+    if (!result.success) {
+      container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${this.escapeHtml(result.error)}</p></div>`;
+      return;
+    }
+    const { rows, totals } = result.data;
+    const money = (v) => (v ? Formatters.formatCurrency(v, App.currency || "USD") : "-");
+    if (!rows.length) {
+      container.innerHTML = '<div class="empty-state"><h3>Nobody owes you anything</h3><p>Every customer account is settled.</p></div>';
+      return;
+    }
+    const kpi = (label, value, tone) => `<div class="stat-card"><div class="stat-value" style="font-size:22px;color:${tone || "inherit"};">${money(value)}</div><div class="stat-label">${label}</div></div>`;
+    container.innerHTML = `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;"><button class="btn btn-secondary btn-sm" onclick="ReportsPage.exportAgeing()">Export CSV</button></div>
+      <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-bottom:16px;">
+        ${kpi("Total due", totals.total, "var(--danger)")}
+        ${kpi("0 to 30 days", totals.buckets.current)}
+        ${kpi("31 to 60 days", totals.buckets.d31_60, "var(--warning)")}
+        ${kpi("61 to 90 days", totals.buckets.d61_90, "var(--warning)")}
+        ${kpi("Over 90 days", totals.buckets.d90_plus, "var(--danger)")}
+      </div>
+      <div class="card"><div class="card-body"><div class="table-wrapper"><table>
+        <thead><tr><th>Customer</th><th>Phone</th><th style="text-align:right;">0-30</th><th style="text-align:right;">31-60</th><th style="text-align:right;">61-90</th><th style="text-align:right;">90+</th><th style="text-align:right;">Total due</th><th style="text-align:right;">Oldest</th></tr></thead>
+        <tbody>${rows.map((r) => `<tr>
+          <td><strong>${this.escapeHtml(r.customer_name)}</strong></td>
+          <td>${this.escapeHtml(r.phone) || "-"}</td>
+          <td style="text-align:right;">${money(r.buckets.current)}</td>
+          <td style="text-align:right;">${money(r.buckets.d31_60)}</td>
+          <td style="text-align:right;">${money(r.buckets.d61_90)}</td>
+          <td style="text-align:right;${r.buckets.d90_plus ? "color:var(--danger);font-weight:600;" : ""}">${money(r.buckets.d90_plus)}</td>
+          <td style="text-align:right;"><strong>${money(r.total)}</strong></td>
+          <td style="text-align:right;">${r.oldest_days} days</td>
+        </tr>`).join("")}</tbody>
+      </table></div></div></div>`;
   },
 
   async renderOverview(container) {

@@ -1023,6 +1023,13 @@ function seedDefaults() {
     language: "en",
     opening_cash: "0",
     opening_bank: "0",
+    low_stock_level: "0",
+    business_type: "laptop_dealer",
+    show_model: "1",
+    show_serial: "1",
+    show_warranty: "1",
+    show_location: "1",
+    show_condition: "1",
   };
 
   const insertSetting = db.prepare(

@@ -12,7 +12,10 @@ const ExpensesPage = {
           <h1>Expenses</h1>
           <p>Record shop expenses paid in cash or from the bank</p>
         </div>
-        <button class="btn btn-primary" onclick="ExpensesPage.showForm()">Add Expense</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-secondary" onclick="ExpensesPage.exportCsv()">Export CSV</button>
+          <button class="btn btn-primary" onclick="ExpensesPage.showForm()">Add Expense</button>
+        </div>
       </div>
       <div class="card" style="margin-bottom:16px;">
         <div class="card-body">
@@ -85,6 +88,15 @@ const ExpensesPage = {
         <span>Page ${this.filters.page} of ${pages}</span>
         <button class="btn btn-secondary btn-sm" ${this.filters.page >= pages ? "disabled" : ""} onclick="ExpensesPage.goTo(${this.filters.page + 1})">Next</button>
       </div>`;
+  },
+
+  async exportCsv() {
+    const r = await window.api.listExpenses({ ...this.filters, page: 1, pageSize: 100000 });
+    if (!r.success) return Toast.error(r.error);
+    CsvTools.download("expenses-" + CsvTools.stamp() + ".csv", [
+      ["Date", "Category", "Amount", "Paid from", "Note"],
+      ...r.data.rows.map((e) => [e.expense_date, e.category, e.amount, e.payment_source, e.note]),
+    ]);
   },
 
   goTo(page) {
@@ -162,7 +174,7 @@ const ExpensesPage = {
     Modal.showConfirm("Delete Expense", "This expense will be removed permanently.", async () => {
       const res = await window.api.deleteExpense(id);
       if (!res.success) return Toast.error(res.error);
-      Toast.success("Expense deleted.");
+      RecyclePage.offerUndo("expense", "Expense deleted.");
       this.refresh();
     });
   },

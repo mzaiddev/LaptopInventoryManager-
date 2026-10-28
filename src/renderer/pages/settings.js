@@ -56,6 +56,7 @@ const SettingsPage = {
           <small>The super-password protects editing and deleting products and viewing purchase prices.</small>
         </div>
       </div>
+      <div class="card" style="margin-bottom:24px;" id="day-lock-card"></div>
       <div class="card" style="margin-bottom:24px;">
         <div class="card-header"><h3>Data Check</h3></div>
         <div class="card-body">
@@ -70,6 +71,7 @@ const SettingsPage = {
     `;
 
     WhatsAppLink.mountCard();
+    this.renderDayLock();
     await this.loadSettings();
     await this.loadAudit();
   },
@@ -243,6 +245,20 @@ const SettingsPage = {
               <label>Phone Country Code (for WhatsApp)</label>
               <input type="text" class="form-control" id="set-country-code" value="${this.escapeHtml(settings.default_country_code || "92")}" placeholder="92">
             </div>
+            <div class="form-group">
+              <label>Low stock alert (units, 0 = off)</label>
+              <input type="number" min="0" step="1" class="form-control" id="set-low-stock" value="${this.escapeHtml(settings.low_stock_level || "0")}">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Business type</label>
+            <select class="form-control" id="set-business-type" onchange="SettingsPage.applyPreset()">
+              ${BusinessProfile.PRESETS.map((p) => `<option value="${p.id}" ${(settings.business_type || "laptop_dealer") === p.id ? "selected" : ""}>${p.label}</option>`).join("")}
+            </select>
+            <small style="color:var(--text-muted);">Choose the product details your shop uses. Hidden details keep their saved data.</small>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;">
+              ${[["model", "Model"], ["serial", "Serial number"], ["warranty", "Warranty"], ["location", "Storage location"], ["condition", "Condition"]].map(([k, label]) => `<label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" id="set-show-${k}" ${settings["show_" + k] !== "0" ? "checked" : ""} onchange="document.getElementById('set-business-type').value = 'custom'"> ${label}</label>`).join("")}
+            </div>
           </div>
           <div class="form-group">
             <label>Backup Folder</label>
@@ -256,6 +272,42 @@ const SettingsPage = {
     } catch (err) {
       container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${err.message}</p></div>`;
     }
+  },
+
+  // Picking a business type ticks the product details that type uses; the owner can still adjust them.
+  applyPreset() {
+    const id = document.getElementById("set-business-type").value;
+    if (id === "custom") return;
+    const s = BusinessProfile.settingsForPreset(id);
+    BusinessProfile.FIELDS.forEach((f) => { const box = document.getElementById("set-show-" + f); if (box) box.checked = s["show_" + f] === "1"; });
+  },
+
+  // Day lock: entries on or before this day cannot be added, changed or deleted. Moving it needs the super-password.
+  async renderDayLock() {
+    const box = document.getElementById("day-lock-card");
+    if (!box) return;
+    const r = await window.api.getDayLock();
+    const locked = r.success ? r.data.lockedBefore : null;
+    box.innerHTML = `
+      <div class="card-header"><h3>Day Lock</h3></div>
+      <div class="card-body">
+        <p style="color:var(--text-secondary);margin-bottom:12px;">After you close a day, lock it so old entries cannot be changed by mistake. ${locked ? `<strong>Locked through ${this.escapeHtml(locked)}.</strong>` : "Nothing is locked."}</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+          <div class="form-group" style="margin:0;"><label>Lock every day up to and including</label><input type="date" class="form-control" id="lock-date" value="${locked || ""}"></div>
+          <button class="btn btn-primary" onclick="SettingsPage.saveDayLock()">Save lock</button>
+          <button class="btn btn-secondary" ${locked ? "" : "disabled"} onclick="SettingsPage.saveDayLock(true)">Unlock all days</button>
+        </div>
+      </div>`;
+  },
+
+  async saveDayLock(clear = false) {
+    const date = clear ? null : document.getElementById("lock-date").value;
+    if (!clear && !date) return Toast.warning("Pick the last day to lock.");
+    if (!(await SuperPrompt.requireForAction("Super-password to change the day lock"))) return;
+    const res = await window.api.setDayLock(date);
+    if (!res.success) return Toast.error(res.error);
+    Toast.success(clear ? "All days unlocked." : "Days locked.");
+    this.renderDayLock();
   },
 
   async saveSettings() {
@@ -276,6 +328,9 @@ const SettingsPage = {
       opening_cash: String(parseFloat(document.getElementById("set-opening-cash")?.value) || 0),
       opening_bank: String(parseFloat(document.getElementById("set-opening-bank")?.value) || 0),
       default_country_code: (document.getElementById("set-country-code")?.value || "").replace(/\D/g, "") || "92",
+      business_type: document.getElementById("set-business-type")?.value || "laptop_dealer",
+      ...Object.fromEntries(BusinessProfile.FIELDS.map((f) => ["show_" + f, document.getElementById("set-show-" + f)?.checked === false ? "0" : "1"])),
+      low_stock_level: String(Math.max(0, parseInt(document.getElementById("set-low-stock")?.value, 10) || 0)),
       backup_folder:
         document.getElementById("set-backup-folder")?.value?.trim() || "",
     };
@@ -314,6 +369,8 @@ const SettingsPage = {
         // Update currency
         App.currency = settings.currency;
         Formatters.compact = settings.compact_numbers !== "0";
+        App.fields = BusinessProfile.fieldsFromSettings(settings);
+        App.applyBusinessType(settings.business_type);
       } else {
         Toast.error(result.error || "Failed to save settings.");
       }

@@ -253,6 +253,22 @@ class InventoryService {
     const db = getDatabase();
     
     return db.transaction(() => {
+      // Keep everything the delete is about to remove, so it can be restored from the Recycle Bin.
+      const product = db.prepare("SELECT * FROM products WHERE id = ?").get(id);
+      if (product) {
+        const rows = (sql) => db.prepare(sql).all(id);
+        require("./recycleService").archive({
+          entity: "product", entityId: id, label: `${product.product_name}${product.serial_number ? " (" + product.serial_number + ")" : ""}`,
+          tables: {
+            products: [product],
+            inspection_notes: rows("SELECT * FROM inspection_notes WHERE product_id = ?"),
+            damage_records: rows("SELECT * FROM damage_records WHERE product_id = ?"),
+            sale_issue_items: rows("SELECT * FROM sale_issue_items WHERE product_id = ?"),
+            return_items: rows("SELECT * FROM return_items WHERE product_id = ?"),
+            supplier_ledger: rows("SELECT * FROM supplier_ledger WHERE product_id = ?"),
+          },
+        });
+      }
       require("./supplierService").releaseProductBill(db, id);
       // First delete all related records that have FK constraints
       // 1. Delete damage records for this product

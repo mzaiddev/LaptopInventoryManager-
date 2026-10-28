@@ -91,12 +91,49 @@
           </svg>
           <span>Cash &amp; Bank Book</span>
         </button>
+        <button class="nav-item" data-page="reports" onclick="App.navigate('reports')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+          </svg>
+          <span>Reports</span>
+        </button>
+        <div class="nav-section dealer-only">Dealer</div>
+        <button class="nav-item dealer-only" data-page="service-jobs" onclick="App.navigate('service-jobs')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+          </svg>
+          <span>Service Jobs</span>
+        </button>
+        <button class="nav-item dealer-only" data-page="trade-ins" onclick="App.navigate('trade-ins')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+          </svg>
+          <span>Trade-ins</span>
+        </button>
+        <button class="nav-item dealer-only" data-page="instalments" onclick="App.navigate('instalments')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          <span>Instalments</span>
+        </button>
         <div class="nav-section">System</div>
         <button class="nav-item" data-page="backup" onclick="App.navigate('backup')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
           </svg>
           <span>Backup & Restore</span>
+        </button>
+        <button class="nav-item" data-page="recycle" onclick="App.navigate('recycle')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+          </svg>
+          <span>Recycle Bin</span>
+        </button>
+        <button class="nav-item" data-page="health" onclick="App.navigate('health')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          <span>System Health</span>
         </button>
         <button class="nav-item" data-page="lists" onclick="App.navigate('lists')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -132,9 +169,16 @@
         </div>
         <div class="topbar-right">
           <div class="owner-context" title="Single owner account"><span class="owner-avatar">O</span><span>Owner</span></div>
+          <div id="attention-root" class="attention-root">
+            <button id="attention-toggle" class="attention-toggle" onclick="Attention.toggle()" aria-expanded="false" aria-controls="attention-panel" title="Needs attention">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              <span id="attention-count" class="attention-count" style="display:none;">0</span>
+            </button>
+            <section id="attention-panel" class="attention-panel" style="display:none;" aria-label="Needs attention"></section>
+          </div>
           <div id="task-center-root" class="task-center-root">
             <button id="task-center-toggle" class="task-center-toggle" onclick="TaskCenter.toggle()" aria-expanded="false" aria-controls="task-center-panel">
-              <span>Tasks</span><span id="task-center-count" class="task-center-count" style="display:none;">0</span>
+              <span id="task-center-spin" class="task-spin" style="display:none;" aria-hidden="true"></span><span>Tasks</span><span id="task-center-count" class="task-center-count" style="display:none;">0</span>
             </button>
             <section id="task-center-panel" class="task-center-panel" style="display:none;" aria-label="Background tasks"></section>
           </div>
@@ -175,6 +219,9 @@
   <script src="../shared/ur.js"></script>
   <script src="../shared/i18n.js"></script>
   <script src="../shared/compact.js"></script>
+  <script src="../shared/businessProfile.js"></script>
+  <script src="../shared/csv.js"></script>
+  <script src="../shared/wording.js"></script>
   <script src="../shared/saleMath.js"></script>
   <script src="utils/formatters.js"></script>
   <script src="utils/validators.js"></script>
@@ -194,6 +241,10 @@
   <script src="components/BulkShare.js"></script>
   <script src="components/GlobalSearch.js"></script>
   <script src="components/TaskCenter.js"></script>
+  <script src="components/Attention.js"></script>
+  <script src="components/CsvTools.js"></script>
+  <script src="components/Pickers.js"></script>
+  <script src="components/Wording.js"></script>
   
   <!-- 3. Pages (depend on components + utilities) -->
   <script src="pages/login.js"></script>
@@ -206,6 +257,11 @@
   <script src="pages/backup.js"></script>
   <script src="pages/settings.js"></script>
   <script src="pages/lists.js"></script>
+  <script src="pages/health.js"></script>
+  <script src="pages/recycle.js"></script>
+  <script src="pages/serviceJobs.js"></script>
+  <script src="pages/tradeIns.js"></script>
+  <script src="pages/instalments.js"></script>
   <!-- Ledger Module Pages -->
   <script src="pages/customers.js"></script>
   <script src="pages/sales.js"></script>

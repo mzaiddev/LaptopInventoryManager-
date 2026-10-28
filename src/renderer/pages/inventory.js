@@ -42,6 +42,7 @@ const InventoryPage = {
             Add Product
           </button>
           <button class="btn btn-secondary" onclick="InventoryPage.openImportDialog()">Import CSV</button>
+          <button class="btn btn-secondary" onclick="InventoryPage.exportCsv()">Export CSV</button>
           <button class="btn btn-danger" onclick="InventoryPage.showRecordDamage()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
               <line x1="18" y1="6" x2="6" y2="18"/><circle cx="12" cy="12" r="10"/>
@@ -345,8 +346,19 @@ const InventoryPage = {
     bar.innerHTML = count ? `
       <strong>${count} selected</strong>
       <span class="selection-action-hint">Selection is kept when you change pages.</span>
+      <button class="btn btn-secondary btn-sm" onclick="InventoryPage.exportSelected()">Export</button>
       <button class="btn btn-secondary btn-sm" onclick="InventoryPage.openBulkEdit()">Edit selected</button>
       <button class="btn btn-secondary btn-sm" onclick="InventoryPage.clearSelection()">Clear</button>` : '';
+  },
+
+  // Only the ticked rows. Purchase price appears only when unlocked.
+  exportSelected() {
+    const cost = App.costVisible;
+    const rows = [...this.selectedProducts.values()];
+    CsvTools.download("selected-products-" + CsvTools.stamp() + ".csv", [
+      ["Product", "Category", "Model", "Serial", "Supplier", "Quantity", "Status", "Condition", "Location", ...(cost ? ["Purchase price"] : [])],
+      ...rows.map((p) => [p.product_name, p.category, p.model, p.serial_number, p.supplier, p.quantity, p.status, p.condition, p.storage_location, ...(cost ? [p.purchase_price] : [])]),
+    ]);
   },
 
   clearSelection() {
@@ -643,6 +655,17 @@ const InventoryPage = {
       });
   },
 
+  // Everything matching the current filters, not just this page. Purchase price appears only when unlocked.
+  async exportCsv() {
+    const r = await window.api.getProducts({ ...this.currentFilters, page: 1, limit: 100000 });
+    if (!r.success) return Toast.error(r.error);
+    const cost = App.costVisible;
+    CsvTools.download("products-" + CsvTools.stamp() + ".csv", [
+      ["Product", "Category", "Model", "Serial", "Supplier", "Quantity", "Status", "Condition", "Location", ...(cost ? ["Purchase price"] : [])],
+      ...r.data.products.map((p) => [p.product_name, p.category, p.model, p.serial_number, p.supplier, p.quantity, p.status, p.condition, p.storage_location, ...(cost ? [p.purchase_price] : [])]),
+    ]);
+  },
+
   deleteProduct(id, name) {
     Modal.showConfirm(
       "Delete Product",
@@ -652,7 +675,7 @@ const InventoryPage = {
         try {
           const result = await window.api.deleteProduct(id);
           if (result.success) {
-            Toast.success("Product deleted successfully.");
+            RecyclePage.offerUndo("product", "Product deleted.");
             this.refresh();
           } else {
             Toast.error(result.error || "Failed to delete product.");

@@ -59,3 +59,16 @@ test("failed calls are not audited", async () => {
   await ipc.handlers["sale:delete"]({}, 1);
   assert.deepStrictEqual(logged, []);
 });
+
+test("requireCostVisible blocks a handler until the owner has unlocked amounts, without consuming the unlock", async () => {
+  const { requireCostVisible } = require("../src/ipc/guard");
+  let ran = 0;
+  const locked = { isCostVisible: () => false };
+  const open = { isCostVisible: () => true };
+  const handler = (auth) => requireCostVisible(auth, async () => { ran += 1; return { success: true, data: 1 }; });
+  assert.deepStrictEqual(await handler(locked)({}), { success: false, error: "SUPER_REQUIRED" });
+  assert.strictEqual(ran, 0);
+  assert.deepStrictEqual(await handler(open)({}), { success: true, data: 1 });
+  assert.deepStrictEqual(await handler(open)({}), { success: true, data: 1 });
+  assert.strictEqual(ran, 2);
+});

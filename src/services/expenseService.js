@@ -44,7 +44,10 @@ class ExpenseService {
   }
 
   remove(id) {
-    const r = getDatabase().prepare("DELETE FROM expenses WHERE id = ?").run(id);
+    const db = getDatabase();
+    const row = db.prepare("SELECT * FROM expenses WHERE id = ?").get(id);
+    if (row) require("./recycleService").archive({ entity: "expense", entityId: id, label: `${row.category} ${row.amount} (${row.expense_date})`, tables: { expenses: [row] } });
+    const r = db.prepare("DELETE FROM expenses WHERE id = ?").run(id);
     if (r.changes === 0) throw new Error("Expense not found");
   }
 

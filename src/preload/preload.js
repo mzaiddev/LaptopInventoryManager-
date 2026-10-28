@@ -24,6 +24,41 @@ contextBridge.exposeInMainWorld("api", {
   getCategories: () => ipcRenderer.invoke("inventory:getCategories"),
   getSuppliers: () => ipcRenderer.invoke("inventory:getSuppliers"),
 
+  getAgeing: (opts) => ipcRenderer.invoke("reports:ageing", opts),
+
+  closingPreview: (date) => ipcRenderer.invoke("closing:preview", date),
+  saveClosing: (data) => ipcRenderer.invoke("closing:save", data),
+  listClosings: () => ipcRenderer.invoke("closing:list"),
+
+  listRecycle: () => ipcRenderer.invoke("recycle:list"),
+  restoreRecycle: (id) => ipcRenderer.invoke("recycle:restore", id),
+  purgeRecycle: (id) => ipcRenderer.invoke("recycle:purge", id),
+  getDayLock: () => ipcRenderer.invoke("lock:get"),
+  setDayLock: (date) => ipcRenderer.invoke("lock:set", date),
+
+  importCustomers: (rows, dryRun) => ipcRenderer.invoke("import:customers", rows, dryRun),
+  importSuppliers: (rows, dryRun) => ipcRenderer.invoke("import:suppliers", rows, dryRun),
+
+  getProductProfit: (range) => ipcRenderer.invoke("reports:profitByProduct", range),
+
+  listServiceJobs: (f) => ipcRenderer.invoke("service:list", f),
+  addServiceJob: (d) => ipcRenderer.invoke("service:add", d),
+  updateServiceJob: (id, d) => ipcRenderer.invoke("service:update", id, d),
+  setServiceJobStatus: (id, status, o) => ipcRenderer.invoke("service:setStatus", id, status, o),
+  addServiceJobPayment: (id, d) => ipcRenderer.invoke("service:addPayment", id, d),
+  listTradeIns: () => ipcRenderer.invoke("tradein:list"),
+  addTradeIn: (d) => ipcRenderer.invoke("tradein:add", d),
+  dueInstalments: (o) => ipcRenderer.invoke("instalment:due", o),
+  listInstalmentPlans: () => ipcRenderer.invoke("instalment:plans"),
+  getInstalmentPlan: (saleId) => ipcRenderer.invoke("instalment:getPlan", saleId),
+  instalmentCandidates: () => ipcRenderer.invoke("instalment:candidates"),
+  createInstalmentPlan: (d) => ipcRenderer.invoke("instalment:create", d),
+  cancelInstalmentPlan: (saleId) => ipcRenderer.invoke("instalment:cancel", saleId),
+
+  // Attention bell and system health
+  getAttention: () => ipcRenderer.invoke("attention:get"),
+  getHealth: () => ipcRenderer.invoke("health:get"),
+
   // Lists & Setup
   getList: (key, opts) => ipcRenderer.invoke("lists:get", key, opts),
   addListItem: (key, name) => ipcRenderer.invoke("lists:add", key, name),

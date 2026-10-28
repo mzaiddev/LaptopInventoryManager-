@@ -241,3 +241,22 @@ test("a saved link shows its number and 'saved' before the connection is back, a
   assert.strictEqual(t.baileys.socks.length, 1);
   assert.strictEqual(fs.existsSync(path.join(t.link.sessionDir, "creds.json")), true);
 });
+
+test("a link made by scanning the QR code (registered stays false) is still remembered after a restart", async () => {
+  const t = make();
+  fs.mkdirSync(t.link.sessionDir, { recursive: true });
+  // This is what Baileys really saves after a QR scan: a paired account, but registered: false.
+  fs.writeFileSync(path.join(t.link.sessionDir, "creds.json"), JSON.stringify({ registered: false, me: { id: "923001234567:5@s.whatsapp.net" } }));
+  assert.strictEqual(t.link.getStatus().saved, true);
+  t.link.autoStart();
+  await settle();
+  await settle();
+  assert.strictEqual(t.baileys.socks.length, 1);
+});
+
+test("a QR code that was shown but never scanned is not a saved link", () => {
+  const t = make();
+  fs.mkdirSync(t.link.sessionDir, { recursive: true });
+  fs.writeFileSync(path.join(t.link.sessionDir, "creds.json"), JSON.stringify({ registered: false }));
+  assert.strictEqual(t.link.getStatus().saved, false);
+});

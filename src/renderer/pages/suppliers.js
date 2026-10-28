@@ -36,6 +36,8 @@ const SuppliersPage = {
           <p>What you owe suppliers. Payments come out of Cash or Bank automatically.</p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-secondary" onclick="SuppliersPage.importCsv()">Import CSV</button>
+          <button class="btn btn-secondary" onclick="SuppliersPage.exportCsv()">Export CSV</button>
           <button class="btn btn-secondary" onclick="SuppliersPage.showBillForm()">Add Bill</button>
           <button class="btn btn-success" onclick="SuppliersPage.showPayForm()">Pay Supplier</button>
           <button class="btn btn-primary" onclick="SuppliersPage.showForm()">Add Supplier</button>
@@ -117,6 +119,25 @@ const SuppliersPage = {
             </div></td>
           </tr>`).join("")}</tbody>
       </table></div>`;
+  },
+
+  importCsv() {
+    CsvTools.openImport({
+      title: "Import suppliers from CSV",
+      templateName: "suppliers-import-template.csv",
+      templateRows: [["name", "phone", "phone2", "address", "notes", "opening_balance"], ["Example Supplier", "03001234567", "", "Hall Road, Lahore", "Main laptop supplier", "1500"]],
+      run: (rows, dryRun) => window.api.importSuppliers(rows, dryRun),
+      onDone: () => this.refresh(),
+    });
+  },
+
+  async exportCsv() {
+    const r = await window.api.listSuppliers({});
+    if (!r.success) return Toast.error(r.error);
+    CsvTools.download("suppliers-" + CsvTools.stamp() + ".csv", [
+      ["Supplier", "Phone", "Phone 2", "Address", "Status", "Bought", "Paid", "We owe"],
+      ...r.data.map((s) => [s.name, s.phone, s.phone2, s.address, s.status, s.opening + s.purchased, s.paid, s.balance]),
+    ]);
   },
 
   onSearch() {

@@ -105,7 +105,12 @@ const BackupPage = {
           <div class="form-group" style="flex:2;min-width:280px;">
             <label>Google OAuth desktop client ID</label>
             <input id="drive-client-id" class="form-control" type="text" value="${this.escapeHtml(settings.google_drive_client_id || '')}" placeholder="Configured by your app provider or Google Cloud project" ${status.connected ? 'disabled' : ''}>
-            <small>Required once for this app. The owner signs in to their own Google account; the app stores the refresh token in Windows secure storage.</small>
+            <small>From Google Cloud: APIs &amp; Services > Credentials > your Desktop app client.</small>
+          </div>
+          <div class="form-group" style="flex:2;min-width:280px;">
+            <label>Google client secret</label>
+            <input id="drive-client-secret" class="form-control" type="password" autocomplete="off" placeholder="${status.secretSaved ? 'Saved. Leave empty to keep it' : 'GOCSPX-...'}" ${status.connected ? 'disabled' : ''}>
+            <small>Saved encrypted on this PC. The owner then signs in to their own Google account.</small>
           </div>
           <div class="form-group" style="max-width:180px;">
             <label>Keep Drive backups</label>
@@ -113,11 +118,11 @@ const BackupPage = {
           </div>
           <div class="form-group" style="display:flex;gap:8px;">
             <button class="btn btn-secondary" onclick="BackupPage.saveDriveSettings()">Save Drive settings</button>
-            ${status.connected ? '<button class="btn btn-danger" onclick="BackupPage.disconnectDrive()">Disconnect</button>' : '<button class="btn btn-primary" onclick="BackupPage.connectDrive()" ' + (!status.configured ? 'disabled' : '') + '>Connect owner Drive</button>'}
+            ${status.connected ? '<button class="btn btn-danger" onclick="BackupPage.disconnectDrive()">Disconnect</button>' : '<button id="drive-connect-btn" class="btn btn-primary" onclick="BackupPage.connectDrive()" ' + '>Connect owner Drive</button>'}
           </div>
         </div>
         <div class="form-row" style="gap:16px;margin-top:8px;">
-          <span><strong>Connection:</strong> ${status.connected ? 'Connected' : status.configured ? 'Not connected' : 'Needs app setup'}</span>
+          <span><strong>Connection:</strong> ${status.connected ? 'Connected' : (status.configured && status.secretSaved) ? 'Not connected' : 'Enter the Client ID and secret, then click Connect'}</span>
           <span><strong>Last upload:</strong> ${this.escapeHtml(status.lastUploadedAt ? Formatters.formatDateTime(status.lastUploadedAt) : 'None yet')}</span>
           <span><strong>Last file:</strong> ${this.escapeHtml(status.lastUploadedFile || '—')}</span>
           ${status.error ? '<span style="color:var(--danger);"><strong>Latest issue:</strong> ' + this.escapeHtml(status.error) + '</span>' : ''}
@@ -129,17 +134,29 @@ const BackupPage = {
     }
   },
 
+  driveFormValues() {
+    return {
+      clientId: document.getElementById('drive-client-id')?.value,
+      clientSecret: document.getElementById('drive-client-secret')?.value,
+      retention: document.getElementById('drive-retention')?.value,
+    };
+  },
+
   async saveDriveSettings() {
-    const r = await window.api.saveDriveSettings({ clientId: document.getElementById('drive-client-id')?.value, retention: document.getElementById('drive-retention')?.value });
+    const r = await window.api.saveDriveSettings(this.driveFormValues());
     if (!r.success) { Toast.error(r.error || 'Could not save Drive settings.'); return; }
     Toast.success('Drive settings saved.');
     await this.loadDrive();
   },
 
   async connectDrive() {
-    const saved = await window.api.saveDriveSettings({ clientId: document.getElementById('drive-client-id')?.value, retention: document.getElementById('drive-retention')?.value });
+    const button = document.getElementById('drive-connect-btn');
+    const saved = await window.api.saveDriveSettings(this.driveFormValues());
     if (!saved.success) { Toast.error(saved.error); return; }
-    Toast.info('Opening Google sign-in…');
+    if (!saved.data.configured) { Toast.error('Enter the Google Client ID first.'); return; }
+    if (!saved.data.secretSaved) { Toast.error('Enter the Google Client secret too.'); return; }
+    if (button) { button.disabled = true; button.textContent = 'Waiting for Google sign-in…'; }
+    Toast.info('Opening Google sign-in in your browser…');
     const r = await window.api.connectDrive();
     if (!r.success) Toast.error(r.error || 'Google Drive connection failed.');
     else Toast.success('Owner Google Drive connected. A verified backup upload has been queued.');

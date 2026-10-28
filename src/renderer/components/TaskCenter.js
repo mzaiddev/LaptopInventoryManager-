@@ -45,12 +45,21 @@ const TaskCenter = {
     const n = this.tasks.filter((j) => ['queued','running','paused','interrupted'].includes(j.status)).length;
     count.textContent = String(n);
     count.style.display = n ? 'inline-flex' : 'none';
+    // The loader shows while something is really working, so the owner can keep using the app and see it going.
+    const working = this.tasks.some((j) => ['queued','running'].includes(j.status));
+    const spin = document.getElementById('task-center-spin');
+    if (spin) spin.style.display = working ? 'inline-block' : 'none';
     const btn = document.getElementById('task-center-toggle');
-    if (btn) btn.title = n ? `${n} active or attention-needed tasks` : 'Background task history';
+    if (btn) {
+      btn.classList.toggle('working', working);
+      btn.title = working ? 'Working in the background. You can keep using the app.' : n ? `${n} tasks need attention` : 'Background task history';
+    }
   },
 
   toggle() { this.openState ? this.close() : this.open(); },
-  async open() {
+  // `highlightId` opens the list with that one task marked (used by the bell alerts).
+  async open(highlightId) {
+    this.highlightId = highlightId || null;
     this.openState = true;
     const panel = document.getElementById('task-center-panel');
     const btn = document.getElementById('task-center-toggle');
@@ -58,9 +67,12 @@ const TaskCenter = {
     if (btn) btn.setAttribute('aria-expanded', 'true');
     await this.refresh();
     this.render();
+    const marked = panel && panel.querySelector('.task-card.highlight');
+    if (marked && marked.scrollIntoView) marked.scrollIntoView({ block: 'nearest' });
   },
   close() {
     this.openState = false;
+    this.highlightId = null;
     const panel = document.getElementById('task-center-panel');
     const btn = document.getElementById('task-center-toggle');
     if (panel) panel.style.display = 'none';
@@ -76,7 +88,9 @@ const TaskCenter = {
     const panel = document.getElementById('task-center-panel');
     if (!panel) return;
     const active = this.tasks.filter((j) => ['running','queued','paused','interrupted'].includes(j.status));
-    const sorted = [...active, ...this.tasks.filter((j) => !active.includes(j))].slice(0, 12);
+    let sorted = [...active, ...this.tasks.filter((j) => !active.includes(j))].slice(0, 12);
+    const marked = this.highlightId && this.tasks.find((j) => j.id === this.highlightId);
+    if (marked && !sorted.includes(marked)) sorted = [marked, ...sorted.slice(0, 11)];
     panel.innerHTML = `
       <div class="task-center-head"><h3>${this._esc(I18n.t('Background tasks'))}</h3><button class="btn btn-secondary btn-sm" onclick="TaskCenter.refresh()">${this._esc(I18n.t('Refresh'))}</button></div>
       <div class="task-center-list">${sorted.length ? sorted.map((j) => this._taskHtml(j)).join('') : `<div class="empty-state" style="padding:26px 10px;"><p>${this._esc(I18n.t('No background tasks yet.'))}</p></div>`}</div>`;
@@ -94,8 +108,8 @@ const TaskCenter = {
     if (['paused','cancelled','interrupted'].includes(j.status) && (j.items || []).some((x) => x.status === 'queued')) actions.push(`<button class="btn btn-primary btn-sm" onclick="TaskCenter.action('resume',${Number(j.id)})">${t('Resume')}</button>`);
     if (Number(j.failed || 0) > 0) actions.push(`<button class="btn btn-secondary btn-sm" onclick="TaskCenter.action('retryFailed',${Number(j.id)})">${t('Retry failed')}</button>`);
     const summary = `${j.done || 0} ${t('done')} · ${j.skipped || 0} ${t('skipped')} · ${j.failed || 0} ${t('failed')}`;
-    return `<article class="task-card">
-      <div class="task-card-top"><div class="task-card-title">${this._esc(j.title)}</div><div class="task-card-state">${this._esc(this._status(j.status))}</div></div>
+    return `<article class="task-card${this.highlightId === j.id ? ' highlight' : ''}">
+      <div class="task-card-top"><div class="task-card-title">${this._esc(j.title)}</div><div class="task-card-state">${['running','queued'].includes(j.status) ? '<span class="task-spin" aria-hidden="true"></span>' : ''}${this._esc(this._status(j.status))}</div></div>
       ${['running','queued'].includes(j.status) ? `<div class="task-progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><span style="width:${pct}%"></span></div>` : ''}
       <div class="task-card-meta">${this._esc(summary)}${total ? ` · ${finished}/${total}` : ''}</div>
       ${current ? `<div class="task-card-meta">${t('Current')}: ${this._esc(current.label)}</div>` : ''}

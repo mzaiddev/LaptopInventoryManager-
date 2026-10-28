@@ -164,10 +164,11 @@ const I18n = {
     }
     if (save && window.api) window.api.updateSettings({ language: this.lang }).catch(() => {});
     // Pages build their text when they are drawn, so draw the current one again.
-    if (window.App && document.getElementById("app").style.display !== "none" && App.currentPage) {
+    // App and LoginPage are top-level consts, so they are globals but not window properties.
+    if (typeof App !== "undefined" && document.getElementById("app").style.display !== "none" && App.currentPage) {
       Modal.close();
       App.navigate(App.currentPage);
-    } else if (window.LoginPage && document.getElementById("login-screen").style.display !== "none") {
+    } else if (typeof LoginPage !== "undefined" && document.getElementById("login-screen").style.display !== "none") {
       LoginPage.show();
     }
   },

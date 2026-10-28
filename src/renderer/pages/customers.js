@@ -16,6 +16,8 @@ const CustomersPage = {
           <p>Manage your customers and track balances</p>
         </div>
         <div style="display:flex;gap:8px;">
+          <button class="btn btn-secondary" onclick="CustomersPage.importCsv()">Import CSV</button>
+          <button class="btn btn-secondary" onclick="CustomersPage.exportCsv()">Export CSV</button>
           <button class="btn btn-secondary" onclick="CustomersPage.openPrintDialog()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
               <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
@@ -762,6 +764,26 @@ const CustomersPage = {
         }
       }
     );
+  },
+
+  importCsv() {
+    CsvTools.openImport({
+      title: "Import customers from CSV",
+      templateName: "customers-import-template.csv",
+      templateRows: [["customer_name", "phone", "address", "email", "opening_balance", "balance_type", "notes"], ["Example Traders", "03001234567", "Lahore", "", "1200", "Debit", "Old balance from register"]],
+      run: (rows, dryRun) => window.api.importCustomers(rows, dryRun),
+      onDone: () => this.refresh(),
+    });
+  },
+
+  async exportCsv() {
+    const r = await window.api.getAllCustomers({ limit: 5000 });
+    if (!r.success) return Toast.error(r.error);
+    const list = r.data.customers || [];
+    CsvTools.download("customers-" + CsvTools.stamp() + ".csv", [
+      ["Customer", "Phone", "Address", "Email", "Status", "Due", "Credit"],
+      ...list.map((c) => [c.customer_name, c.phone, c.address, c.email, c.status, c.total_due || 0, c.ledger_balance < 0 ? -c.ledger_balance : 0]),
+    ]);
   },
 
   escapeHtml(str) {
