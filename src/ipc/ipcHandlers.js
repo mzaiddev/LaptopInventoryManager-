@@ -108,6 +108,13 @@ function registerIpcHandlers() {
       return { success: false, error: err.message };
     }
   });
+  ipcMain.handle("wa:reconnect", async () => {
+    try {
+      return { success: true, data: await waLink.reconnect() };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
   ipcMain.handle("wa:unlink", async () => {
     try {
       await waLink.unlink();

@@ -101,6 +101,7 @@ contextBridge.exposeInMainWorld("api", {
   autoSendStatement: (payload) => ipcRenderer.invoke("statement:autoSend", payload),
   waStatus: () => ipcRenderer.invoke("wa:status"),
   waConnect: () => ipcRenderer.invoke("wa:connect"),
+  waReconnect: () => ipcRenderer.invoke("wa:reconnect"),
   waUnlink: () => ipcRenderer.invoke("wa:unlink"),
   // Pushed by the main process whenever the WhatsApp link changes. Returns a function that stops listening.
   onWaChanged: (cb) => {

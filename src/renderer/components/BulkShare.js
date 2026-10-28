@@ -63,7 +63,9 @@ const BulkShare = {
   },
 
   rowCheckbox(scopeName, id) {
-    return `<td><input type="checkbox" class="bs-cb-${scopeName}" ${this.isSelected(scopeName, id) ? "checked" : ""} onchange="BulkShare.toggle('${scopeName}', ${JSON.stringify(String(id))}, this.checked)"></td>`;
+    // The handler sits in a double-quoted attribute, so the id is single-quoted (JSON.stringify would break it).
+    const safeId = String(id).replace(/[\\']/g, "\\$&").replace(/"/g, "&quot;");
+    return `<td><input type="checkbox" class="bs-cb-${scopeName}" ${this.isSelected(scopeName, id) ? "checked" : ""} onchange="BulkShare.toggle('${scopeName}', '${safeId}', this.checked)"></td>`;
   },
 
   // Bar above the table. onSelected / onAll are JS call strings, e.g. "CustomersPage.sendSelected()".
@@ -156,8 +158,9 @@ const BulkShare = {
       const item = r.items[Math.min(r.idx, total - 1)];
       box.innerHTML =
         '<div style="height:8px;background:var(--border-color);border-radius:4px;margin-bottom:14px;"><div style="height:8px;width:' + pct + '%;background:var(--success);border-radius:4px;"></div></div>' +
-        '<p style="font-size:13px;color:var(--text-muted);">Sending ' + (Math.min(r.idx + 1, total)) + " of " + total + "</p>" +
-        '<p style="font-size:18px;font-weight:700;margin:4px 0 8px;">' + this.esc(item.label) + "</p>" +
+        '<p style="font-size:13px;color:var(--text-muted);">Sending ' + (Math.min(r.idx + 1, total)) + " of " + total + " &middot; " + pct + "%</p>" +
+        '<div style="display:flex;align-items:center;gap:12px;margin:4px 0 8px;"><div class="spinner" style="width:22px;height:22px;border-width:3px;flex:none;"></div>' +
+        '<p style="font-size:18px;font-weight:700;margin:0;">' + this.esc(item.label) + "</p></div>" +
         '<p style="font-size:13px;margin-bottom:16px;">Sent: <strong>' + r.sent.length + "</strong> &nbsp; Skipped: <strong>" + r.skipped.length + "</strong><br>" +
         '<span style="color:var(--text-muted);">Keep this window open. You can keep it in the background.</span></p>' +
         '<div style="display:flex;justify-content:flex-end;"><button class="btn btn-secondary" onclick="BulkShare.requestStop()" ' + (r.stopRequested ? "disabled" : "") + ">" +
@@ -172,7 +175,9 @@ const BulkShare = {
           r.skipped.map((x) => "<li>" + this.esc(x.label) + " - " + this.esc(x.reason) + "</li>").join("") + "</ul>"
         : "";
       const verb = r.mode === "auto" ? "Sent" : "Opened";
+      const allOk = !r.stopped && r.skipped.length === 0;
       box.innerHTML =
+        '<p style="font-size:34px;line-height:1;margin:0 0 8px;color:' + (allOk ? "var(--success)" : "var(--warning,#b45309)") + ';">' + (allOk ? "&#10003;" : "&#9888;") + "</p>" +
         '<p style="font-size:16px;"><strong>' + (r.stopped ? "Stopped" : "All done") + ".</strong> " + verb + " " + r.sent.length + " of " + total + (r.mode === "auto" ? " messages" : " chats") + ".</p>" +
         skippedHtml +
         '<div style="display:flex;justify-content:flex-end;margin-top:16px;"><button class="btn btn-primary" onclick="BulkShare.stop()">Close</button></div>';

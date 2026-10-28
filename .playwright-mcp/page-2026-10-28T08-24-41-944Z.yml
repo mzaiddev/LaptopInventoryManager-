@@ -1,0 +1,154 @@
+- generic [ref=f4e16]:
+  - complementary [ref=f4e17]:
+    - heading "Inventory Manager" [level=2] [ref=f4e22]
+    - navigation [ref=f4e23]:
+      - button "Dashboard" [ref=f4e24] [cursor=pointer]
+      - button "Inventory" [ref=f4e31] [cursor=pointer]
+      - button "Customers" [ref=f4e35] [cursor=pointer]
+      - button "Sales History" [ref=f4e42] [cursor=pointer]
+      - button "New Sale / Issue" [ref=f4e45] [cursor=pointer]
+      - button "Ledgers" [ref=f4e49] [cursor=pointer]
+      - button "Returns" [ref=f4e54] [cursor=pointer]
+      - button "Expenses" [ref=f4e59] [cursor=pointer]
+      - button "Suppliers" [ref=f4e63] [cursor=pointer]
+      - button "Cash & Bank Book" [ref=f4e70] [cursor=pointer]
+      - button "Backup & Restore" [ref=f4e75] [cursor=pointer]
+      - button "Settings" [ref=f4e79] [cursor=pointer]
+    - generic [ref=f4e84]:
+      - button "Sign out" [ref=f4e85] [cursor=pointer]
+      - generic [ref=f4e86]: v1.0.0
+      - generic [ref=f4e87]: Developed by Muhammad Zaid - 03189230490
+  - main [ref=f4e88]:
+    - generic [ref=f4e89]:
+      - generic [ref=f4e90]: Zia Laptop Dealer
+      - generic [ref=f4e92]:
+        - button "اردو" [ref=f4e93] [cursor=pointer]
+        - button "Show Purchase Prices" [ref=f4e94] [cursor=pointer]
+        - button "Toggle Theme" [ref=f4e96] [cursor=pointer]
+    - generic [ref=f4e103]:
+      - generic [ref=f4e105]:
+        - heading "Dashboard" [level=1] [ref=f4e106]
+        - paragraph [ref=f4e107]: Your shop at a glance
+      - generic [ref=f4e108]:
+        - button "Today" [ref=f4e109] [cursor=pointer]
+        - button "Last 7 Days" [ref=f4e110] [cursor=pointer]
+        - button "This Month" [ref=f4e111] [cursor=pointer]
+        - button "Last Month" [ref=f4e112] [cursor=pointer]
+        - button "All Time" [ref=f4e113] [cursor=pointer]
+        - button "Custom" [ref=f4e114] [cursor=pointer]
+      - generic [ref=f4e115]:
+        - generic [ref=f4e116]:
+          - heading "Money In and Out" [level=2] [ref=f4e117]
+          - generic [ref=f4e118]:
+            - generic [ref=f4e119]:
+              - button "i" [ref=f4e120] [cursor=pointer]
+              - generic [ref=f4e124]: PKR 300K
+              - generic [ref=f4e125]: Sales
+              - generic [ref=f4e126]: 2 sales
+              - generic [ref=f4e127]: Your bills in this period, after discounts and returns.
+            - generic [ref=f4e128]:
+              - button "i" [ref=f4e129] [cursor=pointer]
+              - generic [ref=f4e134]: PKR 150K
+              - generic [ref=f4e135]: Received
+              - generic [ref=f4e136]: Cash PKR 100K · Bank PKR 50K
+              - generic [ref=f4e137]: All money collected in this period, in cash or bank.
+            - generic [ref=f4e138]:
+              - button "i" [ref=f4e139] [cursor=pointer]
+              - generic [ref=f4e143]: PKR 0
+              - generic [ref=f4e144]: Expenses
+              - generic [ref=f4e145]: Cash PKR 0 · Bank PKR 0
+              - generic [ref=f4e146]: Money you spent on the shop in this period.
+            - generic [ref=f4e147]:
+              - button "i" [ref=f4e148] [cursor=pointer]
+              - generic [ref=f4e153]: PKR 0
+              - generic [ref=f4e154]: Paid to Suppliers
+              - generic [ref=f4e155]: Cash PKR 0 · Bank PKR 0
+              - generic [ref=f4e156]: "Money you paid to suppliers in this period. It is not an expense: the goods reach profit when you sell them."
+            - generic [ref=f4e157]:
+              - button "i" [ref=f4e158] [cursor=pointer]
+              - generic [ref=f4e163]: PKR 0
+              - generic [ref=f4e164]: Returns
+              - generic [ref=f4e165]: 0 returns
+              - generic [ref=f4e166]: Goods customers gave back. Already taken out of Sales.
+            - generic [ref=f4e167]:
+              - button "i" [ref=f4e168] [cursor=pointer]
+              - link "••••" [ref=f4e173] [cursor=pointer]:
+                - /url: "#"
+              - generic [ref=f4e174]: Net Profit
+              - generic [ref=f4e175]: Click •••• and enter super-password
+              - generic [ref=f4e176]: "What you really earned: Sales, minus the cost of the goods, minus expenses."
+        - generic [ref=f4e177]:
+          - heading "Cash, Bank and Dues" [level=2] [ref=f4e178]
+          - generic [ref=f4e179]:
+            - generic [ref=f4e180]:
+              - button "i" [ref=f4e181] [cursor=pointer]
+              - generic [ref=f4e186]: PKR 300K
+              - generic [ref=f4e187]: Cash in Hand
+              - generic [ref=f4e188]: All time
+              - generic [ref=f4e189]: Cash that should be in your drawer now.
+            - generic [ref=f4e190]:
+              - button "i" [ref=f4e191] [cursor=pointer]
+              - generic [ref=f4e195]: PKR 150K
+              - generic [ref=f4e196]: Bank Balance
+              - generic [ref=f4e197]: All time
+              - generic [ref=f4e198]: Money that should be in your bank now.
+            - generic [ref=f4e199]:
+              - button "i" [ref=f4e200] [cursor=pointer]
+              - generic [ref=f4e204]: PKR 0
+              - generic [ref=f4e205]: Old Balances
+              - generic [ref=f4e206]: 0 customers
+              - generic [ref=f4e207]: Money customers owed you before you started using this system. It is not part of Net Profit.
+            - generic [ref=f4e208]:
+              - button "i" [ref=f4e209] [cursor=pointer]
+              - generic [ref=f4e213]: PKR 0
+              - generic [ref=f4e214]: You Owe Suppliers
+              - generic [ref=f4e215]: 0 suppliers
+              - generic [ref=f4e216]: What you still have to pay suppliers for goods bought on credit. It is not part of Net Profit.
+            - generic [ref=f4e217]:
+              - button "i" [ref=f4e218] [cursor=pointer]
+              - generic [ref=f4e222]: PKR 150K
+              - generic [ref=f4e223]: Customers Owe You
+              - generic [ref=f4e224]: 1 customers
+              - generic [ref=f4e225]: What customers still have to pay you, including old balances.
+        - generic [ref=f4e226]:
+          - heading "Stock" [level=2] [ref=f4e227]
+          - generic [ref=f4e228]:
+            - generic [ref=f4e229]:
+              - generic [ref=f4e233]: "37"
+              - generic [ref=f4e234]: Items in Stock
+              - generic [ref=f4e235]: Units you can sell right now.
+            - generic [ref=f4e236]:
+              - link "••••" [ref=f4e241] [cursor=pointer]:
+                - /url: "#"
+              - generic [ref=f4e242]: Stock Value (cost)
+              - generic [ref=f4e243]: Click •••• and enter super-password
+              - generic [ref=f4e244]: Items in stock multiplied by what you paid for them.
+        - generic [ref=f4e245]:
+          - heading "Recent Activity" [level=2] [ref=f4e246]
+          - generic [ref=f4e247]:
+            - generic [ref=f4e248]:
+              - heading "Recent Sales" [level=3] [ref=f4e250]
+              - list [ref=f4e252]:
+                - listitem [ref=f4e253]:
+                  - generic [ref=f4e254]:
+                    - generic [ref=f4e255]: SALE-20261028-0002
+                    - generic [ref=f4e256]: Bilal Traders - PKR 200K
+                  - generic [ref=f4e257]: Oct 6, 2026
+                - listitem [ref=f4e258]:
+                  - generic [ref=f4e259]:
+                    - generic [ref=f4e260]: SALE-20261028-0001
+                    - generic [ref=f4e261]: Ahmed Khan - PKR 100K
+                  - generic [ref=f4e262]: Oct 5, 2026
+            - generic [ref=f4e263]:
+              - heading "Recent Payments" [level=3] [ref=f4e265]
+              - list [ref=f4e267]:
+                - listitem [ref=f4e268]:
+                  - generic [ref=f4e269]:
+                    - generic [ref=f4e270]: PKR 50K received
+                    - generic [ref=f4e271]: Bilal Traders - SALE-20261028-0002 (Bank)
+                  - generic [ref=f4e272]: Oct 6, 2026
+                - listitem [ref=f4e273]:
+                  - generic [ref=f4e274]:
+                    - generic [ref=f4e275]: PKR 100K received
+                    - generic [ref=f4e276]: Ahmed Khan - SALE-20261028-0001 (Cash)
+                  - generic [ref=f4e277]: Oct 5, 2026

@@ -207,6 +207,7 @@ const SuppliersPage = {
     el.innerHTML = parts.join("<br>");
   },
 
+
   async showPayForm(supplierId = null, entry = null) {
     this.returnTo = this.statementOpenFor; // the form replaces the statement; reopen it after saving
     this.statementOpenFor = null;
@@ -374,31 +375,32 @@ const SuppliersPage = {
 
   async statementHtml() {
     const st = (await window.api.getSettings()).data || {};
+    const T = ReportTheme;
+    const fx = (v) => Formatters.formatCurrency(v, App.currency, true);
     const d = this.statement;
     const s = d.supplier;
-    const th = "padding:6px 8px;border:1px solid #000;text-align:left;font-size:13px;";
-    const td = "padding:6px 8px;border:1px solid #999;font-size:14px;";
-    const rows = d.rows.map((e) => `<tr>
-      <td style="${td}">${Formatters.formatDate(e.entry_date)}</td>
-      <td style="${td}">${e.entry_type === "Payment" ? "Payment (" + e.payment_source + ")" : e.entry_type === "Purchase" ? "Bill" : "Opening balance"}</td>
-      <td style="${td}">${this.esc([e.reference_no, e.note].filter(Boolean).join(" - "))}</td>
-      <td style="${td}text-align:right;">${e.charge ? this.money(e.charge) : ""}</td>
-      <td style="${td}text-align:right;">${e.paid ? this.money(e.paid) : ""}</td>
-      <td style="${td}text-align:right;font-weight:700;">${this.money(e.balance)}</td></tr>`).join("");
-    return `<html><head><meta charset="utf-8"><title>Supplier Statement</title>
-      <style>@page{margin:10mm} body{font-family:Arial,Helvetica,sans-serif;padding:15px;color:#000;font-size:15px} table{width:100%;border-collapse:collapse}</style></head><body>
-      <div style="text-align:center;margin-bottom:16px;padding-bottom:10px;border-bottom:3px solid #000;">
-        <h2 style="font-size:24px;margin-bottom:4px;">${this.esc(st.shop_name || "")}</h2>
-        ${ShopInfo.contactHtml(st, "font-size:14px;color:#000;margin:1px 0;")}
-        <h3 style="margin-top:8px;font-size:22px;">Supplier Statement</h3>
-      </div>
-      <p><strong>Supplier:</strong> ${this.esc(s.name)} &nbsp; ${s.phone ? "<strong>Phone:</strong> " + this.esc(s.phone) : ""}</p>
-      <p style="margin-bottom:10px;"><strong>Date:</strong> ${Formatters.formatDate(new Date().toISOString())}</p>
-      <table><thead><tr><th style="${th}">Date</th><th style="${th}">Type</th><th style="${th}">Details</th><th style="${th}text-align:right;">Bill</th><th style="${th}text-align:right;">Paid</th><th style="${th}text-align:right;">Balance</th></tr></thead>
-      <tbody>${d.broughtForward !== null ? `<tr><td colspan="5" style="${td}"><em>Balance brought forward</em></td><td style="${td}text-align:right;font-weight:700;">${this.money(d.broughtForward)}</td></tr>` : ""}${rows}</tbody></table>
-      <p style="margin-top:14px;font-size:17px;text-align:right;"><strong>${s.balance < 0 ? "Advance paid" : "Balance we owe"}: ${this.money(Math.abs(s.balance))}</strong></p>
-      <p style="margin-top:20px;text-align:center;font-size:12px;">Generated on ${Formatters.formatDateTime(new Date().toISOString())}</p>
-      </body></html>`;
+    const bal = s.balance;
+    const typeLabel = (e) => (e.entry_type === "Payment" ? "Payment (" + e.payment_source + ")" : e.entry_type === "Purchase" ? "Bill" : "Opening balance");
+    const rows = d.rows.map((e) => '<tr><td>' + Formatters.formatDate(e.entry_date) + '</td><td>' + typeLabel(e) + '</td><td>' + this.esc([e.reference_no, e.note].filter(Boolean).join(" - ")) + '</td>' +
+      '<td class="num ' + (e.charge ? 'neg' : 'muted') + '">' + (e.charge ? '+ ' + fx(e.charge) : '-') + '</td>' +
+      '<td class="num ' + (e.paid ? 'pos' : 'muted') + '">' + (e.paid ? '&minus; ' + fx(e.paid) : '-') + '</td>' +
+      '<td class="num strong">' + fx(e.balance) + '</td></tr>').join('');
+    const forward = d.broughtForward !== null
+      ? '<tr><td colspan="5"><i>Balance brought forward</i></td><td class="num strong">' + fx(d.broughtForward) + '</td></tr>' : '';
+    const body =
+      T.header({ shop: st, title: 'Supplier Statement', meta: [['Date', Formatters.formatDate(new Date().toISOString())]] }) +
+      '<div class="info"><div class="box"><div class="k">Supplier</div><div class="v">' + this.esc(s.name) + '</div>' +
+        '<div class="s">' + (this.esc([s.phone, s.phone2].filter(Boolean).join(" | ")) || '-') + (s.address ? ' &middot; ' + this.esc(s.address) : '') + '</div></div>' +
+        '<div class="box" style="max-width:190px;"><div class="k">Account status</div><div class="v" style="margin-top:3px;">' +
+          (bal > 0.005 ? T.badge('bad', 'We owe') : bal < -0.005 ? T.badge('ok', 'Advance paid') : T.badge('ok', 'Settled')) + '</div></div></div>' +
+      T.dueBox(bal > 0.005 ? { label: 'Balance we owe', amount: fx(bal), tone: 'bad' }
+        : bal < -0.005 ? { label: 'Advance paid to supplier', amount: fx(-bal), tone: 'ok' }
+        : { label: 'Account settled', amount: fx(0), tone: 'ok' }) +
+      T.section('Account activity') +
+      '<table><thead><tr><th>Date</th><th>Type</th><th>Details</th><th class="num">Bill (+)</th><th class="num">Paid (&minus;)</th><th class="num">Balance</th></tr></thead><tbody>' + forward + rows + '</tbody>' +
+      '<tfoot><tr><td colspan="3">Totals in this period</td><td class="num">' + fx(d.totals.charged) + '</td><td class="num">' + fx(d.totals.paid) + '</td><td class="num">' + fx(bal) + '</td></tr></tfoot></table>' +
+      T.footer({ shop: st });
+    return T.wrap({ title: 'Supplier Statement', body, toolbar: false });
   },
 
   async printStatement() {

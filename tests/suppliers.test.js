@@ -180,3 +180,70 @@ test("data check flags a negative cash or bank balance", () => {
   assert.ok(r.problems.some((p) => p.type === "cash_negative"));
   void db;
 });
+
+// ---- Bills made by Add Product
+const inventory = require("../src/services/inventoryService");
+const newProduct = (extra = {}) => ({ product_name: "Dell 5420", category: "Laptop", supplier: "Ali Traders", purchase_price: 50000, selling_price: 60000, quantity: 5, purchase_date: "2026-10-05", ...extra });
+
+test("adding a product with a supplier puts price x quantity on that supplier's balance", () => {
+  shop();
+  const { id } = suppliers.add({ name: "Ali Traders" });
+  const { id: pid } = inventory.addProduct(newProduct());
+  assert.strictEqual(suppliers.get(id).balance, 250000);
+  const row = suppliers.statement(id).rows[0];
+  assert.deepStrictEqual([row.entry_type, row.entry_date, row.note, row.product_id], ["Purchase", "2026-10-05", "Dell 5420 x 5", pid]);
+  // a product without a supplier, or with an unknown name, bills nobody
+  inventory.addProduct(newProduct({ supplier: "" }));
+  inventory.addProduct(newProduct({ supplier: "Nobody" }));
+  assert.strictEqual(suppliers.get(id).balance, 250000);
+});
+
+test("paid-now on a new product comes out of cash or bank and is limited by the funds", () => {
+  shop({ cash: 100000 });
+  const { id } = suppliers.add({ name: "Ali Traders" });
+  inventory.addProduct(newProduct({ paid_now: 60000, payment_source: "Cash" }));
+  assert.strictEqual(suppliers.get(id).balance, 190000);
+  const b = dashboard.getBalances(require("../src/database/dbInit").getDatabase());
+  assert.strictEqual(b.cashInHand, 40000);
+  assert.throws(() => inventory.addProduct(newProduct({ paid_now: 50000, payment_source: "Cash" })), /Cash in hand is 40,000/);
+  assert.throws(() => inventory.addProduct(newProduct({ paid_now: 300000, payment_source: "Bank" })), /more than the cost/);
+  assert.strictEqual(suppliers.get(id).balance, 190000); // the failed adds left nothing behind
+  assert.strictEqual(inventory.getAllProducts({}).total, 1);
+});
+
+test("editing a product follows a new price, a restock and a new supplier, never a lower quantity", () => {
+  shop();
+  const a = suppliers.add({ name: "Ali Traders" }).id;
+  const b = suppliers.add({ name: "Bilal Supplies" }).id;
+  const { id: pid } = inventory.addProduct(newProduct());
+  inventory.updateProduct(pid, newProduct({ purchase_price: 52000 })); // price fixed
+  assert.strictEqual(suppliers.get(a).balance, 260000);
+  inventory.updateProduct(pid, newProduct({ purchase_price: 52000, quantity: 7 })); // 2 more bought
+  assert.strictEqual(suppliers.get(a).balance, 364000);
+  inventory.updateProduct(pid, newProduct({ purchase_price: 52000, quantity: 3 })); // sold down: bill stays
+  assert.strictEqual(suppliers.get(a).balance, 364000);
+  inventory.updateProduct(pid, newProduct({ purchase_price: 52000, quantity: 3, supplier: "Bilal Supplies" }));
+  assert.deepStrictEqual([suppliers.get(a).balance, suppliers.get(b).balance], [0, 364000]);
+  inventory.updateProduct(pid, newProduct({ supplier: "" }));
+  assert.strictEqual(suppliers.get(b).balance, 0);
+});
+
+test("deleting a product removes its bill, unless it was paid for or sold", () => {
+  shop();
+  const a = suppliers.add({ name: "Ali Traders" }).id;
+  const { id: plain } = inventory.addProduct(newProduct());
+  inventory.deleteProduct(plain);
+  assert.strictEqual(suppliers.get(a).balance, 0);
+  const { id: paid } = inventory.addProduct(newProduct({ paid_now: 50000, payment_source: "Cash" }));
+  inventory.deleteProduct(paid);
+  assert.strictEqual(suppliers.get(a).balance, 200000); // the goods were still bought
+  assert.match(suppliers.statement(a).rows[0].note, /product deleted/);
+});
+
+test("products that already existed are not billed again when edited", () => {
+  shop();
+  const a = suppliers.add({ name: "Ali Traders", opening: 1000 }).id;
+  const pid = addProduct({ qty: 3, purchase: 100 });
+  inventory.updateProduct(pid, newProduct({ purchase_price: 100, quantity: 5 }));
+  assert.strictEqual(suppliers.get(a).balance, 1000);
+});

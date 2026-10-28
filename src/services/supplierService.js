@@ -264,6 +264,79 @@ class SupplierService {
     })();
   }
 
+  // ---- Bills made by Add Product: the cost of a product (price x quantity) goes onto its supplier's balance.
+  // Only products added after this feature get a bill; older products keep the bills entered by hand.
+  _supplierByName(db, name) {
+    const n = str(name);
+    return n ? db.prepare("SELECT * FROM suppliers WHERE name = ? COLLATE NOCASE").get(n) : null;
+  }
+
+  _productLines(db, productId) {
+    return db.prepare("SELECT * FROM supplier_ledger WHERE product_id = ? ORDER BY id").all(productId);
+  }
+
+  billProduct(db, p) {
+    const sup = this._supplierByName(db, p.supplier);
+    const cost = roundMoney((Number(p.price) || 0) * (Number(p.qty) || 0));
+    if (!sup || sup.status !== "Active" || !(cost > 0)) return null;
+    const paidNow = p.paid_now === "" || p.paid_now == null ? 0 : roundMoney(p.paid_now);
+    if (paidNow < 0) throw new Error("Paid now cannot be negative");
+    if (paidNow > cost) throw new Error("Paid now cannot be more than the cost of the product");
+    if (paidNow > 0 && !SOURCES.includes(p.payment_source)) throw new Error("Paid from must be Cash or Bank");
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(str(p.date)) ? str(p.date) : new Date().toLocaleDateString("sv-SE");
+    if (paidNow > 0) this._guardFunds(p.payment_source, paidNow);
+    const note = `${p.name} x ${p.qty}`;
+    const id = this._insertEntry(db, { supplier_id: sup.id, entry_date: date, entry_type: "Purchase", charge: cost, note });
+    db.prepare("UPDATE supplier_ledger SET product_id = ?, product_qty = ? WHERE id = ?").run(p.product_id, p.qty, id);
+    if (paidNow > 0) {
+      const pid = this._insertEntry(db, { supplier_id: sup.id, entry_date: date, entry_type: "Payment", paid: paidNow, payment_source: p.payment_source, note: "Paid with product" });
+      db.prepare("UPDATE supplier_ledger SET product_id = ? WHERE id = ?").run(p.product_id, pid);
+    }
+    return { supplier_id: sup.id, charge: cost };
+  }
+
+  // After a product edit: a new price or a restock (more quantity) changes the bill, a new supplier moves it.
+  // Fewer units never lowers the bill, because stock also goes down when it is sold.
+  adjustProductBill(db, productId, p) {
+    const lines = this._productLines(db, productId);
+    const bill = lines.find((l) => l.entry_type === "Purchase");
+    if (!bill) return;
+    const hasPayment = lines.some((l) => l.entry_type === "Payment");
+    const name = str(p.supplier);
+    let supplierId = bill.supplier_id;
+    if (!name) {
+      if (hasPayment) throw new Error("This product was paid for when it was added. Keep its supplier, or fix the payment from the Suppliers page.");
+      db.prepare("DELETE FROM supplier_ledger WHERE product_id = ?").run(productId);
+      return;
+    }
+    const sup = this._supplierByName(db, name);
+    if (sup && sup.id !== bill.supplier_id) {
+      if (sup.status !== "Active") throw new Error("This supplier is Inactive");
+      supplierId = sup.id;
+    }
+    const billedQty = bill.product_qty + Math.max(0, (Number(p.qty) || 0) - (Number(p.oldQty) || 0));
+    const charge = roundMoney((Number(p.price) || 0) * billedQty);
+    if (!(charge > 0)) {
+      if (hasPayment) throw new Error("This product was paid for when it was added, so its cost cannot be 0.");
+      db.prepare("DELETE FROM supplier_ledger WHERE product_id = ?").run(productId);
+      return;
+    }
+    db.prepare("UPDATE supplier_ledger SET supplier_id = ? WHERE product_id = ?").run(supplierId, productId);
+    db.prepare("UPDATE supplier_ledger SET charge = ?, product_qty = ?, note = ? WHERE id = ?").run(charge, billedQty, `${p.name} x ${billedQty}`, bill.id);
+  }
+
+  // Deleting a product takes its bill off the supplier, unless the product was sold or already paid for: the goods were still bought.
+  releaseProductBill(db, productId) {
+    const lines = this._productLines(db, productId);
+    if (!lines.length) return;
+    const sold = db.prepare("SELECT 1 FROM sale_issue_items WHERE product_id = ?").get(productId);
+    if (sold || lines.some((l) => l.entry_type === "Payment")) {
+      db.prepare("UPDATE supplier_ledger SET product_id = NULL, note = note || ' (product deleted)' WHERE product_id = ?").run(productId);
+    } else {
+      db.prepare("DELETE FROM supplier_ledger WHERE product_id = ?").run(productId);
+    }
+  }
+
   _entry(id) {
     const e = getDatabase().prepare("SELECT * FROM supplier_ledger WHERE id = ?").get(id);
     if (!e) throw new Error("Entry not found");

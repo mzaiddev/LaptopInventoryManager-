@@ -23,6 +23,17 @@ const ShopInfo = {
     return out.join("");
   },
 
+  // Address, phones and map link as plain strings (for the new report header).
+  contactList(s) {
+    if (!s) return [];
+    const out = [];
+    if (s.shop_address) out.push(s.shop_address);
+    const phones = this.phones(s);
+    if (phones.length) out.push("Phone: " + phones.join(" | "));
+    if (s.google_map_link) out.push("Location: " + s.google_map_link);
+    return out;
+  },
+
   hasPayment(s) {
     return !!(s && (s.easypaisa_number || s.bank_account_number));
   },

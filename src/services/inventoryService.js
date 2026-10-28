@@ -139,6 +139,8 @@ class InventoryService {
       condition,
     } = productData;
 
+    const suppliers = require("./supplierService");
+    return db.transaction(() => {
     const stmt = db.prepare(`
       INSERT INTO products (product_name, category, model, serial_number, supplier,
         purchase_price, selling_price, quantity, purchase_date, warranty,
@@ -163,7 +165,13 @@ class InventoryService {
       condition || "Excellent",
     );
 
-    return { id: result.lastInsertRowid };
+    const id = Number(result.lastInsertRowid);
+    suppliers.billProduct(db, {
+      product_id: id, supplier, name: product_name, price: purchase_price, qty: quantity || 1,
+      date: purchase_date, paid_now: productData.paid_now, payment_source: productData.payment_source,
+    });
+    return { id };
+    })();
   }
 
   updateProduct(id, productData) {
@@ -185,6 +193,9 @@ class InventoryService {
       condition,
     } = productData;
 
+    const suppliers = require("./supplierService");
+    return db.transaction(() => {
+    const before = db.prepare("SELECT quantity FROM products WHERE id = ?").get(id);
     const stmt = db.prepare(`
       UPDATE products SET
         product_name = ?, category = ?, model = ?, serial_number = ?,
@@ -212,13 +223,16 @@ class InventoryService {
       id,
     );
 
+    suppliers.adjustProductBill(db, id, { supplier, name: product_name, price: purchase_price, qty: quantity || 1, oldQty: before ? before.quantity : 0 });
     return { success: true };
+    })();
   }
 
   deleteProduct(id) {
     const db = getDatabase();
     
     return db.transaction(() => {
+      require("./supplierService").releaseProductBill(db, id);
       // First delete all related records that have FK constraints
       // 1. Delete damage records for this product
       db.prepare("DELETE FROM damage_records WHERE product_id = ?").run(id);

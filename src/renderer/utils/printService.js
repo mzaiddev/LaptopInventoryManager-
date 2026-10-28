@@ -481,137 +481,34 @@ const PrintService = {
           .map((col) => {
             let value = row[col.field];
             if (col.format === "currency") {
-              value = Formatters.formatCurrency(value, App.currency || "PKR");
+              value = Formatters.formatCurrency(value, App.currency || "PKR", true);
             } else if (col.format === "date") {
               value = Formatters.formatDate(value);
             } else if (col.format === "datetime") {
               value = Formatters.formatDateTime(value);
-            } else if (col.format === "status") {
-              const cls =
-                value === "In Stock"
-                  ? "b-instock"
-                  : value === "Damaged"
-                    ? "b-damaged"
-                    : value === "Reserved"
-                      ? "b-reserved"
-                      : value === "Sold"
-                        ? "b-sold"
-                        : value === "Returned"
-                          ? "b-returned"
-                          : "b-lost";
-              value = `<span class="badge-p ${cls}">${this.escapeHtml(value)}</span>`;
-            } else if (col.format === "condition") {
-              const cls =
-                value === "Excellent"
-                  ? "b-instock"
-                  : value === "Good"
-                    ? "b-reserved"
-                    : value === "Fair"
-                      ? "b-returned"
-                      : "b-damaged";
-              value = `<span class="badge-p ${cls}">${this.escapeHtml(value)}</span>`;
+            } else if (col.format === "status" || col.format === "condition") {
+              value = ReportTheme.stockBadge(value);
             } else {
               value = this.escapeHtml(value);
             }
             return `<td style="${col.align ? `text-align:${col.align};` : ""}">${value || "-"}</td>`;
           })
           .join("");
-        return `<tr><td style="text-align:center;font-weight:600;color:#94a3b8;">${idx + 1}</td>${cells}</tr>`;
+        return `<tr><td class="ctr muted">${idx + 1}</td>${cells}</tr>`;
       })
       .join("");
 
-    // Summary items
-    let summaryHtml = "";
-    if (summaryItems) {
-      summaryHtml = `
-        <div class="summary-row" style="margin-bottom:12px;">
-          ${summaryItems
-            .map(
-              (item) => `
-            <div class="summary-item">
-              <div class="label">${item.label}</div>
-              <div class="value">${item.value}</div>
-            </div>
-          `,
-            )
-            .join("")}
-        </div>
-      `;
-    }
-
-    // Shop info
-    const shopInfo = `
-      <div style="text-align:center;margin-bottom:4px;">
-        <h1 style="font-size:24px;color:#000;margin-bottom:2px;">${this.escapeHtml(company.shopName)}</h1>
-        ${company.raw ? ShopInfo.contactHtml(company.raw) : (company.address ? `<p style="font-size:14px;color:#000;margin:1px 0;">${this.escapeHtml(company.address)}</p>` : "")}
-        <div style="font-size:12px;color:#000;">
-          ${!company.raw && company.phone ? `Phone: ${this.escapeHtml(company.phone)} | ` : ""}
-          ${company.email ? `Email: ${this.escapeHtml(company.email)} | ` : ""}
-          Printed: ${dateStr} ${timeStr}
-        </div>
-      </div>
-    `;
-
-    return `<!DOCTYPE html>
-<html>
-<head><title>${this.escapeHtml(title)}</title>
-<style>
-  @page { margin: 10mm; size: A4 ${orientation}; }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; color: #000; padding: 15px; background: #fff; font-size: 14px; }
-  .print-header { text-align: center; margin-bottom: 16px; border-bottom: 2px solid #000; padding-bottom: 10px; }
-  .print-header h1 { font-size: 22px; color: #000; }
-  .print-header .sub { font-size: 13px; color: #000; }
-  .print-footer { margin-top: 14px; text-align: center; font-size: 12px; color: #000; border-top: 1px solid #000; padding-top: 6px; }
-  .print-info-line { display: flex; justify-content: space-between; font-size: 13px; color: #000; margin-bottom: 8px; }
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th { background: transparent; color: #000; padding: 7px 8px; text-align: left; font-weight: 700; font-size: 12px; border-bottom: 1px solid #000; }
-  td { padding: 5px 8px; border-bottom: 1px solid #999; color: #000; }
-  tr:nth-child(even) { background: transparent; }
-  .summary-row { display: flex; gap: 12px; flex-wrap: wrap; }
-  .summary-item { padding: 8px 12px; background: transparent; border-radius: 6px; border: 1px solid #000; }
-  .summary-item .label { font-size: 11px; color: #000; text-transform: uppercase; letter-spacing: 0.5px; }
-  .summary-item .value { font-size: 17px; font-weight: 700; color: #000; }
-  .badge-p { padding: 2px 6px; border-radius: 8px; font-size: 11px; font-weight: 500; display: inline-block; border: 1px solid #000; }
-  .b-instock { border-color: #000; color: #000; }
-  .b-reserved { border-color: #000; color: #000; }
-  .b-sold { border-color: #000; color: #000; }
-  .b-damaged { border-color: #000; color: #000; }
-  .b-returned { border-color: #000; color: #000; }
-  .b-lost { border-color: #000; color: #000; }
-  .print-actions { text-align: center; margin-bottom: 10px; }
-  .print-actions button { padding: 8px 20px; margin: 0 5px; border: 1px solid #000; border-radius: 5px; cursor: pointer; font-size: 13px; background: #fff; color: #000; }
-  .btn-print { border-color: #000; }
-  .btn-pdf { border-color: #000; }
-  .filter-tag { display: inline-block; padding: 3px 9px; background: transparent; color: #000; border: 1px solid #000; border-radius: 10px; font-size: 11px; margin-right: 4px; }
-  @media print { .print-actions { display: none; } body { padding: 0; } }
-</style>
-</head>
-<body>
-  <div class="print-actions">
-    <button class="btn-print" onclick="window.print()">🖨️ Print</button>
-    <button class="btn-pdf" onclick="window.print()">📥 Download PDF</button>
-  </div>
-  <div class="print-header">
-    ${shopInfo}
-    <h1>${this.escapeHtml(title)}</h1>
-    ${subtitle ? `<div class="sub">${subtitle}</div>` : ""}
-    ${filterSummary}
-  </div>
-  ${summaryHtml}
-  <div class="print-info-line">
-    <span>Records: ${data.length}</span>
-    <span>${dateStr}</span>
-  </div>
-  <table>
-    <thead><tr><th style="width:30px;text-align:center;">#</th>${tableHeader}</tr></thead>
-    <tbody>${tableBody || '<tr><td colspan="100%" style="text-align:center;padding:20px;color:#94a3b8;">No data</td></tr>'}</tbody>
-  </table>
-  <div class="print-footer">
-    <p>Generated by Laptop Inventory Manager | ${dateStr} ${timeStr}</p>
-  </div>
-</body>
-</html>`;
+    const T = ReportTheme;
+    const shop = company.raw ? company.raw : { shop_name: company.shopName, shop_address: company.address, phone_number: company.phone };
+    const filtersLine = appliedFilters.length ? '<div class="rpt-sub">Filters: ' + appliedFilters.map((f) => this.escapeHtml(f)).join(" | ") + "</div>" : "";
+    const body =
+      T.header({ shop, title, meta: [["Date", dateStr], ["Records", data.length]], subtitle: subtitle || "" }) +
+      filtersLine +
+      (summaryItems ? T.kpis(summaryItems.map((i) => ({ label: i.label, value: i.value }))) : "") +
+      '<table><thead><tr><th class="ctr" style="width:30px;">#</th>' + tableHeader + "</tr></thead>" +
+      "<tbody>" + (tableBody || '<tr><td colspan="100%" class="ctr muted" style="padding:20px;">No data</td></tr>') + "</tbody></table>" +
+      T.footer({ shop });
+    return T.wrap({ title, body, landscape: !!landscape });
   },
 
   openPrintWindow(title, html) {

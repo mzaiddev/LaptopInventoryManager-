@@ -165,8 +165,9 @@ const ReportsPage = {
       const currency = App.currency || "USD";
 
       container.innerHTML = `
-        <div class="ledger-stats-grid" style="grid-template-columns:repeat(3,1fr);">
+        <div class="ledger-stats-grid" style="grid-template-columns:repeat(4,1fr);">
           <div class="ledger-stat-card"><div class="stat-value">${sales.length}</div><div class="stat-label">Transactions</div></div>
+          <div class="ledger-stat-card"><div class="stat-value">${Formatters.formatCurrency(sales.reduce((sum, s) => sum + (s.total_discount || 0), 0), currency)}</div><div class="stat-label">Discounts Given</div></div>
           <div class="ledger-stat-card stat-success"><div class="stat-value">${Formatters.formatCurrency(totalAmount, currency)}</div><div class="stat-label">Total Amount</div></div>
           <div class="ledger-stat-card stat-danger"><div class="stat-value">${Formatters.formatCurrency(totalRemaining, currency)}</div><div class="stat-label">Remaining</div></div>
         </div>
@@ -179,6 +180,7 @@ const ReportsPage = {
                 <th>Customer</th>
                 <th>Type</th>
                 <th>Items</th>
+                <th>Discount</th>
                 <th>Total</th>
                 <th>Paid</th>
                 <th>Remaining</th>
@@ -193,6 +195,7 @@ const ReportsPage = {
                   <td>${this.escapeHtml(s.customer_name) || 'N/A'}</td>
                   <td>${this.escapeHtml(s.transaction_type)}</td>
                   <td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${this.escapeHtml(s.items_summary || '')}">${this.escapeHtml(s.items_summary) || '-'}</td>
+                  <td style="color:${s.total_discount > 0 ? 'var(--success)' : 'var(--text-muted)'};">${s.total_discount > 0 ? '&minus; ' + Formatters.formatCurrency(s.total_discount, currency) + ' <small>(' + ReportTheme.pct(s.total_discount, s.gross_amount) + ')</small>' : '-'}</td>
                   <td>${Formatters.formatCurrency(s.total_amount, currency)}</td>
                   <td>${Formatters.formatCurrency(s.paid_amount, currency)}</td>
                   <td style="font-weight:600;color:${s.remaining_amount > 0 ? 'var(--danger)' : 'var(--success)'};">${Formatters.formatCurrency(s.remaining_amount, currency)}</td>
@@ -223,10 +226,12 @@ const ReportsPage = {
       if (!printWindow) { Toast.error('Please allow pop-ups for printing.'); return; }
 
       const currency = App.currency || 'USD';
-      const currencyFmt = (v) => Formatters.formatCurrency(v, currency);
+      const currencyFmt = (v) => Formatters.formatCurrency(v, currency, true);
 
       let title = '';
       let content = '';
+      let kpis = '';
+      const T = ReportTheme;
 
       if (type === 'sales') {
         const filters = {
@@ -242,13 +247,14 @@ const ReportsPage = {
         const totalAmount = sales.reduce((sum, s) => sum + s.total_amount, 0);
         const totalPaid = sales.reduce((sum, s) => sum + s.paid_amount, 0);
         const totalRemaining = sales.reduce((sum, s) => sum + s.remaining_amount, 0);
-        
+        const totalDiscount = sales.reduce((sum, s) => sum + (s.total_discount || 0), 0);
+
         title = 'Sales Report';
         
         content = `
         <table>
           <thead><tr>
-            <th>Date</th><th>Reference</th><th>Customer</th><th>Type</th><th>Items</th><th>Total</th><th>Paid</th><th>Remaining</th><th>Status</th>
+            <th>Date</th><th>Reference</th><th>Customer</th><th>Type</th><th>Items</th><th class="num">Discount</th><th>Total</th><th>Paid</th><th>Remaining</th><th>Status</th>
           </tr></thead>
           <tbody>
             ${sales.map(s => `<tr>
@@ -257,25 +263,31 @@ const ReportsPage = {
               <td>${this.escapeHtml(s.customer_name) || 'N/A'}</td>
               <td>${this.escapeHtml(s.transaction_type)}</td>
               <td>${this.escapeHtml(s.items_summary) || '-'}</td>
-              <td style="text-align:right;">${currencyFmt(s.total_amount)}</td>
-              <td style="text-align:right;">${currencyFmt(s.paid_amount)}</td>
-              <td style="text-align:right;">${currencyFmt(s.remaining_amount)}</td>
-              <td>${s.payment_status}</td>
+              <td class="num ${s.total_discount > 0 ? 'pos' : 'muted'}">${s.total_discount > 0 ? '&minus; ' + currencyFmt(s.total_discount) + ' <span class="muted">(' + T.pct(s.total_discount, s.gross_amount) + ')</span>' : '-'}</td>
+              <td class="num strong">${currencyFmt(s.total_amount)}</td>
+              <td class="num pos">${currencyFmt(s.paid_amount)}</td>
+              <td class="num ${s.remaining_amount > 0 ? 'neg' : ''}">${currencyFmt(s.remaining_amount)}</td>
+              <td>${T.paymentBadge(s.payment_status)}</td>
             </tr>`).join('')}
           </tbody>
           <tfoot>
             <tr style="font-weight:700;background:transparent;">
               <td colspan="5" style="text-align:right;">Totals:</td>
+              <td style="text-align:right;">${currencyFmt(totalDiscount)}</td>
               <td style="text-align:right;">${currencyFmt(totalAmount)}</td>
               <td style="text-align:right;">${currencyFmt(totalPaid)}</td>
               <td style="text-align:right;">${currencyFmt(totalRemaining)}</td>
               <td></td>
             </tr>
           </tfoot>
-        </table>
-        <div style="margin-top:10px;font-size:13px;color:#000;">
-          <strong>Summary:</strong> ${sales.length} transactions | Total: ${currencyFmt(totalAmount)} | Collected: ${currencyFmt(totalPaid)} | Remaining: ${currencyFmt(totalRemaining)}
-        </div>`;
+        </table>`;
+        kpis = T.kpis([
+          { label: 'Transactions', value: sales.length },
+          { label: 'Total sales', value: currencyFmt(totalAmount) },
+          { label: 'Discounts given', value: currencyFmt(totalDiscount) },
+          { label: 'Collected', value: currencyFmt(totalPaid), tone: 'ok' },
+          { label: 'Remaining', value: currencyFmt(totalRemaining), tone: totalRemaining > 0 ? 'bad' : 'ok' },
+        ]);
       }
 
       if (type === 'outstanding') {
@@ -286,7 +298,7 @@ const ReportsPage = {
         title = 'Remaining Dues Report';
         
         content = `
-        <div style="margin-bottom:10px;font-size:15px;font-weight:700;color:#000;">Total Remaining: ${currencyFmt(totalOutstanding)}</div>
+        ${T.dueBox({ label: 'Total remaining dues', amount: currencyFmt(totalOutstanding), note: data.length + ' customers still owe money' })}
         <table>
           <thead><tr>
             <th>Customer</th><th>Phone</th><th>Invoices</th><th>Total Sales</th><th>Total Paid</th><th>Remaining</th>
@@ -298,7 +310,7 @@ const ReportsPage = {
               <td>${c.invoice_count}</td>
               <td style="text-align:right;">${currencyFmt(c.total_sales)}</td>
               <td style="text-align:right;">${currencyFmt(c.total_paid)}</td>
-              <td style="text-align:right;font-weight:700;color:#000;">${currencyFmt(c.total_outstanding)}</td>
+              <td class="num neg">${currencyFmt(c.total_outstanding)}</td>
             </tr>`).join('')}
           </tbody>
         </table>`;
@@ -322,6 +334,12 @@ const ReportsPage = {
         const totalPaid = withBalances.reduce((s, c) => s + (c.total_paid || 0), 0);
         const totalOut = withBalances.reduce((s, c) => s + (c.outstanding_balance || 0), 0);
         
+        kpis = T.kpis([
+          { label: 'Customers', value: withBalances.length },
+          { label: 'Total sales', value: currencyFmt(totalSales) },
+          { label: 'Collected', value: currencyFmt(totalPaid), tone: 'ok' },
+          { label: 'Remaining', value: currencyFmt(totalOut), tone: totalOut > 0 ? 'bad' : 'ok' },
+        ]);
         content = `
         <table>
           <thead><tr>
@@ -333,7 +351,7 @@ const ReportsPage = {
               <td>${this.escapeHtml(c.phone) || '-'}</td>
               <td style="text-align:right;">${currencyFmt(c.total_sales)}</td>
               <td style="text-align:right;">${currencyFmt(c.total_paid)}</td>
-              <td style="text-align:right;font-weight:700;color:#000;">${currencyFmt(c.outstanding_balance)}</td>
+              <td class="num ${c.outstanding_balance > 0 ? 'neg' : 'pos'}">${currencyFmt(c.outstanding_balance)}</td>
             </tr>`).join('')}
           </tbody>
           <tfoot>
@@ -355,10 +373,13 @@ const ReportsPage = {
         const totalValue = damages.reduce((sum, d) => sum + (d.quantity * (d.purchase_price || 0)), 0);
         const showCost = App.costVisible;
         title = 'Damage Report';
-        
+        kpis = T.kpis([
+          { label: 'Records', value: damages.length },
+          { label: 'Total quantity', value: totalQty, tone: 'warn' },
+          ...(showCost ? [{ label: 'Value lost', value: currencyFmt(totalValue), tone: 'bad' }] : []),
+        ]);
         content = `
-        <div style="margin-bottom:10px;font-size:13px;color:#000;">${damages.length} records | Total Qty: ${totalQty}${showCost ? ' | Value Lost: ' + currencyFmt(totalValue) : ''}</div>
-        <table>
+                <table>
           <thead><tr>
             <th>Ref</th><th>Product</th><th>Category</th><th>Qty</th><th>Type</th><th>Date</th><th>Reason</th>${showCost ? '<th>Value Lost</th>' : ''}
           </tr></thead>
@@ -377,46 +398,8 @@ const ReportsPage = {
         </table>`;
       }
 
-      const html = `<!DOCTYPE html>
-<html>
-<head><title>${title}</title>
-<style>
-  @page { margin: 12mm; size: A4 portrait; }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; padding: 15px; background: #fff; font-size: 14px; }
-  .header { text-align: center; margin-bottom: 16px; border-bottom: 2px solid #000; padding-bottom: 10px; }
-  .header h1 { font-size: 22px; color: #000; margin-bottom: 2px; }
-  .header .sub { font-size: 13px; color: #000; }
-  .header .company-info { font-size: 14px; color: #000; margin-top: 4px; }
-  .footer { margin-top: 16px; text-align: center; font-size: 12px; color: #000; border-top: 1px solid #000; padding-top: 8px; }
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th { background: transparent; color: #000; padding: 7px 8px; text-align: left; font-weight: 700; white-space: nowrap; font-size: 12px; border-bottom: 2px solid #000; }
-  td { padding: 6px 8px; border-bottom: 1px solid #999; color: #000; }
-  tr:nth-child(even) { background: transparent; }
-  tfoot td { border-top: 2px solid #000; }
-  .print-actions { text-align: center; margin-bottom: 12px; }
-  .print-actions button { padding: 8px 20px; margin: 0 6px; border: 1px solid #000; border-radius: 6px; cursor: pointer; font-size: 13px; background: #fff; color: #000; }
-  .btn-print { background: #fff; color: #000; }
-  .btn-pdf { background: #fff; color: #000; }
-  @media print { .print-actions { display: none; } }
-</style>
-</head>
-<body>
-  <div class="print-actions">
-    <button class="btn-print" onclick="window.print()">🖨️ Print</button>
-    <button class="btn-pdf" onclick="window.print()">📥 Download PDF</button>
-  </div>
-  <div class="header">
-    <h1>${this.escapeHtml(shopName)}</h1>
-    ${ShopInfo.contactHtml(company, 'font-size:13px;color:#000;margin-top:2px;')}
-    <div class="sub">${this.escapeHtml(title)} | ${dateStr}</div>
-  </div>
-  ${content}
-  <div class="footer">
-    <p>Generated by Laptop Inventory Manager | ${dateStr}</p>
-  </div>
-</body>
-</html>`;
+      const body = T.header({ shop: company, title, meta: [['Date', Formatters.formatDate(new Date().toISOString())]] }) + kpis + content + T.footer({ shop: company });
+      const html = T.wrap({ title, body, landscape: type === 'sales' });
 
       printWindow.document.write(I18n.translateHtml(html));
       printWindow.document.close();

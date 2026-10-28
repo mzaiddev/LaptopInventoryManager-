@@ -51,8 +51,20 @@ class WhatsAppLink {
     return () => this.listeners.delete(fn);
   }
 
+  // `saved` is true while a link is stored on this PC, so the app can say "reconnecting" instead of "not linked".
   getStatus() {
-    return { state: this.state, qr: this.qr, phone: this.phone, error: this.error };
+    const saved = this._registered();
+    return { state: this.state, qr: this.qr, phone: this.phone || (saved ? this._savedPhone() : null), error: this.error, saved };
+  }
+
+  // The linked number as stored with the session, so it is known even before the connection is back up.
+  _savedPhone() {
+    try {
+      const id = JSON.parse(fs.readFileSync(path.join(this.sessionDir, "creds.json"), "utf8")).me.id || "";
+      return id.split(":")[0].split("@")[0] || null;
+    } catch {
+      return null;
+    }
   }
 
   _set(patch) {
@@ -154,6 +166,17 @@ class WhatsAppLink {
     this._set({ state: "connecting" });
     await this.sleep(Math.min(30000, 2000 * 2 ** this.retries));
     if (this.wantConnected && !this.sock) await this._open();
+  }
+
+  // Drop a stuck connection and open a fresh one. The saved link is kept.
+  async reconnect() {
+    const sock = this.sock;
+    this.sock = null;
+    try { if (sock) sock.end(); } catch { /* already closed */ }
+    this.wantConnected = true;
+    this.retries = 0;
+    await this._open();
+    return this.getStatus();
   }
 
   async unlink() {

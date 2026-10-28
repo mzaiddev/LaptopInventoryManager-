@@ -74,33 +74,79 @@ const WhatsAppLink = {
     return '<div class="loading"><div class="spinner"></div></div><p style="text-align:center;">Connecting to WhatsApp...</p>';
   },
 
-  async unlink() {
-    const r = await window.api.waUnlink();
-    if (!r.success) return Toast.error(r.error);
-    Toast.success("WhatsApp unlinked.");
+  // Asks first, because unlinking means scanning the QR code again.
+  confirmUnlink() {
+    this._confirm("Unlink WhatsApp?", "Statements and invoices will stop sending automatically until you link a WhatsApp again.", "Unlink", () => this.unlink());
+  },
+
+  // Switch to another WhatsApp number: the old link is removed, then the QR code appears.
+  confirmChange() {
+    this._confirm(
+      "Change the linked WhatsApp?",
+      "The current link is removed and a new QR code is shown. Scan it with the phone you want to use from now on.",
+      "Continue",
+      async () => {
+        if (await this.unlink(true)) this.showLink();
+      },
+    );
+  },
+
+  _confirm(title, message, okLabel, onOk) {
+    Modal.show({
+      title,
+      body: `<p style="font-size:14px;">${this.esc(message)}</p>`,
+      footer: `<button class="btn btn-secondary" onclick="window.Modal.close()">Cancel</button><button class="btn btn-primary" id="wa-confirm-ok">${this.esc(okLabel)}</button>`,
+    });
+    const ok = document.getElementById("wa-confirm-ok");
+    if (ok) ok.addEventListener("click", () => { Modal.close(); onOk(); });
+  },
+
+  async unlink(quiet) {
+    const r = await Busy.run("Unlinking WhatsApp...", "", () => window.api.waUnlink());
+    if (!r.success) {
+      Toast.error(r.error || "Could not unlink WhatsApp.");
+      return false;
+    }
+    if (!quiet) Toast.success("WhatsApp unlinked.");
+    return true;
+  },
+
+  // Re-open the connection without scanning again (the link is stored on this PC for good).
+  async reconnect() {
+    const r = await window.api.waReconnect();
+    if (!r.success) Toast.error(r.error || "Could not reconnect. Check the internet connection.");
   },
 
   // ---- Settings card
   cardHtml() {
     const s = this.status;
     const linked = s.state === "linked";
+    const num = s.phone ? "+" + this.esc(s.phone) : "";
+    const trying = s.state === "connecting" || s.state === "qr";
+    let line;
+    let buttons;
+    if (linked) {
+      line = `<strong style="color:var(--success);">Connected</strong>${num ? " as " + num : ""}. Statements and invoices are sent automatically.`;
+      buttons = '<button class="btn btn-secondary" onclick="WhatsAppLink.confirmChange()">Change number</button> <button class="btn btn-secondary" onclick="WhatsAppLink.confirmUnlink()">Unlink</button>';
+    } else if (s.saved) {
+      line = trying
+        ? `<span class="spinner" style="display:inline-block;width:14px;height:14px;border-width:2px;vertical-align:-2px;"></span> Reconnecting${num ? " to " + num : ""}...`
+        : `<strong style="color:var(--warning,#b45309);">Disconnected</strong>${num ? " (" + num + ")" : ""}. The link is saved on this PC.`;
+      buttons = '<button class="btn btn-primary" onclick="WhatsAppLink.reconnect()">Reconnect now</button> <button class="btn btn-secondary" onclick="WhatsAppLink.confirmChange()">Change number</button>';
+    } else {
+      line = "Not linked. Link your WhatsApp once and statements and invoices are sent automatically, with no clicking.";
+      buttons = '<button class="btn btn-primary" onclick="WhatsAppLink.showLink()">Link WhatsApp</button>';
+    }
     return `
       <div class="card-header"><h3>WhatsApp Sending</h3></div>
       <div class="card-body">
-        <p style="margin-bottom:10px;">
-          ${linked
-            ? `<strong style="color:var(--success);">Linked</strong>${s.phone ? " to +" + this.esc(s.phone) : ""}. Statements and invoices are sent automatically.`
-            : s.state === "connecting" || s.state === "qr"
-              ? "Connecting..."
-              : "Not linked. Link your WhatsApp once and statements and invoices are sent automatically, with no clicking."}
-        </p>
+        <p style="margin-bottom:10px;">${line}</p>
         ${s.error && !linked ? `<p style="color:var(--danger);margin-bottom:10px;">${this.esc(s.error)}</p>` : ""}
-        ${linked
-          ? '<button class="btn btn-secondary" onclick="WhatsAppLink.unlink()">Unlink WhatsApp</button>'
-          : '<button class="btn btn-primary" onclick="WhatsAppLink.showLink()">Link WhatsApp</button>'}
+        ${buttons}
         <p style="margin-top:12px;font-size:12px;color:var(--text-muted);">
+          You only link once. The link is kept on this PC and reconnects by itself whenever the app opens, until you change it here or unlink it on your phone.
           This uses your own WhatsApp like WhatsApp Web, not the official business service. Messages are sent a few seconds apart to keep your number safe.
-          Keep this app open and the PC online while sending.
+          Keep the PC online while sending.
         </p>
       </div>`;
   },
@@ -119,15 +165,17 @@ const WhatsAppLink = {
   // ---- One message
   // Linked: sent straight away. Not linked: the old way (PDF on the clipboard, chat opens).
   async shareOne(payload) {
+    const who = payload.customerName ? String(payload.customerName).replace(/^Supplier-/, "") : "the contact";
     if (this.isLinked()) {
       if (!String(payload.phone || "").trim()) return Toast.warning("This contact has no phone number.");
-      const r = await window.api.autoSendStatement(payload);
-      if (r.success) return Toast.success("Sent on WhatsApp.");
-      if (r.code === "NOT_ON_WHATSAPP") return Toast.warning("This number is not on WhatsApp.");
-      if (r.code === "INVALID_NUMBER") return Toast.warning("This phone number is not valid.");
+      const r = await Busy.run("Sending to " + who + "...", "Creating the PDF and sending it on WhatsApp. Please wait.", () => window.api.autoSendStatement(payload));
+      if (r.success) return Toast.success("Sent to " + who + " on WhatsApp.");
+      if (r.code === "NOT_ON_WHATSAPP") return Toast.warning(who + "'s number is not on WhatsApp.");
+      if (r.code === "INVALID_NUMBER") return Toast.warning(who + "'s phone number is not valid.");
+      if (r.code === "NOT_LINKED") return Toast.error("WhatsApp is disconnected. Open Settings to reconnect it.");
       return Toast.error(r.error || "Could not send on WhatsApp.");
     }
-    const r = await window.api.shareStatement(payload);
+    const r = await Busy.run("Preparing the PDF for " + who + "...", "WhatsApp opens when it is ready.", () => window.api.shareStatement(payload));
     if (!r.success) Toast.error(r.error || "Could not create the PDF.");
     else if (r.data.chat === "none") Toast.warning("PDF saved. This contact has no valid phone number, so WhatsApp was not opened.");
     else if (r.data.clipboardOk) Toast.success("PDF copied. In the WhatsApp chat press Ctrl+V, then Send.");

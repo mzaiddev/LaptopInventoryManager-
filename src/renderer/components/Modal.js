@@ -197,7 +197,11 @@ class ModalComponent {
           </div>
           <div class="form-group">
             <label>Supplier</label>
-            <input type="text" class="form-control" id="pf-supplier" value="${this.escapeHtml(pd.supplier || "")}">
+            <select class="form-control" id="pf-supplier">
+              <option value="">No supplier</option>
+              ${pd.supplier ? `<option value="${this.escapeHtml(pd.supplier)}" selected>${this.escapeHtml(pd.supplier)}</option>` : ""}
+            </select>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">${isEdit ? "Changing price, quantity or supplier updates the supplier's balance." : "The cost of this product (price x quantity) is added to what you owe this supplier. You only pay later."}</div>
           </div>
         </div>
         <div class="form-row-3">
@@ -244,6 +248,17 @@ class ModalComponent {
             <label>&nbsp;</label>
           </div>
         </div>
+        ${isEdit ? "" : `<div class="form-row-3" id="pf-paybox" style="display:none;">
+          <div class="form-group">
+            <label>Paid Now to Supplier (optional)</label>
+            <input type="number" min="0" step="0.01" class="form-control" id="pf-paidnow" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>Paid From</label>
+            <select class="form-control" id="pf-paysource"><option value="Cash">Cash</option><option value="Bank">Bank Transfer</option></select>
+          </div>
+          <div class="form-group"><label>&nbsp;</label></div>
+        </div>`}
         <div class="form-group">
           <label>Notes</label>
           <textarea class="form-control" id="pf-notes" rows="3">${this.escapeHtml(pd.notes || "")}</textarea>
@@ -276,6 +291,26 @@ class ModalComponent {
       // Cancelling an edit gives the super-password grant back.
       isEdit ? () => window.api.revokeSuper() : null,
     );
+    this.fillSupplierSelect(pd.supplier || "");
+    const sel = document.getElementById("pf-supplier");
+    const box = document.getElementById("pf-paybox");
+    if (sel && box) sel.addEventListener("change", () => (box.style.display = sel.value ? "" : "none"));
+  }
+
+  // Active suppliers from the Suppliers page; a product's current supplier stays selectable even if it was made inactive.
+  async fillSupplierSelect(current) {
+    try {
+      const r = await window.api.listSuppliers({ status: "Active" });
+      const sel = document.getElementById("pf-supplier");
+      if (!r.success || !sel) return;
+      const names = r.data.map((s) => s.name);
+      if (current && !names.includes(current)) names.push(current);
+      sel.innerHTML =
+        '<option value="">No supplier</option>' +
+        names.sort((a, b) => a.localeCompare(b)).map((n) => `<option value="${this.escapeHtml(n)}"${n === current ? " selected" : ""}>${this.escapeHtml(n)}</option>`).join("");
+    } catch {
+      /* the product's own supplier stays in the list */
+    }
   }
 
   collectFormData() {
@@ -294,6 +329,8 @@ class ModalComponent {
       storage_location:
         document.getElementById("pf-location")?.value?.trim() || "",
       notes: document.getElementById("pf-notes")?.value?.trim() || "",
+      paid_now: parseFloat(document.getElementById("pf-paidnow")?.value) || 0,
+      payment_source: document.getElementById("pf-paysource")?.value || "Cash",
       status: document.getElementById("pf-status")?.value || "In Stock",
       condition: document.getElementById("pf-condition")?.value || "Excellent",
     };

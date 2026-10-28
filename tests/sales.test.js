@@ -108,3 +108,12 @@ test("direct ledger payments remember Cash or Bank", () => {
   const row = s.db.prepare("SELECT payment_method m FROM customer_ledger WHERE reference_type='Payment' AND reference_id IS NULL").get();
   assert.strictEqual(row.m, "Bank");
 });
+
+test("sale lists and the sales report carry the full discount (item discount + sale discount)", () => {
+  const s = setup();
+  const { saleId } = discountedSale(s);
+  // item discount 200 + 10% of the 1800 subtotal (180) = 380
+  const row = ledger.getAllSales({}).sales.find((x) => x.sale_id === saleId);
+  assert.strictEqual(row.total_discount, 380);
+  assert.strictEqual(ledger.getSalesReport({}).find((x) => x.id === saleId).total_discount, 380);
+});

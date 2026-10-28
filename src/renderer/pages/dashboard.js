@@ -147,6 +147,7 @@ const DashboardPage = {
       <div class="dashboard-section">
         <h2>Cash, Bank and Dues</h2>
         <div class="stats-grid">
+          ${this.card("green", I.cash, this.money(d.cashInHand + d.bankBalance), "Total Money (Cash + Bank)", "All time", "", "", "Cash in hand and bank balance added together.", "total")}
           ${this.card("green", I.cash, this.money(d.cashInHand), "Cash in Hand", "All time", "", "", "Cash that should be in your drawer now.", "cash")}
           ${this.card("blue", I.bank, this.money(d.bankBalance), "Bank Balance", "All time", "", "", "Money that should be in your bank now.", "bank")}
           ${this.card("yellow", I.due, this.money(d.oldBalance.amount), "Old Balances", `${d.oldBalance.customers} customers`, "ledgers", "", "Money customers owed you before you started using this system. It is not part of Net Profit.", "old")}
@@ -222,6 +223,11 @@ const DashboardPage = {
           note("All time. If you paid money back to a customer, it is not recorded here.");
         break;
       }
+      case "total":
+        title = "Total Money (Cash + Bank)";
+        body = this.sumTable([["", "Cash in hand", d.cashInHand], ["+", "Bank balance", d.bankBalance]], "Total Money", d.cashInHand + d.bankBalance) +
+          note("All time. Expenses and supplier payments are already taken out of cash and bank.");
+        break;
       case "suppliers":
         title = "Paid to Suppliers";
         body = this.sumTable([["", "Paid from cash", d.supplierPaid.cash], ["+", "Paid from bank", d.supplierPaid.bank]], "Paid to Suppliers", d.supplierPaid.total) +

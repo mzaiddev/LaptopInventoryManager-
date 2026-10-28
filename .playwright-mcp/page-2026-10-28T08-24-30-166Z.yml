@@ -1,0 +1,10 @@
+- generic [ref=f4e3]:
+  - heading "Inventory Manager" [level=2] [ref=f4e7]
+  - generic [ref=f4e8]:
+    - generic [ref=f4e9]: Username
+    - textbox [active] [ref=f4e10]
+  - generic [ref=f4e11]:
+    - generic [ref=f4e12]: Password
+    - textbox [ref=f4e13]
+  - button "Sign in" [ref=f4e14] [cursor=pointer]
+  - button "اردو" [ref=f4e15] [cursor=pointer]

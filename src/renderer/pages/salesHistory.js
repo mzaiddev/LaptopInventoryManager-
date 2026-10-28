@@ -111,6 +111,7 @@ const SalesHistoryPage = {
                 <th>Date</th>
                 <th>Type</th>
                 <th>Items</th>
+                <th style="text-align:right;">Discount</th>
                 <th style="text-align:right;">Total</th>
                 <th style="text-align:right;">Paid</th>
                 <th style="text-align:right;">Remaining</th>
@@ -136,6 +137,7 @@ const SalesHistoryPage = {
                   <td style="font-size:12px;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${this.escapeHtml(l.items_summary || '')}">
                     ${this.escapeHtml(l.items_summary) || '-'}
                   </td>
+                  <td style="text-align:right;color:${l.total_discount > 0 ? 'var(--success)' : 'var(--text-muted)'};">${l.total_discount > 0 ? '&minus; ' + Formatters.formatCurrency(l.total_discount, App.currency) + '<div style="font-size:11px;">' + ReportTheme.pct(l.total_discount, l.gross_amount) + ' off</div>' : '-'}</td>
                   <td style="text-align:right;font-weight:700;">${Formatters.formatCurrency(l.total_amount, App.currency)}</td>
                   <td style="text-align:right;font-weight:600;color:var(--success);">${Formatters.formatCurrency(l.display_paid, App.currency)}</td>
                   <td style="text-align:right;font-weight:700;${l.display_remaining > 0 ? 'color:var(--danger);' : 'color:var(--success);'}">${Formatters.formatCurrency(l.display_remaining, App.currency)}</td>
@@ -620,50 +622,39 @@ const SalesHistoryPage = {
       }
       const l = result.data;
       const currency = App.currency || "USD";
-      const html = `
-        <html><head><meta charset="utf-8"><title>Invoice - ${this.escapeHtml(l.reference_no)}</title>
-        <style>
-          @page { margin: 10mm; }
-          body { font-family: Arial, Helvetica, sans-serif; padding: 20px; color: #000; font-size: 15px; }
-          .shop-header { text-align: center; margin-bottom: 12px; }
-          .shop-header h1 { font-size: 24px; margin-bottom: 2px; }
-          .shop-header p { font-size: 14px; color: #000; margin: 1px 0; }
-          .invoice-header { text-align: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #000; }
-          .invoice-header h2 { font-size: 24px; margin-bottom: 4px; }
-          .invoice-info { display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 14px; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 14px; }
-          table th { background: transparent; padding: 8px 10px; text-align: left; border: 1px solid #000; font-size: 13px; text-transform: uppercase; font-weight: 700; }
-          table td { padding: 7px 10px; border: 1px solid #999; font-size: 14px; }
-          .invoice-totals { text-align: right; font-size: 15px; margin-top: 10px; }
-          .grand-total { font-size: 19px; font-weight: 700; border-top: 2px solid #000; padding-top: 8px; margin-top: 4px; }
-          .invoice-footer { text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #000; font-size: 13px; color: #000; }
-          @media print { body { padding: 0; } }
-        </style></head>
-        <body>
-          <div class="shop-header"><h1>${this.escapeHtml(shopName)}</h1>
-            ${ShopInfo.contactHtml(company, 'font-size:14px;color:#000;margin:1px 0;')}
-          </div>
-          <div class="invoice-header"><h2>INVOICE</h2><p>${this.escapeHtml(l.reference_no)}</p></div>
-          <div class="invoice-info">
-            <div><strong>Customer:</strong> ${this.escapeHtml(l.customer_name)}<br>
-              <strong>Phone:</strong> ${this.escapeHtml(l.phone) || 'N/A'}<br>
-              <strong>Address:</strong> ${this.escapeHtml(l.address) || 'N/A'}
-            </div>
-            <div style="text-align:right;"><strong>Date:</strong> ${Formatters.formatDate(l.issue_date || l.transaction_date)}<br><strong>Type:</strong> ${l.ledger_type}</div>
-          </div>
-          <table><thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
-            <tbody>${(l.items || []).map(item => `<tr><td>${this.escapeHtml(item.product_name)}</td><td>${item.quantity}</td><td>${Formatters.formatCurrency(item.unit_price, currency)}</td><td>${Formatters.formatCurrency(item.subtotal, currency)}${item.discount_amount > 0 ? '<br><small>after discount -' + Formatters.formatCurrency(item.discount_amount, currency) + '</small>' : ''}</td></tr>`).join('')}</tbody>
-          </table>
-          <div class="invoice-totals">
-            ${l.discount_amount > 0 ? `<div>Subtotal: ${Formatters.formatCurrency((l.items || []).reduce((s, i) => s + i.subtotal, 0), currency)}</div>
-            <div>Discount${l.discount_type === 'percent' ? ' (' + l.discount_value + '%)' : ''}: -${Formatters.formatCurrency(l.discount_amount, currency)}</div>` : ''}
-            <div class="grand-total">Total: ${Formatters.formatCurrency(l.total_amount, currency)}</div>
-          </div>
-          ${ShopInfo.paymentHtml(company)}
-          <div class="invoice-footer"><p>Thank you for your business!</p></div>
-          ${share ? '' : '<script>window.onload=function(){setTimeout(function(){window.print()},300)};<\/script>'}
-        </body></html>
-      `;
+      const T = ReportTheme;
+      const fx = (v) => Formatters.formatCurrency(v, currency, true);
+      const items = l.items || [];
+      const subtotal = items.reduce((sum, i) => sum + i.subtotal, 0);
+      const itemDisc = items.reduce((sum, i) => sum + (i.discount_amount || 0), 0);
+      const totalDisc = itemDisc + (l.discount_amount || 0);
+      const grossTotal = items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
+      const totalPct = T.pct(totalDisc, grossTotal);
+      const remaining = l.remaining_amount || 0;
+      const status = remaining <= 0.005 ? 'paid' : (l.paid_amount > 0 ? 'partial' : 'unpaid');
+      const body =
+        T.header({ shop: company, title: 'Invoice', meta: [['Invoice no.', l.reference_no], ['Date', Formatters.formatDate(l.issue_date || l.transaction_date)], ['Type', l.ledger_type]] }) +
+        '<div class="info">' +
+          '<div class="box"><div class="k">Bill to</div><div class="v">' + this.escapeHtml(l.customer_name) + '</div>' +
+            '<div class="s">' + (this.escapeHtml(l.phone) || '-') + (l.address ? ' &middot; ' + this.escapeHtml(l.address) : '') + '</div></div>' +
+          '<div class="box" style="max-width:190px;"><div class="k">Payment status</div><div class="v" style="margin-top:3px;">' + T.paymentBadge(status) + '</div></div>' +
+        '</div>' +
+        '<table><thead><tr><th class="ctr" style="width:32px;">#</th><th>Product</th><th class="ctr">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr></thead><tbody>' +
+          items.map((i, n) => '<tr><td class="ctr muted">' + (n + 1) + '</td><td>' + this.escapeHtml(i.product_name) + (i.discount_amount > 0 ? '<div class="muted"><span>Discount on this item</span> (' + T.pct(i.discount_amount, i.quantity * i.unit_price) + '): &minus; ' + fx(i.discount_amount) + '</div>' : '') +
+            '</td><td class="ctr">' + i.quantity + '</td><td class="num">' + fx(i.unit_price) + '</td><td class="num strong">' + fx(i.subtotal) + '</td></tr>').join('') +
+        '</tbody></table>' +
+        '<div class="totals">' +
+          (l.discount_amount > 0 ? '<div class="row"><span>Subtotal</span><span>' + fx(subtotal) + '</span></div>' +
+            '<div class="row"><span><span>Extra discount on bill</span> (' + (l.discount_type === 'percent' ? l.discount_value + '%' : T.pct(l.discount_amount, subtotal)) + ')</span><span class="pos">&minus; ' + fx(l.discount_amount) + '</span></div>' : '') +
+          '<div class="row grand"><span>Total</span><span>' + fx(l.total_amount) + '</span></div>' +
+          (totalDisc > 0 ? '<div class="row"><span>You saved (total discount)</span><span class="pos">' + fx(totalDisc) + (totalPct ? ' (' + totalPct + ')' : '') + '</span></div>' : '') +
+          '<div class="row"><span>Paid</span><span class="pos">' + fx(l.paid_amount) + '</span></div>' +
+          '<div class="row ' + (remaining > 0.005 ? 'due' : '') + '"><span>' + (remaining > 0.005 ? 'Balance due' : 'Balance') + '</span><span>' + fx(remaining) + '</span></div>' +
+        '</div>' +
+        (remaining > 0.005 ? T.dueBox({ label: 'Balance due', amount: fx(remaining), note: 'Please pay this amount. Thank you.' }) + T.paymentBox(company) : '') +
+        '<div class="rpt-thanks">Thank you for your business!</div>' +
+        T.footer({ shop: company });
+      const html = T.wrap({ title: 'Invoice - ' + l.reference_no, body, toolbar: false, autoPrint: !share });
       if (!share) {
         const printWindow = window.open('', '_blank', 'width=800,height=600');
         printWindow.document.write(I18n.translateHtml(html));
@@ -674,6 +665,7 @@ const SalesHistoryPage = {
       const money = (n) => Formatters._formatCurrency(n, currency, true);
       const message =
         t('Dear ' + l.customer_name + ',') + '\n\n' + t('Invoice ' + l.reference_no + ' (' + Formatters.formatDate(l.issue_date) + ')') + '\n' +
+        (totalDisc > 0 ? t('Discount given:') + ' ' + money(totalDisc) + (totalPct ? ' (' + totalPct + ')' : '') + '\n' : '') +
         t('Total:') + ' ' + money(l.total_amount) + '\n' +
         t('Paid:') + ' ' + money(l.paid_amount) + '\n' +
         t('Balance:') + ' ' + money(l.remaining_amount) + '\n\n' +
@@ -705,6 +697,7 @@ const SalesHistoryPage = {
           { field: 'customer_name', label: 'Customer', width: '120px' },
           { field: 'transaction_date', label: 'Date', width: '70px', format: 'date' },
           { field: 'display_type', label: 'Type', width: '80px' },
+          { field: 'total_discount', label: 'Discount', width: '70px', align: 'right', format: 'currency' },
           { field: 'total_amount', label: 'Total', width: '70px', align: 'right', format: 'currency' },
           { field: 'items_summary', label: 'Items', width: '150px' },
         ],
@@ -713,6 +706,7 @@ const SalesHistoryPage = {
           { label: 'Total Sales', value: sales.length },
           { label: 'Cash Sales', value: cashCount },
           { label: 'Loan Sales', value: loanCount },
+          { label: 'Discounts Given', value: Formatters.formatCurrency(sales.reduce((s, l) => s + (l.total_discount || 0), 0), currency) },
           { label: 'Total Amount', value: Formatters.formatCurrency(totalAmount, currency) },
         ],
         getCompanyHeader: () => LedgersPage.getCompanyHeader()

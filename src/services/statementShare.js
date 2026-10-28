@@ -22,7 +22,13 @@ async function htmlToPdf(html, outPath) {
   const win = new BrowserWindow({ show: false, webPreferences: { javascript: false, sandbox: true } });
   try {
     await win.loadFile(tmp);
-    const pdf = await win.webContents.printToPDF({ pageSize: "A4", printBackground: true });
+    const pdf = await win.webContents.printToPDF({
+      pageSize: "A4",
+      printBackground: true, // keep the tinted headers and badges
+      displayHeaderFooter: true,
+      headerTemplate: "<span></span>",
+      footerTemplate: '<div style="width:100%;font-size:8px;color:#566070;text-align:center;font-family:Arial,sans-serif;">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>',
+    });
     fs.writeFileSync(outPath, pdf);
   } finally {
     win.destroy();

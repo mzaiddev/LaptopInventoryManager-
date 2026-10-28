@@ -69,46 +69,50 @@ const CashBookPage = {
   },
 
   tableHtml(d, forPrint) {
-    const th = forPrint ? "padding:5px 7px;border:1px solid #000;text-align:left;font-size:12px;" : "";
-    const td = forPrint ? "padding:5px 7px;border:1px solid #999;font-size:12px;" : "";
-    const num = "text-align:right;";
-    const rows = d.rows.map((r) => `
-      <tr>
-        <td style="${td}">${Formatters.formatDate(r.date)}</td>
-        <td style="${td}">${this.esc(r.kind)}</td>
-        <td style="${td}">${this.esc(r.who)}${r.detail ? `<br><small>${this.esc(r.detail)}</small>` : ""}</td>
-        <td style="${td}">${r.account}</td>
-        <td style="${td}${num}color:${forPrint ? "#000" : "var(--success)"};">${r.in ? this.money(r.in) : ""}</td>
-        <td style="${td}${num}color:${forPrint ? "#000" : "var(--danger)"};">${r.out ? this.money(r.out) : ""}</td>
-        <td style="${td}${num}">${this.money(r.cash)}</td>
-        <td style="${td}${num}">${this.money(r.bank)}</td>
-      </tr>`).join("");
+    const num = 'text-align:right;';
+    const money = (v) => (forPrint ? Formatters.formatCurrency(v, App.currency, true) : this.money(v));
+    const rows = d.rows.map((r) => '<tr>' +
+      '<td>' + Formatters.formatDate(r.date) + '</td>' +
+      '<td>' + this.esc(r.kind) + '</td>' +
+      '<td>' + this.esc(r.who) + (r.detail ? '<br><small class="muted">' + this.esc(r.detail) + '</small>' : '') + '</td>' +
+      '<td>' + (forPrint ? '<span class="badge ' + (r.account === 'Cash' ? 'ok' : 'neutral') + '">' + r.account + '</span>' : r.account) + '</td>' +
+      '<td class="num ' + (r.in ? 'pos' : 'muted') + '" style="' + num + (r.in && !forPrint ? 'color:var(--success);' : '') + '">' + (r.in ? '+ ' + money(r.in) : '-') + '</td>' +
+      '<td class="num ' + (r.out ? 'neg' : 'muted') + '" style="' + num + (r.out && !forPrint ? 'color:var(--danger);' : '') + '">' + (r.out ? '&minus; ' + money(r.out) : '-') + '</td>' +
+      '<td class="num strong" style="' + num + '">' + money(r.cash) + '</td>' +
+      '<td class="num strong" style="' + num + '">' + money(r.bank) + '</td></tr>').join('');
     if (!d.rows.length) return '<div class="empty-state"><h3>No movements</h3><p>Nothing was received or paid in this period.</p></div>';
-    return `<div class="table-wrapper"><table style="${forPrint ? "width:100%;border-collapse:collapse;" : ""}">
-      <thead><tr><th style="${th}">Date</th><th style="${th}">Type</th><th style="${th}">Who / Details</th><th style="${th}">Account</th>
-        <th style="${th}${num}">Money In</th><th style="${th}${num}">Money Out</th><th style="${th}${num}">Cash Balance</th><th style="${th}${num}">Bank Balance</th></tr></thead>
-      <tbody>
-        <tr><td colspan="6" style="${td}"><em>Opening balance</em></td><td style="${td}${num}">${this.money(d.openingCash)}</td><td style="${td}${num}">${this.money(d.openingBank)}</td></tr>
-        ${rows}
-      </tbody></table></div>`;
+    return '<div class="table-wrapper"><table>' +
+      '<thead><tr><th>Date</th><th>Type</th><th>Who / Details</th><th>Account</th><th class="num" style="' + num + '">Money In (+)</th><th class="num" style="' + num + '">Money Out (&minus;)</th><th class="num" style="' + num + '">Cash Balance</th><th class="num" style="' + num + '">Bank Balance</th></tr></thead>' +
+      '<tbody><tr><td colspan="6"><i>Opening balance</i></td><td class="num" style="' + num + '">' + money(d.openingCash) + '</td><td class="num" style="' + num + '">' + money(d.openingBank) + '</td></tr>' + rows + '</tbody></table></div>';
   },
 
   async print() {
     if (!this.data) return;
+    const T = ReportTheme;
+    const fx = (v) => Formatters.formatCurrency(v, App.currency, true);
     const st = (await window.api.getSettings()).data || {};
-    const range = this.filters.from || this.filters.to ? `${this.filters.from || "..."} to ${this.filters.to || "..."}` : "All time";
-    const html = I18n.translateHtml(`<html><head><meta charset="utf-8"><title>Cash and Bank Book</title>
-      <style>@page{margin:10mm;size:A4 landscape} body{font-family:Arial,Helvetica,sans-serif;padding:12px;color:#000;font-size:13px}</style></head><body>
-      <div style="text-align:center;margin-bottom:12px;padding-bottom:8px;border-bottom:3px solid #000;">
-        <h2 style="font-size:22px;">${this.esc(st.shop_name || "")}</h2>
-        ${ShopInfo.contactHtml(st, "font-size:13px;color:#000;margin:1px 0;")}
-        <h3 style="margin-top:6px;font-size:19px;">Cash and Bank Book</h3><div>${this.esc(range)}</div>
-      </div>
-      ${this.tableHtml(this.data, true)}
-      <p style="margin-top:10px;text-align:right;"><strong>Closing: Cash ${this.money(this.data.closingCash)} &nbsp; Bank ${this.money(this.data.closingBank)}</strong></p>
-      <script>window.onload=function(){setTimeout(function(){window.print()},400)};<\/script></body></html>`);
-    const w = window.open("", "_blank", "width=1100,height=800");
-    if (!w) return Toast.error("Please allow pop-ups for printing.");
+    const d = this.data;
+    const f = this.filters;
+    const range = f.from || f.to ? (f.from || '...') + ' to ' + (f.to || '...') : 'All time';
+    const body =
+      T.header({ shop: st, title: 'Cash and Bank Book', meta: [['Period', range], ['Date', Formatters.formatDate(new Date().toISOString())]] }) +
+      T.kpis([
+        { label: 'Opening cash', value: fx(d.openingCash) },
+        { label: 'Cash in (+)', value: fx(d.totals.cashIn), tone: 'ok' },
+        { label: 'Cash out (-)', value: fx(d.totals.cashOut), tone: 'bad' },
+        { label: 'Cash now', value: fx(d.closingCash), tone: d.closingCash < 0 ? 'bad' : '' },
+      ]) +
+      T.kpis([
+        { label: 'Opening bank', value: fx(d.openingBank) },
+        { label: 'Bank in (+)', value: fx(d.totals.bankIn), tone: 'ok' },
+        { label: 'Bank out (-)', value: fx(d.totals.bankOut), tone: 'bad' },
+        { label: 'Bank now', value: fx(d.closingBank), tone: d.closingBank < 0 ? 'bad' : '' },
+      ]) +
+      this.tableHtml(d, true) +
+      T.footer({ shop: st });
+    const html = I18n.translateHtml(T.wrap({ title: 'Cash and Bank Book', body, landscape: true, autoPrint: true }));
+    const w = window.open('', '_blank', 'width=1100,height=800');
+    if (!w) return Toast.error('Please allow pop-ups for printing.');
     w.document.write(html);
     w.document.close();
   },

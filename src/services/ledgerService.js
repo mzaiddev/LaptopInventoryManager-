@@ -451,6 +451,8 @@ class LedgerService {
     let query = `
       SELECT si.id as sale_id, si.reference_no as sale_reference, si.issue_date as transaction_date,
         si.transaction_type, si.total_amount, si.paid_amount, si.remaining_amount,
+        (si.discount_amount + COALESCE((SELECT SUM(discount_amount) FROM sale_issue_items WHERE sale_issue_id = si.id), 0)) as total_discount,
+        (SELECT COALESCE(SUM(quantity * unit_price), 0) FROM sale_issue_items WHERE sale_issue_id = si.id) as gross_amount,
         si.payment_status as status, si.ledger_type, si.notes as sale_notes,
         c.id as customer_id, c.customer_name, c.phone as customer_phone,
         (SELECT COUNT(*) FROM sale_issue_items WHERE sale_issue_id = si.id) as items_count,
@@ -610,6 +612,8 @@ class LedgerService {
     const db = getDatabase();
     const customer = db.prepare("SELECT id, customer_name FROM customers WHERE id = ?").get(data.customer_id);
     if (!customer) throw new Error("Customer not found");
+    if (!["Debit", "Credit"].includes(data.balance_type)) throw new Error("Old balance type must be Debit or Credit");
+    if (!(Number(data.amount) > 0)) throw new Error("Old balance amount must be greater than 0");
 
     return db.transaction(() => {
       // First add to old_balances table for legacy support
@@ -1139,6 +1143,8 @@ class LedgerService {
     const db = getDatabase();
     let query = `
       SELECT si.*, c.customer_name,
+        (si.discount_amount + COALESCE((SELECT SUM(discount_amount) FROM sale_issue_items WHERE sale_issue_id = si.id), 0)) as total_discount,
+        (SELECT COALESCE(SUM(quantity * unit_price), 0) FROM sale_issue_items WHERE sale_issue_id = si.id) as gross_amount,
         (SELECT GROUP_CONCAT(sii.product_name || ' x' || sii.quantity, ', ') FROM sale_issue_items sii WHERE sii.sale_issue_id = si.id) as items_summary
       FROM sale_issues si
       LEFT JOIN customers c ON si.customer_id = c.id

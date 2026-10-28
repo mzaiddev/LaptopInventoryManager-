@@ -242,6 +242,7 @@ const CustomersPage = {
                 <span class="profile-sale-meta">${Formatters.formatDate(sale.issue_date)} - ${this.escapeHtml(sale.transaction_type)}</span>
               </div>
               <div class="profile-sale-amounts">
+                ${this.saleDiscount(sale) > 0 ? `<span class="profile-sale-meta" style="margin-right:8px;">Discount: &minus; ${Formatters.formatCurrency(this.saleDiscount(sale), currency)} (${ReportTheme.pct(this.saleDiscount(sale), this.saleGross(sale))})</span>` : ''}
                 <span class="profile-sale-total">${Formatters.formatCurrency(sale.total_amount, currency)}</span>
               </div>
             </div>
@@ -494,130 +495,92 @@ const CustomersPage = {
 
   summaryTableHtml(s, currency) {
     const { lines, totalLabel, total } = this.summaryLines(s);
-    const row = (l) => '<tr><td style="padding:7px 14px;border:1px solid #999;width:30px;text-align:center;font-weight:700;">' + l.sign + '</td>' +
-      '<td style="padding:7px 14px;border:1px solid #999;">' + l.label + '</td>' +
-      '<td style="padding:7px 14px;border:1px solid #999;text-align:right;">' + Formatters.formatCurrency(l.amount, currency, true) + '</td></tr>';
-    return '<table style="width:100%;font-size:15px;border-collapse:collapse;color:#000;">' + lines.map(row).join('') +
-      '<tr><td style="padding:9px 14px;border:2px solid #000;text-align:center;font-weight:700;">=</td>' +
-      '<td style="padding:9px 14px;border:2px solid #000;font-weight:700;">' + totalLabel + '</td>' +
-      '<td style="padding:9px 14px;border:2px solid #000;text-align:right;font-weight:700;font-size:17px;">' + Formatters.formatCurrency(total, currency, true) + '</td></tr></table>';
+    const fx = (v) => Formatters.formatCurrency(v, currency, true);
+    const row = (l) => '<tr><td class="sign">' + (l.sign === '-' ? '&minus;' : l.sign) + '</td><td>' + l.label + '</td><td class="num">' + fx(l.amount) + '</td></tr>';
+    return '<table class="sum">' + lines.map(row).join('') +
+      '<tr class="total"><td class="sign">=</td><td>' + totalLabel + '</td><td class="num">' + fx(total) + '</td></tr></table>';
   },
 
-  buildStatementHtml(stmt, currency) {
-    // Build ledger entries table
+  // Everything taken off one sale: the per-item discounts plus the discount on the whole bill.
+  saleDiscount(sl) {
+    return (sl.discount_amount || 0) + (sl.items || []).reduce((s, i) => s + (i.discount_amount || 0), 0);
+  },
+
+  // What a sale would have cost before any discount.
+  saleGross(sl) {
+    return (sl.items || []).reduce((s, i) => s + i.quantity * i.unit_price, 0);
+  },
+
+  statementGross(stmt) {
+    return (stmt.sales || []).reduce((s, sl) => s + this.saleGross(sl), 0);
+  },
+
+  statementDiscount(stmt) {
+    return Math.round((stmt.sales || []).reduce((s, sl) => s + this.saleDiscount(sl), 0) * 100) / 100;
+  },
+
+  // Friendly names for the ledger entry types.
+  _entryLabel(type) {
+    return { Sale: 'Sale', Payment: 'Payment', OldBalanceDebit: 'Old balance', OldBalanceCredit: 'Old balance (credit)', Return: 'Return', Adjustment: 'Adjustment' }[type] || type;
+  },
+
+  // The inside of a statement (no page wrapper). Same markup for the screen, print and the WhatsApp PDF.
+  statementBody(stmt, currency) {
+    const T = ReportTheme;
+    const esc = (v) => this.escapeHtml(v);
+    const fx = (v) => Formatters.formatCurrency(v, currency, true);
+    const shop = Object.assign({ shop_name: stmt.shopName }, stmt.shop);
+    const bal = stmt.balance.statement.balance;
+    const owes = bal > 0.005;
+    const credit = bal < -0.005;
+    const statusBadge = owes ? T.badge('bad', 'Payment due') : credit ? T.badge('ok', 'In credit') : T.badge('ok', 'All clear');
+    const today = Formatters.formatDate(new Date().toISOString());
+
     const ledgerEntries = stmt.ledger_entries || [];
-    const ledgerHtml = ledgerEntries.length > 0 ? `
-      <h4 style="font-size:18px;margin:20px 0 10px;color:#000;">Ledger Transactions</h4>
-      <table style="width:100%;border-collapse:collapse;font-size:15px;">
-        <thead>
-          <tr style="background:transparent;">
-            <th style="padding:9px 12px;border:1px solid #000;text-align:left;font-size:14px;text-transform:uppercase;color:#000;font-weight:700;">Date</th>
-            <th style="padding:9px 12px;border:1px solid #000;text-align:left;font-size:14px;text-transform:uppercase;color:#000;font-weight:700;">Type</th>
-            <th style="padding:9px 12px;border:1px solid #000;text-align:left;font-size:14px;text-transform:uppercase;color:#000;font-weight:700;">Description</th>
-            <th style="padding:9px 12px;border:1px solid #000;text-align:right;font-size:14px;text-transform:uppercase;color:#000;font-weight:700;">Debit</th>
-            <th style="padding:9px 12px;border:1px solid #000;text-align:right;font-size:14px;text-transform:uppercase;color:#000;font-weight:700;">Credit</th>
-            <th style="padding:9px 12px;border:1px solid #000;text-align:right;font-size:14px;text-transform:uppercase;color:#000;font-weight:700;">Balance</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${ledgerEntries.map(e => `<tr>
-            <td style="padding:7px 12px;border:1px solid #999;font-size:14px;color:#000;">${Formatters.formatDate(e.entry_date)}</td>
-            <td style="padding:7px 12px;border:1px solid #999;font-size:14px;color:#000;">${this.escapeHtml(e.reference_type)}</td>
-            <td style="padding:7px 12px;border:1px solid #999;font-size:14px;color:#000;">${this.escapeHtml(e.description)}</td>
-            <td style="padding:7px 12px;border:1px solid #999;font-size:14px;text-align:right;color:#000;">${e.debit > 0 ? Formatters.formatCurrency(e.debit, currency) : '-'}</td>
-            <td style="padding:7px 12px;border:1px solid #999;font-size:14px;text-align:right;color:#000;">${e.credit > 0 ? Formatters.formatCurrency(e.credit, currency) : '-'}</td>
-            <td style="padding:7px 12px;border:1px solid #999;font-size:14px;text-align:right;font-weight:700;color:#000;">${Formatters.formatCurrency(e.running_balance, currency)}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-    ` : '';
+    const ledgerHtml = ledgerEntries.length ? T.section('Account activity') + '<table><thead><tr>' +
+      '<th>Date</th><th>Type</th><th>Details</th><th class="num">Charged (+)</th><th class="num">Received (&minus;)</th><th class="num">Balance</th></tr></thead><tbody>' +
+      ledgerEntries.map((e) => '<tr><td>' + Formatters.formatDate(e.entry_date) + '</td><td>' + esc(this._entryLabel(e.reference_type)) + '</td><td>' + esc(e.description) + '</td>' +
+        '<td class="num ' + (e.debit > 0 ? 'neg' : 'muted') + '">' + (e.debit > 0 ? '+ ' + fx(e.debit) : '-') + '</td>' +
+        '<td class="num ' + (e.credit > 0 ? 'pos' : 'muted') + '">' + (e.credit > 0 ? '&minus; ' + fx(e.credit) : '-') + '</td>' +
+        '<td class="num strong">' + fx(e.running_balance) + '</td></tr>').join('') +
+      '</tbody></table>' : '';
 
-    const salesHtml = stmt.sales && stmt.sales.length > 0
-      ? stmt.sales.map(s => {
-          return `
-            <div style="margin-bottom:16px;border:1px solid #000;border-radius:8px;padding:14px;background:transparent;">
-              <div style="margin-bottom:10px;">
-                <strong style="font-size:18px;color:#000;">${this.escapeHtml(s.reference_no)}</strong>
-                <span style="color:#000;font-size:15px;margin-left:10px;">${Formatters.formatDate(s.issue_date)} - ${this.escapeHtml(s.transaction_type)}</span>
-                <span style="float:right;font-size:16px;font-weight:700;color:#000;">${Formatters.formatCurrency(s.total_amount, currency)}</span>
-              </div>
-              <table style="width:100%;border-collapse:collapse;font-size:15px;">
-                <thead>
-                  <tr style="background:transparent;">
-                    <th style="padding:7px 10px;border:1px solid #000;text-align:left;font-size:14px;text-transform:uppercase;color:#000;font-weight:700;">Product</th>
-                    <th style="padding:7px 10px;border:1px solid #000;text-align:center;font-size:14px;text-transform:uppercase;color:#000;font-weight:700;">Qty</th>
-                    <th style="padding:7px 10px;border:1px solid #000;text-align:right;font-size:14px;text-transform:uppercase;color:#000;font-weight:700;">Price</th>
-                    <th style="padding:7px 10px;border:1px solid #000;text-align:right;font-size:14px;text-transform:uppercase;color:#000;font-weight:700;">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${s.items ? s.items.map(i => `
-                    <tr>
-                      <td style="padding:6px 10px;border:1px solid #999;font-size:14px;color:#000;">${this.escapeHtml(i.product_name)}</td>
-                      <td style="padding:6px 10px;border:1px solid #999;font-size:14px;text-align:center;color:#000;">${i.quantity}</td>
-                      <td style="padding:6px 10px;border:1px solid #999;font-size:14px;text-align:right;color:#000;">${Formatters.formatCurrency(i.unit_price, currency)}</td>
-                      <td style="padding:6px 10px;border:1px solid #999;font-size:14px;text-align:right;color:#000;">${Formatters.formatCurrency(i.subtotal, currency)}</td>
-                    </tr>
-                  `).join('') : '<tr><td colspan="4" style="padding:6px 10px;font-size:14px;color:#000;">No items</td></tr>'}
-                </tbody>
-              </table>
-            </div>
-          `;
-        }).join('')
-      : '<p style="color:#000;text-align:center;padding:20px;font-size:15px;">No transactions found.</p>';
+    const sales = stmt.sales || [];
+    const salesHtml = sales.length ? T.section('Sales (' + sales.length + ')') + sales.map((sl) => {
+      const items = sl.items && sl.items.length ? sl.items.map((i) => '<tr><td>' + esc(i.product_name) + (i.discount_amount > 0 ? '<div class="muted"><span>Discount on this item</span> (' + T.pct(i.discount_amount, i.quantity * i.unit_price) + '): &minus; ' + fx(i.discount_amount) + '</div>' : '') + '</td><td class="ctr">' + i.quantity + '</td><td class="num">' + fx(i.unit_price) + '</td><td class="num">' + fx(i.subtotal) + '</td></tr>').join('')
+        : '<tr><td colspan="4" class="muted">No items</td></tr>';
+      const discLine = this.saleDiscount(sl) > 0 ? '<div class="muted" style="margin-top:4px;"><span>Discount given</span> (' + T.pct(this.saleDiscount(sl), this.saleGross(sl)) + '): <b class="pos">&minus; ' + fx(this.saleDiscount(sl)) + '</b></div>' : '';
+      const paidLine = discLine + (sl.paid_amount != null ? '<div class="muted" style="margin-top:4px;"><span>Paid:</span> <b>' + fx(sl.paid_amount) + '</b> &nbsp;|&nbsp; <span>Remaining:</span> <b>' + fx(sl.remaining_amount || 0) + '</b></div>' : '');
+      return '<div class="sale"><div class="top"><div><b>' + esc(sl.reference_no) + '</b> <span class="muted">&middot; ' + Formatters.formatDate(sl.issue_date) + ' &middot; ' + esc(sl.transaction_type) + '</span></div>' +
+        '<div>' + (sl.payment_status ? T.paymentBadge(sl.payment_status) + ' ' : '') + '<b>' + fx(sl.total_amount) + '</b></div></div>' +
+        '<table><thead><tr><th>Product</th><th class="ctr">Qty</th><th class="num">Price</th><th class="num">Total</th></tr></thead><tbody>' + items + '</tbody></table>' + paidLine + '</div>';
+    }).join('') : '';
 
-    const returnsHtml = stmt.returns && stmt.returns.length > 0
-      ? `
-        <h4 style="font-size:18px;margin:16px 0 8px;color:#000;">Returns</h4>
-        <table style="width:100%;border-collapse:collapse;font-size:14px;">
-          <thead>
-            <tr style="background:transparent;">
-              <th style="padding:8px;border:1px solid #999;text-align:left;color:#000;font-weight:700;">Date</th>
-              <th style="padding:8px;border:1px solid #999;text-align:left;color:#000;font-weight:700;">Reference</th>
-              <th style="padding:8px;border:1px solid #999;text-align:right;color:#000;font-weight:700;">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${stmt.returns.map(r => `<tr>
-              <td style="padding:6px 8px;border:1px solid #999;font-size:14px;color:#000;">${Formatters.formatDate(r.return_date)}</td>
-              <td style="padding:6px 8px;border:1px solid #999;font-size:14px;color:#000;">${this.escapeHtml(r.reference_no)}</td>
-              <td style="padding:6px 8px;border:1px solid #999;font-size:14px;text-align:right;font-weight:700;color:#000;">-${Formatters.formatCurrency(r.total_return_amount, currency)}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>`
-      : '';
+    const returns = stmt.returns || [];
+    const returnsHtml = returns.length ? T.section('Returns') + '<table><thead><tr><th>Date</th><th>Reference</th><th class="num">Amount returned</th></tr></thead><tbody>' +
+      returns.map((r) => '<tr><td>' + Formatters.formatDate(r.return_date) + '</td><td>' + esc(r.reference_no) + '</td><td class="num pos">&minus; ' + fx(r.total_return_amount) + '</td></tr>').join('') + '</tbody></table>' : '';
 
-    return `
-      <div class="customer-statement" style="font-family:Arial, Helvetica, sans-serif;padding:15px;">
-        <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid #000;">
-          <h2 style="font-size:24px;margin-bottom:6px;color:#000;">${this.escapeHtml(stmt.shopName)}</h2>
-          ${ShopInfo.contactHtml(stmt.shop, 'font-size:15px;color:#000;margin:2px 0;')}
-          <h3 style="margin-top:10px;font-size:24px;color:#000;">Customer Statement</h3>
-        </div>
-        <div style="margin-bottom:16px;font-size:15px;">
-          <table style="width:100%;">
-            <tr><td style="font-weight:700;width:120px;padding:4px 0;">Customer:</td><td>${this.escapeHtml(stmt.customer.customer_name)}</td></tr>
-            <tr><td style="font-weight:700;padding:4px 0;">Phone:</td><td>${this.escapeHtml(stmt.customer.phone) || '-'}</td></tr>
-            <tr><td style="font-weight:700;padding:4px 0;">Address:</td><td>${this.escapeHtml(stmt.customer.address) || '-'}</td></tr>
-            <tr><td style="font-weight:700;padding:4px 0;">Date:</td><td>${Formatters.formatDate(new Date().toISOString())}</td></tr>
-          </table>
-        </div>
-        <div style="margin-bottom:20px;">
-          ${this.summaryTableHtml(stmt.balance.statement, currency)}
-        </div>
-        ${ledgerHtml}
-        ${stmt.sales && stmt.sales.length > 0 ? `
-        <h4 style="font-size:18px;margin:20px 0 10px;color:#000;">Sales History (${stmt.sales.length})</h4>
-        ${salesHtml}
-        ` : ''}
-        ${returnsHtml}
-        ${ShopInfo.paymentHtml(stmt.shop)}
-        <div style="text-align:center;margin-top:30px;padding-top:16px;border-top:1px solid #000;font-size:13px;color:#000;">
-          <p>Generated on ${Formatters.formatDateTime(new Date().toISOString())}</p>
-          <p>This is a computer-generated statement from ${this.escapeHtml(stmt.shopName)}</p>
-        </div>
-      </div>
-    `;
+    return T.header({ shop, title: 'Customer Statement', meta: [['Date', today]] }) +
+      '<div class="info">' +
+        '<div class="box"><div class="k">Customer</div><div class="v">' + esc(stmt.customer.customer_name) + '</div>' +
+          '<div class="s">' + (esc(stmt.customer.phone) || '-') + (stmt.customer.address ? ' &middot; ' + esc(stmt.customer.address) : '') + '</div></div>' +
+        '<div class="box" style="max-width:190px;"><div class="k">Account status</div><div class="v" style="margin-top:3px;">' + statusBadge + '</div></div>' +
+      '</div>' +
+      T.dueBox(owes
+        ? { label: 'Total amount due', amount: fx(bal), note: 'Please pay this amount. Thank you.', tone: 'bad' }
+        : credit
+          ? { label: 'Credit balance (we owe you)', amount: fx(-bal), tone: 'ok' }
+          : { label: 'Account settled', amount: fx(0), note: 'Nothing is due.', tone: 'ok' }) +
+      T.section('Account summary') + this.summaryTableHtml(stmt.balance.statement, currency) +
+      (this.statementDiscount(stmt) > 0 ? '<div class="muted" style="margin-top:6px;"><span>Total discount given to you:</span> <b class="pos">' + fx(this.statementDiscount(stmt)) + ' (' + T.pct(this.statementDiscount(stmt), this.statementGross(stmt)) + ')</b> <span>(already taken off the sales above)</span></div>' : '') +
+      ledgerHtml + salesHtml + returnsHtml +
+      (owes ? T.paymentBox(shop) : '') +
+      T.footer({ shop, note: 'This is a computer-generated statement from ' + (stmt.shopName || '') });
+  },
+
+  // For the on-screen statement: the same look, styled by the shared stylesheet.
+  buildStatementHtml(stmt, currency) {
+    return ReportTheme.styleTag() + '<div class="rpt">' + this.statementBody(stmt, currency) + '</div>';
   },
 
   printStatementFromModal() {
@@ -628,33 +591,14 @@ const CustomersPage = {
     this._openPdfWindow(customerName, printContent);
   },
 
-  // Full HTML page for a statement; autoPrint adds the print-on-load script for the print window.
+  // Full HTML page for a statement; autoPrint adds the toolbar and the print-on-load script for the print window.
   _statementDocument(customerName, printContent, autoPrint) {
-    return `
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Statement - ${this.escapeHtml(customerName)}</title>
-        <style>
-          @page { margin: 10mm; }
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: Arial, Helvetica, sans-serif; padding: 15px; color: #000; background: #fff; font-size: 15px; }
-          table { width: 100%; border-collapse: collapse; }
-          th { padding: 8px 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #000; border: 1px solid #000; background: transparent; text-align: left; font-weight: 700; }
-          td { padding: 7px 10px; border: 1px solid #999; font-size: 14px; color: #000; }
-          .badge { display: inline-block; padding: 3px 9px; border-radius: 10px; font-size: 12px; font-weight: 500; border: 1px solid #000; }
-          .badge-in-stock { border-color: #166534; color: #000; }
-          .badge-reserved { border-color: #92400e; color: #000; }
-          .badge-damaged { border-color: #991b1b; color: #000; }
-          @media print { body { padding: 0; } }
-        </style>
-      </head>
-      <body>
-        ${printContent}
-        ${autoPrint ? '<script>window.onload = function() { setTimeout(function() { window.print(); }, 500); };<\/script>' : ''}
-      </body>
-      </html>
-    `;
+    return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Statement - ' + this.escapeHtml(customerName) + '</title>' +
+      '<style>body{margin:0;padding:14px;background:#fff;} @media print{body{padding:0;}}</style></head><body>' +
+      (autoPrint ? '<div class="rpt-toolbar no-print" style="text-align:center;margin-bottom:12px;"><button onclick="window.print()">Print</button> <button onclick="window.print()">Save as PDF</button></div>' : '') +
+      printContent +
+      (autoPrint ? '<script>window.onload=function(){setTimeout(function(){window.print()},500)};<\/script>' : '') +
+      '</body></html>';
   },
 
   _openPdfWindow(customerName, printContent) {
@@ -686,7 +630,8 @@ const CustomersPage = {
       t('Dear ' + customerName + ',') + '\n\n' +
       t('Here is your account statement from ' + shopName + ' (' + dateStr + ').') + '\n\n' +
       sum.lines.map((l) => (l.sign ? l.sign + ' ' : '') + t(l.label) + ': ' + money(l.amount)).join('\n') + '\n' +
-      '= ' + t(sum.totalLabel) + ': ' + money(sum.total) + '\n\n' +
+      '= ' + t(sum.totalLabel) + ': ' + money(sum.total) + '\n' +
+      (this.statementDiscount(stmt) > 0 ? t('Total discount given to you:') + ' ' + money(this.statementDiscount(stmt)) + ' (' + ReportTheme.pct(this.statementDiscount(stmt), this.statementGross(stmt)) + ')\n' : '') + '\n' +
       (pay ? t('Payment Details') + ':\n' + pay + '\n\n' : '') +
       t('The attached PDF lists every entry. For any questions please contact us. Thank you!') + '\n- ' + shopName;
     return {

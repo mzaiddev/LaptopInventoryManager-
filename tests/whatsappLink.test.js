@@ -185,7 +185,7 @@ test("unlink logs out, deletes the session and clears the status", async () => {
   await t.link.unlink();
   assert.strictEqual(t.baileys.socks[0].loggedOut, true);
   assert.strictEqual(fs.existsSync(t.link.sessionDir), false);
-  assert.deepStrictEqual(t.link.getStatus(), { state: "unlinked", qr: null, phone: null, error: null });
+  assert.deepStrictEqual(t.link.getStatus(), { state: "unlinked", qr: null, phone: null, error: null, saved: false });
 });
 
 test("app start reconnects only when this PC was linked before", async () => {
@@ -201,4 +201,17 @@ test("app start reconnects only when this PC was linked before", async () => {
   await settle();
   await settle();
   assert.strictEqual(was.baileys.socks.length, 1);
+});
+
+test("a saved link shows its number and 'saved' before the connection is back, and reconnect keeps it", async () => {
+  const t = make();
+  fs.mkdirSync(t.link.sessionDir, { recursive: true });
+  fs.writeFileSync(path.join(t.link.sessionDir, "creds.json"), JSON.stringify({ registered: true, me: { id: "923001234567:5@s.whatsapp.net" } }));
+  const s = t.link.getStatus();
+  assert.strictEqual(s.saved, true);
+  assert.strictEqual(s.phone, "923001234567");
+  await t.link.reconnect();
+  await settle();
+  assert.strictEqual(t.baileys.socks.length, 1);
+  assert.strictEqual(fs.existsSync(path.join(t.link.sessionDir, "creds.json")), true);
 });

@@ -1097,19 +1097,9 @@ const InventoryPage = {
 
         grandTotal += inStockQty;
 
-        const qtyColor = '#000';
-        const dotColor = inStockQty > 0 ? '#000' : '#fff';
-
-        rowsHtml += '<tr style="background:transparent;">' +
-          '<td style="padding:8px 12px;border:1px solid #000;text-align:center;color:#000;font-size:12px;">' + catIndex + '</td>' +
-          '<td style="padding:8px 12px;border:1px solid #000;">' +
-            '<div style="display:flex;align-items:center;gap:8px;">' +
-              '<span style="width:9px;height:9px;border-radius:50%;background:' + dotColor + ';border:1px solid #000;display:inline-block;"></span>' +
-              '<strong style="font-size:14px;color:#000;">' + this.escapeHtml(cat) + '</strong>' +
-            '</div>' +
-          '</td>' +
-          '<td style="padding:8px 12px;border:1px solid #000;text-align:center;font-weight:700;font-size:15px;color:' + qtyColor + ';">' + inStockQty + '</td>' +
-        '</tr>';
+        rowsHtml += '<tr><td class="ctr muted">' + catIndex + '</td>' +
+          '<td><strong>' + this.escapeHtml(cat) + '</strong></td>' +
+          '<td class="ctr">' + (inStockQty > 0 ? '<strong>' + inStockQty + '</strong>' : '<strong class="neg">0</strong>') + '</td></tr>';
       }
 
       const dateStr = new Date().toLocaleDateString();
@@ -1121,58 +1111,19 @@ const InventoryPage = {
         return;
       }
 
-      printWindow.document.write(I18n.translateHtml('<!DOCTYPE html>' +
-      '<html><head><title>Stock Summary by Category</title>' +
-      '<style>' +
-        '@page { margin: 8mm; size: A4 portrait; }' +
-        '* { margin: 0; padding: 0; box-sizing: border-box; }' +
-        'body { font-family: Segoe UI, Arial, sans-serif; color: #000; padding: 12px; background: #fff; font-size: 14px; }' +
-        '.print-header { text-align: center; margin-bottom: 14px; border-bottom: 2px solid #000; padding-bottom: 8px; }' +
-        '.print-header h1 { font-size: 22px; color: #000; }' +
-        '.print-header .sub { font-size: 13px; color: #000; }' +
-        '.print-footer { margin-top: 14px; text-align: center; font-size: 12px; color: #000; border-top: 1px solid #000; padding-top: 6px; }' +
-        '.print-actions { text-align: center; margin-bottom: 10px; }' +
-        '.print-actions button { padding: 8px 20px; margin: 0 5px; border: 1px solid #000; border-radius: 5px; cursor: pointer; font-size: 13px; background: #fff; color: #000; }' +
-        '.btn-print { background: #fff; color: #000; }' +
-        '.btn-pdf { background: #fff; color: #000; }' +
-        'table { width: 100%; border-collapse: collapse; font-size: 12px; }' +
-        'th { background: transparent; color: #000; padding: 8px 12px; text-align: left; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #000; }' +
-        'td { padding: 7px 12px; border: 1px solid #000; color: #000; }' +
-        '.summary-row { display: flex; gap: 16px; justify-content: center; margin: 14px 0; }' +
-        '.summary-item { padding: 12px 22px; background: transparent; border-radius: 8px; border: 1px solid #000; text-align: center; min-width: 140px; }' +
-        '.summary-item .label { font-size: 11px; color: #000; text-transform: uppercase; letter-spacing: 0.5px; }' +
-        '.summary-item .value { font-size: 20px; font-weight: 700; color: #000; margin-top: 4px; }' +
-        '.grand-row { background: transparent !important; color: #000 !important; font-weight: 700; font-size: 13px; border-top: 2px solid #000; }' +
-        '.grand-row td { color: #000 !important; border-color: #000; padding: 10px 12px; }' +
-        '@media print { .print-actions { display: none; } body { padding: 0; } }' +
-      '</style></head><body>' +
-      '<div class="print-actions"><button class="btn-print" onclick="window.print()">Print</button><button class="btn-pdf" onclick="window.print()">Download PDF</button></div>' +
-      '<div class="print-header">' +
-        '<h1>' + this.escapeHtml(company.shopName) + '</h1>' +
-        (company.raw ? ShopInfo.contactHtml(company.raw, 'font-size:12px;color:#000;') : (company.address ? '<p style="font-size:11px;color:#64748b;">' + this.escapeHtml(company.address) + '</p>' : '')) +
-        '<div style="font-size:13px;color:#000;">' +
-          (!company.raw && company.phone ? 'Phone: ' + this.escapeHtml(company.phone) + ' | ' : '') +
-          (company.email ? 'Email: ' + this.escapeHtml(company.email) + ' | ' : '') +
-          'Printed: ' + dateStr + ' ' + timeStr +
-        '</div>' +
-        '<h1 style="font-size:22px;color:#000;margin-top:6px;">Stock Summary by Category</h1>' +
-        '<div class="sub">In Stock quantity for each product category (0 = no stock)</div>' +
-      '</div>' +
-      '<div class="summary-row">' +
-        '<div class="summary-item"><div class="label">Total Categories</div><div class="value">' + allCategories.length + '</div></div>' +
-        '<div class="summary-item"><div class="label">Total In Stock Units</div><div class="value">' + grandTotal + '</div></div>' +
-        '<div class="summary-item"><div class="label">Categories with 0</div><div class="value">' + allCategories.filter(c => products.filter(p => (p.category || "Uncategorized") === c && p.status === "In Stock").reduce((s, p) => s + (p.quantity || 0), 0) === 0).length + '</div></div>' +
-      '</div>' +
-      '<table><thead><tr>' +
-        '<th style="width:40px;text-align:center;">#</th>' +
-        '<th style="text-align:left;">Category</th>' +
-        '<th style="width:120px;text-align:center;">In Stock Qty</th>' +
-      '</tr></thead><tbody>' +
-      rowsHtml +
-      '<tr class="grand-row"><td style="text-align:center;"></td><td style="font-weight:700;">GRAND TOTAL</td><td style="text-align:center;font-weight:800;font-size:16px;">' + grandTotal + '</td></tr>' +
-      '</tbody></table>' +
-      '<div class="print-footer"><p>Generated by Laptop Inventory Manager | ' + dateStr + ' ' + timeStr + '</p></div>' +
-      '</body></html>'));
+      const T = ReportTheme;
+      const shop = company.raw ? company.raw : { shop_name: company.shopName, shop_address: company.address, phone_number: company.phone };
+      const zeroCats = allCategories.filter(c => products.filter(p => (p.category || "Uncategorized") === c && p.status === "In Stock").reduce((sum, p) => sum + (p.quantity || 0), 0) === 0).length;
+      const body = T.header({ shop, title: 'Stock Summary by Category', meta: [['Date', dateStr]], subtitle: 'In Stock quantity for each product category (0 = no stock)' }) +
+        T.kpis([
+          { label: 'Total categories', value: allCategories.length },
+          { label: 'Total in-stock units', value: grandTotal, tone: 'ok' },
+          { label: 'Categories with 0', value: zeroCats, tone: zeroCats ? 'bad' : '' },
+        ]) +
+        '<table><thead><tr><th class="ctr" style="width:40px;">#</th><th>Category</th><th class="ctr" style="width:130px;">In Stock Qty</th></tr></thead><tbody>' + rowsHtml + '</tbody>' +
+        '<tfoot><tr><td></td><td>GRAND TOTAL</td><td class="ctr">' + grandTotal + '</td></tr></tfoot></table>' +
+        T.footer({ shop });
+      printWindow.document.write(I18n.translateHtml(T.wrap({ title: 'Stock Summary by Category', body })));
       printWindow.document.close();
     } catch (err) {
       Toast.error('Category report error: ' + err.message);
