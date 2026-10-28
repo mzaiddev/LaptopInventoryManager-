@@ -700,16 +700,7 @@ const CustomersPage = {
   async shareStatementWhatsApp(customerId) {
     try {
       const payload = await this.buildStatementShare(customerId);
-      const r = await window.api.shareStatement(payload);
-      if (!r.success) {
-        Toast.error(r.error || 'Could not create the PDF.');
-      } else if (r.data.chat === 'none') {
-        Toast.warning('PDF saved. This customer has no valid phone number, so WhatsApp was not opened.');
-      } else if (r.data.clipboardOk) {
-        Toast.success('PDF copied. In the WhatsApp chat press Ctrl+V, then Send.');
-      } else {
-        Toast.warning('WhatsApp opened. The PDF is in the folder that just opened: drag it into the chat.');
-      }
+      await WhatsAppLink.shareOne(payload);
     } catch (err) {
       Toast.error(err.message);
     }

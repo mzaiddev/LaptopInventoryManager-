@@ -146,5 +146,6 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  try { require('../services/whatsappLink').getLink().shutdown(); } catch (e) { /* not linked */ }
   closeDatabase();
 });

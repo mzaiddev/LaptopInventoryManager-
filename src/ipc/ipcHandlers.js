@@ -1,4 +1,4 @@
-const { ipcMain: rawIpcMain, dialog, app } = require("electron");
+const { ipcMain: rawIpcMain, dialog, app, BrowserWindow } = require("electron");
 const authService = require("../services/authService");
 const { guardIpc, requireSuper, AUDITED } = require("./guard");
 const auditService = require("../services/auditService");
@@ -93,6 +93,37 @@ function registerIpcHandlers() {
   ipcMain.handle("supplier:updateEntry", requireSuper(authService, wrap((id, d) => supplierService.updateEntry(id, d))));
   ipcMain.handle("supplier:deleteEntry", requireSuper(authService, wrap((id) => supplierService.removeEntry(id))));
   ipcMain.handle("cashbook:get", wrap((f) => cashBookService.get(f || {})));
+
+  // Linked WhatsApp: status is pushed to every window, so nothing has to poll.
+  const waLink = require("../services/whatsappLink").getLink();
+  waLink.onChange((status) => {
+    const windows = BrowserWindow && BrowserWindow.getAllWindows ? BrowserWindow.getAllWindows() : [];
+    windows.forEach((w) => { if (!w.isDestroyed()) w.webContents.send("wa:changed", status); });
+  });
+  ipcMain.handle("wa:status", wrap(() => waLink.getStatus()));
+  ipcMain.handle("wa:connect", async () => {
+    try {
+      return { success: true, data: await waLink.connect() };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+  ipcMain.handle("wa:unlink", async () => {
+    try {
+      await waLink.unlink();
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+  ipcMain.handle("statement:autoSend", async (event, payload) => {
+    try {
+      return { success: true, data: await require("../services/statementShare").autoSend(payload) };
+    } catch (err) {
+      return { success: false, error: err.message, code: err.code || null };
+    }
+  });
+  waLink.autoStart();
 
   ipcMain.handle("statement:share", async (event, payload) => {
     try {

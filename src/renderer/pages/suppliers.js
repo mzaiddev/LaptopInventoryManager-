@@ -419,10 +419,6 @@ const SuppliersPage = {
       t("Here is our account statement with you (" + new Date().toLocaleDateString() + ").") + "\n" +
       (s.balance < 0 ? t("Advance paid") : t("Balance we owe")) + ": " + Formatters._formatCurrency(Math.abs(s.balance), App.currency, true) +
       "\n\n" + t("Thank you!") + "\n- " + shopName;
-    const r = await window.api.shareStatement({ html: I18n.translateHtml(await this.statementHtml()), customerName: "Supplier-" + s.name, phone: s.phone || "", message });
-    if (!r.success) Toast.error(r.error || "Could not create the PDF.");
-    else if (r.data.chat === "none") Toast.warning("PDF saved. This supplier has no valid phone number, so WhatsApp was not opened.");
-    else if (r.data.clipboardOk) Toast.success("PDF copied. In the WhatsApp chat press Ctrl+V, then Send.");
-    else Toast.warning("WhatsApp opened. The PDF is in the folder that just opened: drag it into the chat.");
+    await WhatsAppLink.shareOne({ html: I18n.translateHtml(await this.statementHtml()), customerName: "Supplier-" + s.name, phone: s.phone || "", message });
   },
 };

@@ -66,6 +66,7 @@ const App = {
     } catch (e) {}
 
     await this.syncCostVisibility();
+    try { await WhatsAppLink.init(); } catch (e) { /* sending falls back to the manual way */ }
 
     // Navigate to dashboard
     this.navigate("dashboard");

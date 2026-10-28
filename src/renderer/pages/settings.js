@@ -23,6 +23,7 @@ const SettingsPage = {
           </div>
         </div>
       </div>
+      <div class="card" style="margin-bottom:24px;" id="wa-link-card"></div>
       <div class="card" style="margin-bottom:24px;">
         <div class="card-header"><h3>Security</h3></div>
         <div class="card-body">
@@ -68,6 +69,7 @@ const SettingsPage = {
       </div>
     `;
 
+    WhatsAppLink.mountCard();
     await this.loadSettings();
     await this.loadAudit();
   },

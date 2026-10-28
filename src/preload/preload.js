@@ -98,6 +98,16 @@ contextBridge.exposeInMainWorld("api", {
 
   // Statements
   shareStatement: (payload) => ipcRenderer.invoke("statement:share", payload),
+  autoSendStatement: (payload) => ipcRenderer.invoke("statement:autoSend", payload),
+  waStatus: () => ipcRenderer.invoke("wa:status"),
+  waConnect: () => ipcRenderer.invoke("wa:connect"),
+  waUnlink: () => ipcRenderer.invoke("wa:unlink"),
+  // Pushed by the main process whenever the WhatsApp link changes. Returns a function that stops listening.
+  onWaChanged: (cb) => {
+    const handler = (event, status) => cb(status);
+    ipcRenderer.on("wa:changed", handler);
+    return () => ipcRenderer.removeListener("wa:changed", handler);
+  },
 
   // Expenses
   addExpense: (d) => ipcRenderer.invoke("expense:add", d),

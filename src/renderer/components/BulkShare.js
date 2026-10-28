@@ -91,21 +91,38 @@ const BulkShare = {
   },
 
   // items: [{ id, label, phone }]; prepare(item) -> { html, customerName, phone, message }
+  // Linked WhatsApp: one confirmation, then everything is sent automatically.
+  // Not linked: link by QR code, or send one by one the old way.
   start({ title, items, prepare }) {
     if (!items || items.length === 0) {
       Toast.warning("Nothing to send.");
       return;
     }
-    this.run = { title, items, prepare, idx: 0, stage: "intro", sent: [], skipped: [], busy: false, stopped: false };
+    this.run = { title, items, prepare, idx: 0, stage: "intro", sent: [], skipped: [], busy: false, stopped: false, stopRequested: false };
+    this._openModal();
+    this._render();
+  },
+
+  _openModal() {
+    const r = this.run;
     Modal.show({
-      title: this.esc(title),
+      title: this.esc(r.title),
       body: '<div id="bs-queue"></div>',
       size: "",
       onClose: () => {
-        if (this.run) this.run.stopped = true;
+        if (this.run) {
+          this.run.stopped = true;
+          this.run.stopRequested = true; // an automatic run stops after the message in progress
+        }
       },
     });
-    this._render();
+  },
+
+  // Messages go out 5-11 s apart with a rest every 20, so this is the honest time estimate.
+  _estimate(n) {
+    const seconds = Math.round(n * 9 + Math.floor(n / 20) * 60);
+    if (seconds < 90) return "about a minute";
+    return "about " + Math.round(seconds / 60) + " minutes";
   },
 
   _render() {
@@ -115,63 +132,146 @@ const BulkShare = {
     const total = r.items.length;
 
     if (r.stage === "intro") {
-      box.innerHTML = `
-        <p style="font-size:15px;margin-bottom:10px;"><strong>${total}</strong> ${total === 1 ? "entry" : "entries"} will be sent on WhatsApp, one by one.</p>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
-          For each one the PDF is made and copied, and the WhatsApp chat opens. Press <strong>Ctrl+V</strong>,
-          then <strong>Send</strong> in WhatsApp, then come back here and click <strong>Next</strong>.
-        </p>
-        <div style="display:flex;gap:8px;justify-content:flex-end;">
-          <button class="btn btn-secondary" onclick="BulkShare.stop()">Cancel</button>
-          <button class="btn btn-success" onclick="BulkShare.begin()">Start</button>
-        </div>`;
+      const linked = WhatsAppLink.isLinked();
+      box.innerHTML = linked
+        ? '<p style="font-size:15px;margin-bottom:10px;"><strong>' + total + "</strong> " + (total === 1 ? "message" : "messages") + " will be sent automatically on WhatsApp" +
+          (WhatsAppLink.status.phone ? " from +" + this.esc(WhatsAppLink.status.phone) : "") + ".</p>" +
+          '<p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">They go out a few seconds apart to keep your number safe, so this takes ' + this._estimate(total) +
+          ". Keep this window open until it says All done.</p>" +
+          '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">' +
+          '<button class="btn btn-secondary" onclick="BulkShare.stop()">Cancel</button>' +
+          '<button class="btn btn-secondary" onclick="BulkShare.begin()">Send one by one instead</button>' +
+          '<button class="btn btn-success" onclick="BulkShare.startAuto()">Send now</button></div>'
+        : '<p style="font-size:15px;margin-bottom:10px;"><strong>' + total + "</strong> " + (total === 1 ? "message" : "messages") + " to send.</p>" +
+          '<p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">Link your WhatsApp once by scanning a QR code, like WhatsApp Web, and everything sends automatically with no clicking.</p>' +
+          '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">' +
+          '<button class="btn btn-secondary" onclick="BulkShare.stop()">Cancel</button>' +
+          '<button class="btn btn-secondary" onclick="BulkShare.begin()">Send one by one instead</button>' +
+          '<button class="btn btn-success" onclick="BulkShare.link()">Link WhatsApp</button></div>';
+      return;
+    }
+
+    if (r.stage === "sending") {
+      const pct = Math.round(((r.idx) / total) * 100);
+      const item = r.items[Math.min(r.idx, total - 1)];
+      box.innerHTML =
+        '<div style="height:8px;background:var(--border-color);border-radius:4px;margin-bottom:14px;"><div style="height:8px;width:' + pct + '%;background:var(--success);border-radius:4px;"></div></div>' +
+        '<p style="font-size:13px;color:var(--text-muted);">Sending ' + (Math.min(r.idx + 1, total)) + " of " + total + "</p>" +
+        '<p style="font-size:18px;font-weight:700;margin:4px 0 8px;">' + this.esc(item.label) + "</p>" +
+        '<p style="font-size:13px;margin-bottom:16px;">Sent: <strong>' + r.sent.length + "</strong> &nbsp; Skipped: <strong>" + r.skipped.length + "</strong><br>" +
+        '<span style="color:var(--text-muted);">Keep this window open. You can keep it in the background.</span></p>' +
+        '<div style="display:flex;justify-content:flex-end;"><button class="btn btn-secondary" onclick="BulkShare.requestStop()" ' + (r.stopRequested ? "disabled" : "") + ">" +
+        (r.stopRequested ? "Stopping after this one..." : "Stop") + "</button></div>";
       return;
     }
 
     if (r.stage === "done") {
       const skippedHtml = r.skipped.length
-        ? `<p style="font-size:13px;margin-top:10px;"><strong>Skipped (${r.skipped.length}):</strong></p>
-           <ul style="font-size:13px;margin:4px 0 0 18px;max-height:180px;overflow:auto;">${r.skipped
-             .map((s) => `<li>${this.esc(s.label)} - ${this.esc(s.reason)}</li>`)
-             .join("")}</ul>`
+        ? '<p style="font-size:13px;margin-top:10px;"><strong>Not sent (' + r.skipped.length + "):</strong></p>" +
+          '<ul style="font-size:13px;margin:4px 0 0 18px;max-height:180px;overflow:auto;">' +
+          r.skipped.map((x) => "<li>" + this.esc(x.label) + " - " + this.esc(x.reason) + "</li>").join("") + "</ul>"
         : "";
-      box.innerHTML = `
-        <p style="font-size:16px;"><strong>${r.stopped ? "Stopped" : "All done"}.</strong> Opened ${r.sent.length} of ${total} chats.</p>
-        ${skippedHtml}
-        <div style="display:flex;justify-content:flex-end;margin-top:16px;">
-          <button class="btn btn-primary" onclick="BulkShare.stop()">Close</button>
-        </div>`;
+      const verb = r.mode === "auto" ? "Sent" : "Opened";
+      box.innerHTML =
+        '<p style="font-size:16px;"><strong>' + (r.stopped ? "Stopped" : "All done") + ".</strong> " + verb + " " + r.sent.length + " of " + total + (r.mode === "auto" ? " messages" : " chats") + ".</p>" +
+        skippedHtml +
+        '<div style="display:flex;justify-content:flex-end;margin-top:16px;"><button class="btn btn-primary" onclick="BulkShare.stop()">Close</button></div>';
       return;
     }
 
+    // Manual one-by-one mode
     const item = r.items[r.idx];
     const pct = Math.round((r.idx / total) * 100);
     const opened = r.stage === "opened";
-    box.innerHTML = `
-      <div style="height:6px;background:var(--border-color);border-radius:3px;margin-bottom:14px;">
-        <div style="height:6px;width:${pct}%;background:var(--primary);border-radius:3px;"></div>
-      </div>
-      <p style="font-size:13px;color:var(--text-muted);">${r.idx + 1} of ${total}</p>
-      <p style="font-size:18px;font-weight:700;margin:4px 0 12px;">${this.esc(item.label)}</p>
-      <p style="font-size:13px;margin-bottom:16px;">${
-        opened
-          ? "WhatsApp is open. Press <strong>Ctrl+V</strong>, then <strong>Send</strong>. When done, click Next."
-          : "Click <strong>Open WhatsApp</strong> to prepare this one."
-      }</p>
-      <div style="display:flex;gap:8px;justify-content:space-between;">
-        <button class="btn btn-secondary" onclick="BulkShare.finish()" ${r.busy ? "disabled" : ""}>Stop</button>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-secondary" onclick="BulkShare.skip('Skipped by you')" ${r.busy ? "disabled" : ""}>Skip</button>
-          ${
-            opened
-              ? '<button class="btn btn-primary" onclick="BulkShare.next()">Next</button>'
-              : `<button class="btn btn-success" onclick="BulkShare.open()" ${r.busy ? "disabled" : ""}>${r.busy ? "Preparing..." : "Open WhatsApp"}</button>`
-          }
-        </div>
-      </div>`;
+    box.innerHTML =
+      '<div style="height:6px;background:var(--border-color);border-radius:3px;margin-bottom:14px;"><div style="height:6px;width:' + pct + '%;background:var(--primary);border-radius:3px;"></div></div>' +
+      '<p style="font-size:13px;color:var(--text-muted);">' + (r.idx + 1) + " of " + total + "</p>" +
+      '<p style="font-size:18px;font-weight:700;margin:4px 0 12px;">' + this.esc(item.label) + "</p>" +
+      '<p style="font-size:13px;margin-bottom:16px;">' +
+      (opened ? "WhatsApp is open. Press <strong>Ctrl+V</strong>, then <strong>Send</strong>. When done, click Next." : "Click <strong>Open WhatsApp</strong> to prepare this one.") + "</p>" +
+      '<div style="display:flex;gap:8px;justify-content:space-between;">' +
+      '<button class="btn btn-secondary" onclick="BulkShare.finish()" ' + (r.busy ? "disabled" : "") + ">Stop</button>" +
+      '<div style="display:flex;gap:8px;">' +
+      '<button class="btn btn-secondary" onclick="BulkShare.skip(' + "'Skipped by you'" + ')" ' + (r.busy ? "disabled" : "") + ">Skip</button>" +
+      (opened
+        ? '<button class="btn btn-primary" onclick="BulkShare.next()">Next</button>'
+        : '<button class="btn btn-success" onclick="BulkShare.open()" ' + (r.busy ? "disabled" : "") + ">" + (r.busy ? "Preparing..." : "Open WhatsApp") + "</button>") +
+      "</div></div>";
   },
 
+  // ---- Link, then come back to this panel
+  link() {
+    WhatsAppLink.showLink(() => {
+      if (!this.run) return;
+      this._openModal();
+      this._render();
+    });
+  },
+
+  // ---- Automatic mode: one click, everything is sent
+  async startAuto() {
+    const r = this.run;
+    if (!r || r.stage === "sending") return;
+    r.mode = "auto";
+    r.stage = "sending";
+    let hardFails = 0;
+    this._render();
+
+    for (r.idx = 0; r.idx < r.items.length; r.idx++) {
+      if (r.stopRequested) break;
+      const item = r.items[r.idx];
+      this._render();
+      try {
+        const payload = await r.prepare(item);
+        if (!payload || !String(payload.phone || "").trim()) {
+          r.skipped.push({ label: item.label, reason: "No phone number" });
+          continue;
+        }
+        const res = await window.api.autoSendStatement(payload);
+        if (res.success) {
+          r.sent.push(item);
+          hardFails = 0;
+        } else if (res.code === "NOT_ON_WHATSAPP") {
+          r.skipped.push({ label: item.label, reason: "Not on WhatsApp" });
+        } else if (res.code === "INVALID_NUMBER") {
+          r.skipped.push({ label: item.label, reason: "Invalid phone number" });
+        } else if (res.code === "NOT_LINKED") {
+          r.skipped.push({ label: item.label, reason: "WhatsApp got disconnected" });
+          r.stopped = true;
+          r.idx += 1;
+          break; // nothing else can be sent until WhatsApp is linked again
+        } else {
+          r.skipped.push({ label: item.label, reason: res.error || "Could not send" });
+          hardFails += 1;
+          if (hardFails >= 3) { // three in a row: something is wrong, so stop instead of failing the rest
+            r.stopped = true;
+            r.idx += 1;
+            break;
+          }
+        }
+      } catch (err) {
+        r.skipped.push({ label: item.label, reason: err.message });
+        hardFails += 1;
+        if (hardFails >= 3) { r.stopped = true; r.idx += 1; break; }
+      }
+    }
+    if (r.stopRequested) r.stopped = true;
+    // Entries never reached are listed, so the owner knows who still needs a statement.
+    for (let i = r.idx; i < r.items.length; i++) r.skipped.push({ label: r.items[i].label, reason: "Not sent (stopped)" });
+    r.stage = "done";
+    this._render();
+  },
+
+  requestStop() {
+    if (this.run) {
+      this.run.stopRequested = true;
+      this._render();
+    }
+  },
+
+  // ---- Manual one-by-one mode (used when WhatsApp is not linked, or by choice)
   begin() {
+    this.run.mode = "manual";
     this.run.stage = "ready";
     this._render();
   },
@@ -226,7 +326,7 @@ const BulkShare = {
     this._render();
   },
 
-  // Stop early: show the summary.
+  // Stop early in manual mode: show the summary.
   finish() {
     const r = this.run;
     if (!r) return;

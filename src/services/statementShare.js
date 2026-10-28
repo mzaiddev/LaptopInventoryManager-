@@ -63,4 +63,16 @@ async function exportAndShare({ html, customerName, phone, message }) {
   return { pdfPath, clipboardOk, chat };
 }
 
-module.exports = { exportAndShare };
+// Automatic path: PDF -> the linked WhatsApp, no clicks. Throws errors that carry a .code.
+async function autoSend({ html, customerName, phone, message }) {
+  if (!html || typeof html !== "string") throw new Error("Nothing to export");
+  const link = require("./whatsappLink").getLink();
+  if (link.getStatus().state !== "linked") throw require("./whatsappLink").coded("NOT_LINKED", "WhatsApp is not linked. Link it first.");
+  const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const pdfPath = path.join(statementsDir(), `${safeFileName(customerName)}-${stamp}.pdf`);
+  await htmlToPdf(html, pdfPath);
+  await link.sendPdf({ phone, filePath: pdfPath, fileName: `${safeFileName(customerName)}.pdf`, caption: message });
+  return { pdfPath };
+}
+
+module.exports = { exportAndShare, autoSend };
