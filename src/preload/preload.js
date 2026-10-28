@@ -105,6 +105,18 @@ contextBridge.exposeInMainWorld("api", {
   deleteExpense: (id) => ipcRenderer.invoke("expense:delete", id),
   listExpenses: (f) => ipcRenderer.invoke("expense:list", f),
   expenseTotals: (f) => ipcRenderer.invoke("expense:totals", f),
+  listSuppliers: (f) => ipcRenderer.invoke("supplier:list", f),
+  getSupplier: (id) => ipcRenderer.invoke("supplier:get", id),
+  addSupplier: (d) => ipcRenderer.invoke("supplier:add", d),
+  updateSupplier: (id, d) => ipcRenderer.invoke("supplier:update", id, d),
+  deleteSupplier: (id) => ipcRenderer.invoke("supplier:delete", id),
+  supplierTotals: () => ipcRenderer.invoke("supplier:totals"),
+  supplierStatement: (id, f) => ipcRenderer.invoke("supplier:statement", id, f),
+  addSupplierPurchase: (d) => ipcRenderer.invoke("supplier:addPurchase", d),
+  addSupplierPayment: (d) => ipcRenderer.invoke("supplier:addPayment", d),
+  updateSupplierEntry: (id, d) => ipcRenderer.invoke("supplier:updateEntry", id, d),
+  deleteSupplierEntry: (id) => ipcRenderer.invoke("supplier:deleteEntry", id),
+  getCashBook: (f) => ipcRenderer.invoke("cashbook:get", f),
 
   // Auth
   authStatus: () => ipcRenderer.invoke("auth:status"),

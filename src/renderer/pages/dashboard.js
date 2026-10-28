@@ -139,6 +139,7 @@ const DashboardPage = {
           ${this.card("blue", I.sales, this.money(d.sales), "Sales", `${d.salesCount} sales`, "sales-history", "", "Your bills in this period, after discounts and returns.", "sales")}
           ${this.card("green", I.cash, this.money(d.received.total), "Received", `Cash ${this.money(d.received.cash)} · Bank ${this.money(d.received.bank)}`, "ledgers", "", "All money collected in this period, in cash or bank.", "received")}
           ${this.card("red", I.exp, this.money(d.expenses.total), "Expenses", `Cash ${this.money(d.expenses.cash)} · Bank ${this.money(d.expenses.bank)}`, "expenses", "", "Money you spent on the shop in this period.", "expenses")}
+          ${this.card("yellow", I.ret, this.money(d.supplierPaid.total), "Paid to Suppliers", `Cash ${this.money(d.supplierPaid.cash)} · Bank ${this.money(d.supplierPaid.bank)}`, "suppliers", "", "Money you paid to suppliers in this period. It is not an expense: the goods reach profit when you sell them.", "suppliers")}
           ${this.card("yellow", I.ret, this.money(d.returns.total), "Returns", `${d.returns.count} returns`, "returns", "", "Goods customers gave back. Already taken out of Sales.", "returns")}
           ${this.card("green", I.profit, this.money(d.netProfit), "Net Profit", d.netProfit === null ? "Click •••• and enter super-password" : "Sales − cost − expenses", "", profitColor, "What you really earned: Sales, minus the cost of the goods, minus expenses.", "profit")}
         </div>
@@ -149,6 +150,7 @@ const DashboardPage = {
           ${this.card("green", I.cash, this.money(d.cashInHand), "Cash in Hand", "All time", "", "", "Cash that should be in your drawer now.", "cash")}
           ${this.card("blue", I.bank, this.money(d.bankBalance), "Bank Balance", "All time", "", "", "Money that should be in your bank now.", "bank")}
           ${this.card("yellow", I.due, this.money(d.oldBalance.amount), "Old Balances", `${d.oldBalance.customers} customers`, "ledgers", "", "Money customers owed you before you started using this system. It is not part of Net Profit.", "old")}
+          ${this.card("red", I.due, this.money(d.payables.payable), "You Owe Suppliers", `${d.payables.suppliersOwed} suppliers${d.payables.advance ? " · Advance " + this.money(d.payables.advance) : ""}`, "suppliers", d.payables.payable > 0 ? "var(--danger)" : "", "What you still have to pay suppliers for goods bought on credit. It is not part of Net Profit.", "payable")}
           ${this.card("red", I.due, this.money(d.outstanding.amount), "Customers Owe You", `${d.outstanding.customersOwing} customers`, "ledgers", d.outstanding.amount > 0 ? "var(--danger)" : "", "What customers still have to pay you, including old balances.", "owe")}
         </div>
       </div>
@@ -216,10 +218,21 @@ const DashboardPage = {
       case "bank": {
         const c = key === "cash" ? x.cash : x.bank;
         title = key === "cash" ? "Cash in Hand" : "Bank Balance";
-        body = this.sumTable([["", key === "cash" ? "Opening cash (Settings)" : "Opening bank balance (Settings)", c.opening], ["+", key === "cash" ? "Cash received" : "Bank received", c.received], ["−", key === "cash" ? "Cash expenses" : "Bank expenses", c.expenses]], title, key === "cash" ? d.cashInHand : d.bankBalance) +
+        body = this.sumTable([["", key === "cash" ? "Opening cash (Settings)" : "Opening bank balance (Settings)", c.opening], ["+", key === "cash" ? "Cash received" : "Bank received", c.received], ["−", key === "cash" ? "Cash expenses" : "Bank expenses", c.expenses], ["−", "Paid to suppliers", c.suppliers]], title, key === "cash" ? d.cashInHand : d.bankBalance) +
           note("All time. If you paid money back to a customer, it is not recorded here.");
         break;
       }
+      case "suppliers":
+        title = "Paid to Suppliers";
+        body = this.sumTable([["", "Paid from cash", d.supplierPaid.cash], ["+", "Paid from bank", d.supplierPaid.bank]], "Paid to Suppliers", d.supplierPaid.total) +
+          note("This money left your Cash or Bank, but it is not an expense. The cost of the goods is counted in Net Profit when you sell them, so counting this payment too would count it twice.");
+        break;
+      case "payable":
+        title = "You Owe Suppliers";
+        body = this.sumTable([["", "Total owed to suppliers", d.payables.payable]], "You Owe Suppliers", d.payables.payable) +
+          (d.payables.advance ? this.sumTable([["", "Paid ahead to suppliers (advance)", d.payables.advance]], "For your information", d.payables.advance) : "") +
+          note("All time. Open the Suppliers page to see each supplier, add bills and pay them.");
+        break;
       case "old": {
         title = "Old Balances";
         body = this.sumTable([["", "Old balances recorded for customers", d.oldBalance.amount]], "Old Balances", d.oldBalance.amount) +

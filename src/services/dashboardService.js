@@ -1,6 +1,7 @@
 const { getDatabase } = require("../database/dbInit");
 const { roundMoney } = require("../utils/money");
 const expenseService = require("./expenseService");
+const supplierService = require("./supplierService");
 
 // Empty from/to means unbounded on that side.
 function between(col, from, to) {
@@ -29,6 +30,9 @@ class DashboardService {
       received,
       returns,
       expenses: { total: expenses.total, cash: expenses.cash, bank: expenses.bank },
+      // Paying a supplier moves cash/bank only. The goods reach profit through cost of goods sold.
+      supplierPaid: supplierService.paymentsBySource({ from, to }),
+      payables: supplierService.totals(),
       netProfit: costVisible ? roundMoney(sales.total - cogs - expenses.total) : null,
       ...this.getBalances(db),
       outstanding: this.getOutstanding(db),
@@ -54,6 +58,7 @@ class DashboardService {
 
     const paid = this._paymentsByMethod(db);
     const spent = expenseService.totals({});
+    const supp = supplierService.paymentsBySource({});
     const opening = (key) => roundMoney(Number(this.getSetting(key)) || 0);
 
     const l = db.prepare(`
@@ -74,8 +79,8 @@ class DashboardService {
       sales: { discounts: roundMoney(discounts), returns: returns.total },
       received: { onSales: roundMoney(onSales), onLedger: roundMoney(onLedger) },
       profit: costVisible ? { sales: sales.total, cogs, expenses: expenses.total } : null,
-      cash: { opening: opening("opening_cash"), received: paid.cash, expenses: spent.cash },
-      bank: { opening: opening("opening_bank"), received: paid.bank, expenses: spent.bank },
+      cash: { opening: opening("opening_cash"), received: paid.cash, expenses: spent.cash, suppliers: supp.cash },
+      bank: { opening: opening("opening_bank"), received: paid.bank, expenses: spent.bank, suppliers: supp.bank },
       owe,
     };
   }
@@ -133,11 +138,12 @@ class DashboardService {
   getBalances(db) {
     const paid = this._paymentsByMethod(db);
     const spent = expenseService.totals({});
+    const supp = supplierService.paymentsBySource({});
     // Money already in the drawer / bank when the shop started using the app (Settings).
     const opening = (key) => roundMoney(Number(this.getSetting(key)) || 0);
     return {
-      cashInHand: roundMoney(opening("opening_cash") + paid.cash - spent.cash),
-      bankBalance: roundMoney(opening("opening_bank") + paid.bank - spent.bank),
+      cashInHand: roundMoney(opening("opening_cash") + paid.cash - spent.cash - supp.cash),
+      bankBalance: roundMoney(opening("opening_bank") + paid.bank - spent.bank - supp.bank),
     };
   }
 

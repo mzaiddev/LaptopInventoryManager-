@@ -37,6 +37,10 @@ class IntegrityService {
       problems.push({ type: "negative_stock", id: p.id, detail: `${p.product_name} has negative stock` });
     });
 
+    const bal = require("./dashboardService").getBalances(db);
+    if (bal.cashInHand < -EPS) problems.push({ type: "cash_negative", id: null, detail: `Cash in hand is ${bal.cashInHand}. Check the opening cash in Settings and recent expenses or supplier payments.` });
+    if (bal.bankBalance < -EPS) problems.push({ type: "bank_negative", id: null, detail: `Bank balance is ${bal.bankBalance}. Check the opening bank balance in Settings and recent expenses or supplier payments.` });
+
     return { ok: problems.length === 0, problems };
   }
 }

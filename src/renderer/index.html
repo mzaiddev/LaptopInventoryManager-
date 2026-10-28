@@ -76,6 +76,18 @@
           </svg>
           <span>Expenses</span>
         </button>
+        <button class="nav-item" data-page="suppliers" onclick="App.navigate('suppliers')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+          </svg>
+          <span>Suppliers</span>
+        </button>
+        <button class="nav-item" data-page="cashbook" onclick="App.navigate('cashbook')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+          </svg>
+          <span>Cash &amp; Bank Book</span>
+        </button>
         <button class="nav-item" data-page="backup" onclick="App.navigate('backup')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
@@ -160,6 +172,8 @@
   <script src="pages/login.js"></script>
   <script src="pages/vendor.js"></script>
   <script src="pages/expenses.js"></script>
+  <script src="pages/suppliers.js"></script>
+  <script src="pages/cashBook.js"></script>
   <script src="pages/dashboard.js"></script>
   <script src="pages/inventory.js"></script>
   <script src="pages/backup.js"></script>

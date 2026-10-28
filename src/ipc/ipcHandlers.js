@@ -14,7 +14,9 @@ const fs = require("fs");
 function registerIpcHandlers() {
   const ipcMain = guardIpc(rawIpcMain, authService, (channel, args) => {
     const [action, entity] = AUDITED[channel];
-    auditService.log(action, entity, typeof args[0] === "number" ? args[0] : null);
+    // Money movements keep their details (amount, account) in the log; other channels may carry passwords, so they do not.
+    const detail = channel.startsWith("supplier:") ? args.find((a) => a && typeof a === "object") || null : null;
+    auditService.log(action, entity, typeof args[0] === "number" ? args[0] : null, detail);
   });
 
   ipcMain.handle("ledger:getEntries", async (event, filters) => {
@@ -76,6 +78,21 @@ function registerIpcHandlers() {
   ipcMain.handle("expense:delete", wrap((id) => expenseService.remove(id)));
   ipcMain.handle("expense:list", wrap((f) => expenseService.list(f)));
   ipcMain.handle("expense:totals", wrap((f) => expenseService.totals(f)));
+
+  const supplierService = require("../services/supplierService");
+  const cashBookService = require("../services/cashBookService");
+  ipcMain.handle("supplier:list", wrap((f) => supplierService.list(f || {})));
+  ipcMain.handle("supplier:get", wrap((id) => supplierService.get(id)));
+  ipcMain.handle("supplier:add", wrap((d) => supplierService.add(d)));
+  ipcMain.handle("supplier:update", wrap((id, d) => supplierService.update(id, d)));
+  ipcMain.handle("supplier:delete", requireSuper(authService, wrap((id) => supplierService.remove(id))));
+  ipcMain.handle("supplier:totals", wrap(() => supplierService.totals()));
+  ipcMain.handle("supplier:statement", wrap((id, f) => supplierService.statement(id, f || {})));
+  ipcMain.handle("supplier:addPurchase", wrap((d) => supplierService.addPurchase(d)));
+  ipcMain.handle("supplier:addPayment", wrap((d) => supplierService.addPayment(d)));
+  ipcMain.handle("supplier:updateEntry", requireSuper(authService, wrap((id, d) => supplierService.updateEntry(id, d))));
+  ipcMain.handle("supplier:deleteEntry", requireSuper(authService, wrap((id) => supplierService.removeEntry(id))));
+  ipcMain.handle("cashbook:get", wrap((f) => cashBookService.get(f || {})));
 
   ipcMain.handle("statement:share", async (event, payload) => {
     try {

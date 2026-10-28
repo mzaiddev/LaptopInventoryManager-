@@ -44,7 +44,10 @@ test("type filter and text search (customer name or description)", () => {
   seed();
   assert.ok(ledger.getLedgerEntries({ reference_type: "Payment" }).rows.every((x) => x.reference_type === "Payment"));
   assert.ok(ledger.getLedgerEntries({ search: "Bob" }).rows.every((x) => x.customer_name === "Bob Laptops"));
-  assert.ok(ledger.getLedgerEntries({ search: "SALE-20261024" }).total >= 1);
+  // Sale references carry the day they were created (local time), not the sale date.
+  const d = new Date();
+  const today = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+  assert.ok(ledger.getLedgerEntries({ search: `SALE-${today}` }).total >= 1);
   assert.strictEqual(ledger.getLedgerEntries({ search: "nobody-at-all" }).total, 0);
 });
 

@@ -111,6 +111,12 @@ const App = {
         case "expenses":
           await ExpensesPage.load();
           break;
+        case "suppliers":
+          await SuppliersPage.load();
+          break;
+        case "cashbook":
+          await CashBookPage.load();
+          break;
         case "backup":
           await BackupPage.load();
           break;
@@ -146,6 +152,12 @@ const App = {
         break;
       case "expenses":
         await ExpensesPage.refresh();
+        break;
+      case "suppliers":
+        await SuppliersPage.refresh();
+        break;
+      case "cashbook":
+        await CashBookPage.load();
         break;
       case "backup":
         await BackupPage.refresh();
