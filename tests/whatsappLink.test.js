@@ -79,6 +79,32 @@ test("a QR code is shown as an image, then linking shows the phone number", asyn
   assert.deepStrictEqual(seen.slice(0, 2), ["connecting", "qr"]);
 });
 
+test("rapid connect clicks share one connection attempt", async () => {
+  const baileys = fakeBaileys();
+  let release;
+  let loads = 0;
+  const t = make({ deps: { loadBaileys: () => {
+    loads += 1;
+    return new Promise((resolve) => { release = () => resolve(baileys); });
+  } } });
+
+  const first = t.link.connect();
+  const second = t.link.connect();
+  await settle();
+  assert.strictEqual(loads, 1);
+  release();
+  await Promise.all([first, second]);
+  assert.strictEqual(baileys.socks.length, 1);
+});
+
+test("reconnect while linked keeps the current WhatsApp session", async () => {
+  const t = await linked();
+  const sock = t.link.sock;
+  await t.link.reconnect();
+  assert.strictEqual(t.link.sock, sock);
+  assert.strictEqual(t.baileys.socks.length, 1);
+});
+
 test("right after the scan WhatsApp asks for a restart and the app reconnects by itself", async () => {
   const t = make();
   await t.link.connect();

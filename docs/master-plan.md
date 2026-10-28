@@ -61,7 +61,7 @@ Electron + SQLite, Windows, one owner, offline. English/Urdu.
 | Collections | No due dates, ageing, promised-payment date or reminders |
 | Stock | No low-stock level, no import/export, no barcode, no warranty expiry, no serial lookup, no photos, no stock count, no bulk edit |
 | Reports | No Excel export, no daily closing, no profit by product/customer, no top lists |
-| Team | One owner login only; no roles; no day lock; no recycle bin |
+| Team | One owner login only; no staff roles or day lock |
 | Platform | No setup wizard, no global search, no auto-update (version 1.0.0), no health page |
 | Technical | `better-sqlite3` is synchronous in the main process; a big import in one go freezes the window |
 
@@ -164,9 +164,9 @@ So the same program can be sold to a mobile shop, general store, electronics sho
 - Bell in the top bar with a count; items: backup overdue, customers overdue, low stock, negative cash/bank, task finished, WhatsApp disconnected, licence ending, update available. Each opens the filtered screen.
 - **System health page:** last backup (local and cloud), database size, integrity check, WhatsApp link, free disk space, app version, last error. One-click "Create support report" (logs + health, no customer data) for the vendor.
 
-### F6 — Control layer: roles, undo, day lock  (L)
+### F6 — Control layer: undo and day lock (roles deferred)  (L)
 
-- Roles: **Owner**, **Manager**, **Cashier**. Cashier can sell and take payments; cannot see cost, cash/bank, profit, backups, settings. Discount limit per role.
+- Keep the existing **Owner-only** login for the current offline, single-PC product. Staff roles are deferred unless the product scope changes.
 - **Undo and Recycle bin:** deleted sales, payments, products and customers go to a bin for 30 days with restore; "Undo" toast for 10 seconds.
 - **Day close and lock:** close the day after counting the drawer; entries before the lock date cannot be edited without the owner's super-password; every override is audited.
 - Audit log filter by user, date and action.
@@ -198,7 +198,7 @@ One branded look (logo, colours, footer, optional tax number) for: invoice, rece
 
 | ID | Feature | Detail | Size |
 |---|---|---|---|
-| A1 | **Google Drive backup** | One-time Google sign-in in the browser (loopback + PKCE). Scope `drive.file`: the app sees only files it created. Upload runs as a `cloud` task after each backup and daily. Keep last N in a "Backups" Drive folder. Refresh token stored with Electron `safeStorage`. Uses plain `fetch` to Google's REST API, so no heavy SDK. Failed upload retries automatically next time; status shown on the Backup page and bell | L |
+| A1 | **Owner-connected Google Drive backup** | Owner signs in to their own Google account from Settings (installed-app OAuth; narrow `drive.file` scope). Upload runs as a `cloud` task after each successful local backup and daily while online. If offline, retain pending status and retry after reconnect. Keep last N in an app-owned "Backups" folder. Protect refresh token with Electron `safeStorage`. Status and disconnect/reconnect actions appear on Backup page and bell | L |
 | A2 | Second location | Copy each backup to USB / network folder / OneDrive-Dropbox folder in addition to the default | S |
 | A3 | Backup status | "Last backup: today 10:32 (local), yesterday (Google Drive)" on dashboard, Backup page and health page; warning after 2 days | S |
 | A4 | Restore from cloud | List Drive backups, pick one, download as task, verify (existing `verify()`), safety copy, restore | M |
@@ -206,7 +206,7 @@ One branded look (logo, colours, footer, optional tax number) for: invoice, rece
 | A6 | Show auto-backups | Backup page lists the daily auto files too, with restore | S |
 | A7 | Other clouds | OneDrive/Dropbox with the same interface — only if clients ask | M each |
 
-Notes: `drive.file` is the narrow scope and should not need Google's security review; confirm when the Google Cloud project is created. The vendor owns one Google Cloud project and ships one client ID (owner decision, section 9). Zero-code workaround today: set the Backup Folder to a Google Drive for Desktop folder.
+Notes: Use the narrowest suitable Drive scope and verify Google's current consent requirements during implementation. The owner connects their own account; no shop backup should be stored in a shared vendor Drive. The OAuth client owner/configuration and recovery support still need a delivery decision. Zero-code fallback: set the Backup Folder to a Google Drive for Desktop folder.
 
 ### B. Customers and collections
 
@@ -267,7 +267,7 @@ Notes: `drive.file` is the narrow scope and should not need Google's security re
 | F-1 | **Expense categories managed** (from F3), recurring expenses (rent, salaries suggested each month), receipt photo | M |
 | F-2 | Payment accounts: split cash book by account (Meezan, EasyPaisa, JazzCash) | M |
 | F-3 | **Daily closing:** expected cash vs counted, difference recorded, ties to day lock (F6) | M |
-| F-4 | Return refunds: record refund as cash/bank out so the drawer matches (open question 3 in `SPEC.md`) | M |
+| F-4 | Return adjustment: reduce the original sale and the customer's receivable; no cash/bank payout workflow. Carry forward any return amount beyond outstanding due as customer credit, with clear statement display | M |
 | F-5 | Opening balances wizard (cash, bank, customers, suppliers, stock) | M |
 
 ### G. Reports and analytics
@@ -296,7 +296,7 @@ Notes: `drive.file` is the narrow scope and should not need Google's security re
 
 ### J. Team and security
 
-- J1 Roles and permissions (F6) · J2 Auto-lock after idle · J3 Owner password reset via vendor console · J4 Audit log filters · J5 Hide cash/bank and profit behind super-password (done today for cash/bank cards; extend to Cash Book page and reports)
+- J2 Auto-lock after idle · J3 Owner password reset via vendor console · J4 Audit log filters · J5 Hide cash/bank and profit behind super-password (done today for cash/bank cards; extend to Cash Book page and reports). Staff roles are deferred; owner remains the sole role.
 
 ### K. Platform and ease of use
 
@@ -330,7 +330,7 @@ Owner phone view (read-only dashboard) · multi-PC or branch sync · online paym
 | 6 | Inventory pro | D4–D12, E1–E4 | 2, 3 | L |
 | 7 | Closing and reports | F-1 to F-5, G1–G5, F8 documents | 2 | L |
 | 8 | Sales speed and documents | C1–C7, B8 cheques, B9 instalments | 5, 7 | L |
-| 9 | Team and control | F6, J1–J4 | 0 | L |
+| 9 | Owner controls | F6, J2–J5 | 0 | M |
 | 10 | Dealer modules | I1–I3, H3–H5 | 5, 6 | L |
 | 11 | Platform polish | K1–K10 | all | L |
 | 12 | Later | section L | — | — |
@@ -354,7 +354,7 @@ New tables (each added by a numbered migration with the automatic pre-migration 
 | `product_photos` | 6 | Photo file names |
 | `payment_promises`, `cheques`, `instalments` | 5, 8 | Collections |
 | `templates` | 5 | Message templates |
-| `roles`, `users.role`, `day_locks`, `recycle_bin` | 9 | Control layer |
+| `day_locks`, `recycle_bin` | 9 | Owner control layer; no staff roles |
 | `service_jobs`, `trade_ins` | 10 | Dealer modules |
 | `scheduled_tasks` | 10 | Scheduled messages |
 
@@ -369,7 +369,7 @@ Changes to existing tables: `products.category/unit/min_stock/warranty_months`, 
 | Freezing the window during imports (synchronous SQLite) | Chunked transactions with yields, worker thread if needed; test with a 5,000-row import |
 | Table rebuild migration for relaxed `CHECK`s | One migration, pre-migration backup, tested on a copy with the sample data |
 | WhatsApp number restriction | Keep pacing and caps, warn the client, keep manual fallback |
-| Google Cloud project and client ID ownership | Owner decision; document the setup; fall back to Drive-for-Desktop folder |
+| Google OAuth consent and account recovery | Owner connects their own Drive account; document who owns/configures OAuth client, how revoked consent is recovered, and offer a local folder fallback |
 | Lost backup password (A5) | Optional, clear warning, never stored |
 | Scope growth | Each phase is its own spec; nothing starts without an approved spec |
 | New dependencies (Excel library, Google SDK) | CSV first; plain `fetch` for Google; ask before adding any package |
@@ -378,14 +378,14 @@ Changes to existing tables: `products.category/unit/min_stock/warranty_months`, 
 
 ## 9. Decisions needed from you
 
-1. **Order:** accept phases 0 → 1 → 2 → 3 → 4, or move Drive backup earlier?
-2. **Google Drive:** will you create one Google Cloud project and ship one client ID, or should each shop use its own Drive-for-Desktop folder?
-3. **Excel:** is a CSV-only import acceptable first (opens in Excel), or do clients need real `.xlsx` files from day one (adds one dependency)?
+1. **Order:** follow the roadmap's staged order; Phase 0 and catalog/bulk foundations precede broad expansion.
+2. **Google Drive:** owner connects their own account in the app; the app uploads database backups to that owner's Drive automatically when online. No shared vendor Drive.
+3. **Import:** support spreadsheet-based workflows; decide CSV-first vs `.xlsx` based on client need. Both require preview, validation, duplicate policy, and errors output.
 4. **Business types:** which presets should ship first besides laptop dealer (mobile shop, general store, others)?
 5. **Payment accounts:** keep Cash/Bank as the base and add account names (recommended), or fully free account types (bigger rebuild)?
-6. **Staff:** do clients have cashiers? (decides how early phase 9 comes.)
-7. **Returns and cash:** should a refund leave the cash drawer?
-8. **WhatsApp:** automatic sending by default with a warning, or manual by default?
+6. **Staff:** one Owner role only for current offline single-PC scope; staff roles are deferred.
+7. **Returns and cash:** returns reduce sale/customer receivable; no cash payout feature. Define carry-forward customer credit when return value exceeds outstanding due.
+8. **WhatsApp:** the owner starts each sending task and confirms recipients/content; unattended scheduled campaigns are deferred.
 9. **Credit-balance customers** (shop owes them): shown in the default customer report? (this plan: yes)
 10. **Tax:** do clients need a tax number/summary on invoices?
 

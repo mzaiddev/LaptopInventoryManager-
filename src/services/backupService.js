@@ -6,6 +6,22 @@ const backupFiles = require('./backupFiles');
 const settingsService = require('./settingsService');
 
 class BackupService {
+  queueDriveBackup(backupPath) {
+    const drive = require('./googleDriveService').getGoogleDriveService();
+    if (!drive.status().connected) return null;
+    const task = require('./taskService').getTaskService().enqueue({
+      kind: 'drive.upload', lane: 'cloud', title: `Upload backup: ${path.basename(backupPath)}`,
+      items: [{ key: path.basename(backupPath), label: path.basename(backupPath), payload: { filePath: backupPath } }],
+    });
+    return { taskId: task.id, status: task.status };
+  }
+
+  async connectDrive() {
+    const result = await require('./googleDriveService').getGoogleDriveService().connect();
+    const filePath = this.runAutoBackup({ upload: false });
+    const task = filePath ? this.queueDriveBackup(filePath) : null;
+    return { ...result, task };
+  }
   // Settings > Backup Folder wins when set and usable; otherwise the default folder.
   resolveBackupDir() {
     const custom = (settingsService.getSetting('backup_folder') || '').trim();
@@ -36,6 +52,8 @@ class BackupService {
 
     try {
       await db.backup(backupPath);
+      const verification = backupFiles.verify(backupPath);
+      if (!verification.ok) throw new Error(`Backup verification failed: ${verification.error}`);
       const stats = fs.statSync(backupPath);
 
       const stmt = db.prepare(
@@ -43,16 +61,19 @@ class BackupService {
       );
       stmt.run(filename, backupPath, stats.size);
 
-      return { success: true, filename, filepath: backupPath, fileSize: stats.size };
+      const cloud = this.queueDriveBackup(backupPath);
+      return { success: true, filename, filepath: backupPath, fileSize: stats.size, cloud };
     } catch (err) {
       throw new Error(`Backup failed: ${err.message}`);
     }
   }
 
   // Daily file refreshed at start-up and on exit; the shop never depends on remembering to back up.
-  runAutoBackup() {
+  runAutoBackup({ upload = true } = {}) {
     try {
-      return backupFiles.autoBackup(getDatabase(), path.join(this.resolveBackupDir(), 'auto'));
+      const filePath = backupFiles.autoBackup(getDatabase(), path.join(this.resolveBackupDir(), 'auto'));
+      if (upload) this.queueDriveBackup(filePath);
+      return filePath;
     } catch (err) {
       console.error('Automatic backup failed:', err.message);
       return null;
@@ -80,7 +101,26 @@ class BackupService {
     const db = getDatabase();
     return db.prepare(
       'SELECT * FROM backup_history ORDER BY created_at DESC LIMIT 50'
-    ).all();
+    ).all().map((backup) => {
+      const check = backupFiles.verify(backup.filepath);
+      return { ...backup, verified: check.ok, verification_error: check.error || '' };
+    });
+  }
+
+  getAutomaticBackups() {
+    const dir = path.join(this.resolveBackupDir(), 'auto');
+    if (!fs.existsSync(dir)) return [];
+    return fs.readdirSync(dir).filter((name) => /^auto-\d{4}-\d{2}-\d{2}\.db$/.test(name)).sort().reverse().map((filename) => {
+      const filepath = path.join(dir, filename);
+      const stats = fs.statSync(filepath);
+      const verification = backupFiles.verify(filepath);
+      return { filename, file_size: stats.size, modified_at: stats.mtime.toISOString(), verified: verification.ok, error: verification.error || '' };
+    });
+  }
+
+  restoreAutomaticBackup(filename) {
+    if (!/^auto-\d{4}-\d{2}-\d{2}\.db$/.test(String(filename || ''))) throw new Error('Invalid automatic backup name.');
+    return this.restoreBackup(path.join(this.resolveBackupDir(), 'auto', filename));
   }
 
   deleteBackup(backupId) {

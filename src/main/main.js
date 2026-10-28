@@ -110,10 +110,11 @@ app.whenReady().then(() => {
   if (!gotLock) return;
 
   // Initialize database
+  let startupBackupPath = null;
   try {
     initDatabase();
     require('../services/authService').seedDefaultOwner();
-    require('../services/backupService').runAutoBackup();
+    startupBackupPath = require('../services/backupService').runAutoBackup({ upload: false });
     console.log('Database initialized successfully.');
   } catch (err) {
     console.error('Failed to initialize database:', err);
@@ -125,6 +126,15 @@ app.whenReady().then(() => {
 
   // Register IPC handlers
   registerIpcHandlers();
+
+  // Task Center is ready first so the verified daily backup can safely enter its queue.
+  if (startupBackupPath) require('../services/backupService').queueDriveBackup(startupBackupPath);
+  const { net } = require('electron');
+  const taskService = require('../services/taskService').getTaskService();
+  const cloudRetry = setInterval(() => {
+    try { if (net.isOnline()) taskService.retryFailedCloudUploads(); } catch (err) { console.error('Cloud backup retry check failed:', err.message); }
+  }, 30000);
+  if (cloudRetry.unref) cloudRetry.unref();
 
   // Create menu and window
   createMenu();
@@ -138,7 +148,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  require('../services/backupService').runAutoBackup();
+  require('../services/backupService').runAutoBackup({ upload: false });
   closeDatabase();
   if (process.platform !== 'darwin') {
     app.quit();

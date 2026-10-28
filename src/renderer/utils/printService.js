@@ -66,6 +66,8 @@ const PrintService = {
 
   buildSelectionDialog(options, company) {
     const { data, columns, filters } = options;
+    const filterField = filters?.field || 'category';
+    const defaultFilter = filters?.defaultFilter || null;
 
     // Build print options section (for sales printing)
     let printOptionsSection = "";
@@ -85,7 +87,7 @@ const PrintService = {
               .map((c) => {
                 const count = data.filter(
                   (row) =>
-                    (row.category || "").toLowerCase() === c.toLowerCase(),
+                  String(row[filterField] || "").toLowerCase() === c.toLowerCase(),
                 ).length;
                 return `<option value="${this.escapeHtml(c)}">${this.escapeHtml(c)} (${count} items)</option>`;
               })
@@ -97,7 +99,7 @@ const PrintService = {
               .map((c) => {
                 const count = data.filter(
                   (row) =>
-                    (row.category || "").toLowerCase() === c.toLowerCase(),
+                  String(row[filterField] || "").toLowerCase() === c.toLowerCase(),
                 ).length;
                 return `<button class="chip" data-category="${this.escapeHtml(c)}" onclick="PrintService.filterByCategory(this, '${this.escapeJsString(c)}')">${this.escapeHtml(c)} (${count})</button>`;
               })
@@ -120,6 +122,7 @@ const PrintService = {
           <input type="checkbox" id="print-select-all" checked onchange="PrintService.toggleSelectAll(event)">
           <strong>Select All</strong>
         </label>
+        ${defaultFilter ? `<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;cursor:pointer;"><input type="checkbox" id="print-include-settled" onchange="PrintService.toggleDefaultFilter(this.checked)"><strong>${this.escapeHtml(defaultFilter.includeLabel || 'Include rows outside the default filter')}</strong></label>` : ''}
         <span style="font-size:12px;color:#64748b;" id="print-selected-count">Selected: ${data.length}/${data.length}</span>
       </div>
     `;
@@ -134,6 +137,8 @@ const PrintService = {
 
     const tableBody = data
       .map((row, idx) => {
+        const fieldValue = Number(row[defaultFilter?.field]);
+        const defaultMatch = !defaultFilter || (defaultFilter.operator === 'gt' ? fieldValue > Number(defaultFilter.value) : String(row[defaultFilter.field]) === String(defaultFilter.value));
         const cells = columns
           .map((col) => {
             let value = row[col.field];
@@ -173,7 +178,7 @@ const PrintService = {
           .join("");
 
         return `
-        <tr data-row-idx="${idx}" data-category="${this.escapeHtml(row.category || "")}">
+        <tr data-row-idx="${idx}" data-category="${this.escapeHtml(row[filterField] || "")}" data-default-match="${defaultMatch}" style="${defaultMatch ? '' : 'display:none;'}">
           <td style="width:36px;text-align:center;">
             <input type="checkbox" class="print-row-checkbox" checked onchange="PrintService.updateSelectionCount()">
           </td>
@@ -224,6 +229,7 @@ const PrintService = {
   },
 
   initDialogEvents(options) {
+    this._includeSettled = false;
     this.updateSelectionCount();
   },
 
@@ -238,8 +244,7 @@ const PrintService = {
     const select = document.getElementById("print-category-select");
     if (select) select.value = category;
 
-    // Filter rows
-    this.applyCategoryFilter(category);
+    this.applyFilters();
   },
 
   filterByCategorySelect(category) {
@@ -248,54 +253,38 @@ const PrintService = {
       chip.classList.toggle("active", chip.dataset.category === category);
     });
 
-    // Filter rows
-    this.applyCategoryFilter(category);
+    this.applyFilters();
   },
 
   applyCategoryFilter(category) {
-    document
-      .querySelectorAll(".print-selection-table tbody tr")
-      .forEach((row) => {
-        if (!category) {
-          row.style.display = "";
-        } else {
-          const rowCat = row.dataset.category || "";
-          row.style.display =
-            rowCat.toLowerCase() === category.toLowerCase() ? "" : "none";
-        }
-      });
+    const select = document.getElementById('print-category-select');
+    if (select) select.value = category;
+    document.querySelectorAll('.print-category-chips .chip').forEach((chip) => chip.classList.toggle('active', chip.dataset.category === category));
+    this.applyFilters();
+  },
+
+  toggleDefaultFilter(includeAll) {
+    this._includeSettled = !!includeAll;
+    this.applyFilters();
+  },
+
+  applyFilters() {
+    const activeChip = document.querySelector('.print-category-chips .chip.active');
+    const category = activeChip?.dataset.category || '';
+    const search = (document.getElementById('print-search-input')?.value || '').toLowerCase().trim();
+    const showAll = this._includeSettled || !this._currentPrintOptions?.filters?.defaultFilter;
+    document.querySelectorAll('.print-selection-table tbody tr').forEach((row) => {
+      const rowCategory = row.dataset.category || '';
+      const categoryMatch = !category || rowCategory.toLowerCase() === category.toLowerCase();
+      const defaultMatch = showAll || row.dataset.defaultMatch !== 'false';
+      const searchMatch = !search || row.textContent.toLowerCase().includes(search);
+      row.style.display = categoryMatch && defaultMatch && searchMatch ? '' : 'none';
+    });
     this.updateSelectionCount();
   },
 
   filterRows() {
-    const search = (document.getElementById("print-search-input")?.value || "")
-      .toLowerCase()
-      .trim();
-    document
-      .querySelectorAll(".print-selection-table tbody tr")
-      .forEach((row) => {
-        if (!search) {
-          // Check if this row matches the current category filter
-          const activeChip = document.querySelector(
-            ".print-category-chips .chip.active",
-          );
-          if (activeChip) {
-            const category = activeChip.dataset.category || "";
-            const rowCat = row.dataset.category || "";
-            row.style.display = category
-              ? rowCat.toLowerCase() === category.toLowerCase()
-                ? ""
-                : "none"
-              : "";
-          } else {
-            row.style.display = "";
-          }
-          return;
-        }
-        const text = row.textContent.toLowerCase();
-        row.style.display = text.includes(search) ? "" : "none";
-      });
-    this.updateSelectionCount();
+    this.applyFilters();
   },
 
   toggleSelectAll(evt) {
@@ -440,7 +429,8 @@ const PrintService = {
   },
 
   async generatePrintHtml(title, data, options, company, printOpts = {}) {
-    const { columns, landscape, subtitle, summaryItems } = options;
+    const { columns, landscape, subtitle } = options;
+    const summaryItems = typeof options.getSummaryItems === 'function' ? options.getSummaryItems(data) : options.summaryItems;
     const dateStr = new Date().toLocaleDateString();
     const timeStr = new Date().toLocaleTimeString();
     const orientation = landscape ? "landscape" : "portrait";

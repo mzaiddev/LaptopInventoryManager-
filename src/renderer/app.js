@@ -67,6 +67,7 @@ const App = {
 
     await this.syncCostVisibility();
     try { await WhatsAppLink.init(); } catch (e) { /* sending falls back to the manual way */ }
+    try { await TaskCenter.init(); } catch (e) { /* task actions remain available on demand */ }
 
     // Navigate to dashboard
     this.navigate("dashboard");
@@ -222,6 +223,10 @@ const App = {
       },
       emptyMessage: "No products found.",
       actions: (row) => this.getRowActions(row),
+      selection: {
+        getSelected: () => InventoryPage.selectedProducts,
+        onChange: (id, checked) => InventoryPage.setProductSelected(id, checked),
+      },
     });
     window.tableRef = this.table;
   },

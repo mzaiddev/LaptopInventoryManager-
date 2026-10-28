@@ -218,17 +218,32 @@ Dashboard data source rules:
 
 ## 7. UI/UX Standards
 
-The implementation must follow:
+Use the user-provided store-admin screenshot as the visual reference for a more polished and attractive system. Adapt its layout patterns to this inventory app; do not copy unrelated storefront or marketing modules. Keep extending the existing app rather than replacing its architecture.
 
-- current app design style
-- professional modern look
-- responsive layout
-- clean spacing and hierarchy
+The interface should use:
+
+- clear persistent side navigation and a useful top bar with global search, notifications, and owner context
+- strong page title/description and clear primary actions
+- compact, meaningful summary cards, clean search and filters, readable tables, and helpful status badges
+- contextual bulk-action bar when rows are selected, showing selected count and only actions valid for that module
+- consistent spacing, typography, icons, colors, dialogs, and interaction states across pages
+- responsive layout at common laptop window sizes
 - loading states
 - empty states
 - clear actions and buttons
 - reusable components
 - enterprise-grade visual consistency
+
+### Themes and languages
+
+- Provide polished **Light** and **Dark** themes across all pages, dialogs, tables, charts, task indicators, and notifications; persist the owner's choice across restarts.
+- Provide **English** and **Urdu** throughout the UI; persist the owner's choice across restarts.
+- Urdu uses right-to-left layout, with sensible mirroring of navigation and controls. Keep phone numbers, currency values, serial numbers, invoice references, and other mixed-direction values legible.
+- Theme/language changes must not discard an open form, current search/filter, or selected rows.
+- Maintain readable contrast and visible keyboard focus; never communicate stock/payment/task state by color alone.
+- Add Urdu strings for every new UI label and check print/PDF RTL layout for any document changed by the work.
+
+The app already contains light/dark and English/Urdu/RTL support. Treat this as a consistency and quality requirement across upgraded workflows, not as a request to remove or replace existing preference handling.
 
 ---
 
@@ -247,6 +262,8 @@ After implementation, verify:
 - returns update stock correctly
 - ledger outstanding balances are correct
 - reports export properly
+- the dashboard and inventory screens follow the supplied visual direction in Light and Dark themes
+- English and Urdu work across updated pages; Urdu uses RTL without clipping table actions or numeric identifiers
 - no existing features are broken
 
 ---

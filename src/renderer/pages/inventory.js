@@ -29,6 +29,7 @@ const InventoryPage = {
     page: 1,
     limit: 50,
   },
+  selectedProducts: new Map(),
 
   async load() {
     const content = document.getElementById("page-content");
@@ -58,6 +59,7 @@ const InventoryPage = {
             </svg>
             Add Product
           </button>
+          <button class="btn btn-secondary" onclick="InventoryPage.openImportDialog()">Import CSV</button>
           <button class="btn btn-danger" onclick="InventoryPage.showRecordDamage()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
               <line x1="18" y1="6" x2="6" y2="18"/><circle cx="12" cy="12" r="10"/>
@@ -131,6 +133,7 @@ const InventoryPage = {
             <div id="category-list" class="category-list" style="margin:12px 0;display:flex;gap:8px;flex-wrap:wrap;">
               <!-- category chips will be injected here -->
             </div>
+            <div id="inventory-bulk-bar" class="selection-action-bar" style="display:none;"></div>
             <div id="inventory-table-container"><div class="loading"><div class="spinner"></div></div></div>
             <div id="inventory-pagination"></div>
           </div>
@@ -310,6 +313,10 @@ const InventoryPage = {
 
       const data = result.data;
 
+      data.products.forEach((product) => {
+        if (this.selectedProducts.has(String(product.id))) this.selectedProducts.set(String(product.id), product);
+      });
+
       // Ensure table exists
       if (!App.table) {
         App.setupInventoryTable();
@@ -319,6 +326,7 @@ const InventoryPage = {
       }
 
       App.table.render(data.products);
+      this.renderBulkBar();
       App.pagination.update(data.total, data.page, data.totalPages);
 
       // Update products tab count
@@ -327,6 +335,204 @@ const InventoryPage = {
     } catch (err) {
       container.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${err.message}</p></div>`;
     }
+  },
+
+  setProductSelected(id, checked) {
+    const key = String(id);
+    if (checked) {
+      const row = (App.table && App.table.rows || []).find((p) => String(p.id) === key);
+      if (row) this.selectedProducts.set(key, row);
+    } else this.selectedProducts.delete(key);
+    this.renderBulkBar();
+  },
+
+  renderBulkBar() {
+    const bar = document.getElementById('inventory-bulk-bar');
+    if (!bar) return;
+    const count = this.selectedProducts.size;
+    bar.style.display = count ? 'flex' : 'none';
+    bar.innerHTML = count ? `
+      <strong>${count} selected</strong>
+      <span class="selection-action-hint">Selection is kept when you change pages.</span>
+      <button class="btn btn-secondary btn-sm" onclick="InventoryPage.openBulkEdit()">Edit selected</button>
+      <button class="btn btn-secondary btn-sm" onclick="InventoryPage.clearSelection()">Clear</button>` : '';
+  },
+
+  clearSelection() {
+    this.selectedProducts.clear();
+    this.renderBulkBar();
+    if (App.table && App.currentPage === 'inventory') App.table.render(App.table.rows);
+  },
+
+  downloadImportTemplate() {
+    const csv = 'product_name,category,model,serial_number,supplier,purchase_price,selling_price,quantity,purchase_date,warranty,storage_location,condition,notes\r\nExample Laptop,Laptop,ThinkPad T14,SN-001,Example Supplier,500,650,1,2026-10-28,12 months,Main shelf,Good,Optional note\r\n';
+    const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a'); link.href = url; link.download = 'product-import-template.csv'; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
+
+  openImportDialog() {
+    this._importRows = null;
+    Modal.show({
+      title: 'Import products from CSV', size: 'lg',
+      body: `<p>Use the template to match the expected columns. Import creates new products and never overwrites existing stock. Duplicate serial numbers are reported as failed task items.</p>
+        <button class="btn btn-secondary btn-sm" onclick="InventoryPage.downloadImportTemplate()">Download CSV template</button>
+        <div class="form-group" style="margin-top:14px;"><label>CSV file</label><input class="form-control" id="product-import-file" type="file" accept=".csv,text/csv"></div>
+        <div id="product-import-preview" class="bulk-edit-preview">Choose a CSV file to validate and preview rows.</div>`,
+      footer: `<button class="btn btn-secondary" onclick="Modal.close()">Cancel</button><button class="btn btn-primary" id="product-import-submit" disabled>Import valid rows</button>`,
+    });
+    document.getElementById('product-import-file').addEventListener('change', (event) => this.previewImportFile(event.target.files?.[0]));
+    document.getElementById('product-import-submit').addEventListener('click', () => this.submitImport());
+  },
+
+  parseCsv(text) {
+    const rows = []; let row = []; let cell = ''; let quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (quoted && ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (ch === '"') quoted = !quoted;
+      else if (ch === ',' && !quoted) { row.push(cell); cell = ''; }
+      else if ((ch === '\n' || ch === '\r') && !quoted) {
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+        row.push(cell); if (row.some((v) => v.trim())) rows.push(row); row = []; cell = '';
+      } else cell += ch;
+    }
+    if (cell || row.length) { row.push(cell); if (row.some((v) => v.trim())) rows.push(row); }
+    if (quoted) throw new Error('The CSV contains an unfinished quoted field.');
+    return rows;
+  },
+
+  async previewImportFile(file) {
+    const preview = document.getElementById('product-import-preview');
+    const submit = document.getElementById('product-import-submit');
+    if (!file || !preview || !submit) return;
+    submit.disabled = true;
+    if (file.size > 15 * 1024 * 1024) { preview.textContent = 'CSV files must be 15 MB or smaller.'; return; }
+    try {
+      const rows = this.parseCsv(await file.text());
+      if (rows.length < 2) throw new Error('The CSV needs a header row and at least one product.');
+      const headers = rows[0].map((h) => h.replace(/^\uFEFF/, '').trim().toLowerCase());
+      const required = ['product_name', 'category', 'selling_price'];
+      const missing = required.filter((h) => !headers.includes(h));
+      if (missing.length) throw new Error(`Missing required column(s): ${missing.join(', ')}.`);
+      const errors = []; const valid = []; const seenSerial = new Set();
+      rows.slice(1).forEach((cells, index) => {
+        const record = Object.fromEntries(headers.map((h, i) => [h, (cells[i] || '').trim()]));
+        const rowNo = index + 2;
+        const item = {
+          product_name: record.product_name, category: record.category,
+          model: record.model || '', serial_number: record.serial_number || '', supplier: record.supplier || '',
+          purchase_price: record.purchase_price === undefined || record.purchase_price === '' ? 0 : Number(record.purchase_price),
+          selling_price: Number(record.selling_price), quantity: record.quantity === undefined || record.quantity === '' ? 1 : Number(record.quantity),
+          purchase_date: record.purchase_date || '', warranty: record.warranty || '', storage_location: record.storage_location || '',
+          condition: record.condition || 'Excellent', notes: record.notes || '',
+        };
+        const problems = [];
+        if (!item.product_name) problems.push('Product name is required');
+        if (!item.category) problems.push('Category is required');
+        if (!Number.isFinite(item.purchase_price) || item.purchase_price < 0) problems.push('Purchase price must be >= 0');
+        if (!Number.isFinite(item.selling_price) || item.selling_price < 0) problems.push('Sale price must be >= 0');
+        if (!Number.isInteger(item.quantity) || item.quantity < 1) problems.push('Quantity must be a positive whole number');
+        if (item.purchase_date && !/^\d{4}-\d{2}-\d{2}$/.test(item.purchase_date)) problems.push('Date must be YYYY-MM-DD');
+        if (item.serial_number) {
+          const serialKey = item.serial_number.toLowerCase();
+          if (seenSerial.has(serialKey)) problems.push('Duplicate serial in this file');
+          seenSerial.add(serialKey);
+        }
+        if (problems.length) errors.push({ rowNo, product: item.product_name || '(unnamed)', error: problems.join('; ') });
+        else valid.push(item);
+      });
+      this._importRows = valid;
+      this._importErrors = errors;
+      preview.innerHTML = `<p><strong>${valid.length}</strong> valid row(s), <strong>${errors.length}</strong> invalid row(s).</p>
+        ${valid.slice(0, 5).map((x) => `<div>${this.escapeHtml(x.product_name)} · ${this.escapeHtml(x.category)} · ${Formatters.formatCurrency(x.selling_price, App.currency)} · qty ${x.quantity}</div>`).join('')}
+        ${errors.length ? `<details style="margin-top:8px;"><summary>Review first ${Math.min(errors.length, 20)} row errors</summary><ul>${errors.slice(0,20).map((x) => `<li>Row ${x.rowNo} (${this.escapeHtml(x.product)}): ${this.escapeHtml(x.error)}</li>`).join('')}</ul></details>` : ''}
+        ${valid.some((x) => x.purchase_price > 0) ? '<p class="text-muted">This import contains purchase prices and will require the super-password.</p>' : ''}`;
+      submit.disabled = valid.length === 0;
+    } catch (err) { this._importRows = null; preview.textContent = err.message; }
+  },
+
+  async submitImport() {
+    const rows = this._importRows || [];
+    if (!rows.length) return;
+    if (rows.some((x) => x.purchase_price > 0) && !(await SuperPrompt.requireForAction('Super-password to import purchase prices'))) return;
+    const result = await window.api.enqueueProductImport(rows);
+    if (result.error === 'SUPER_REQUIRED') return Toast.error('Please enter the super-password again.');
+    if (!result.success) return Toast.error(result.error || 'Could not queue this import.');
+    Modal.close();
+    Toast.success(`Import queued for ${rows.length} product(s). Follow progress in Task Center.`);
+  },
+
+  openBulkEdit() {
+    const rows = [...this.selectedProducts.values()];
+    if (!rows.length) return;
+    const categories = [...new Set([...(App.categories || []), ...rows.map((p) => p.category).filter(Boolean)])];
+    const options = categories.map((c) => `<option value="${this.escapeHtml(c)}">${this.escapeHtml(c)}</option>`).join('');
+    Modal.show({
+      title: `Bulk edit ${rows.length} products`,
+      size: 'lg',
+      body: `<div class="form-group"><label>Change field</label><select class="form-control" id="bulk-product-field">
+        <option value="category">Category</option><option value="supplier">Supplier</option><option value="location">Storage location</option>
+        <option value="status">Stock status</option><option value="condition">Condition</option>
+        <option value="price_percent">Sale price (% change)</option><option value="price_amount">Sale price (amount change)</option>
+      </select></div>
+      <div class="form-group"><label>New value / change</label><div id="bulk-product-value-wrap"><input class="form-control" id="bulk-product-value" type="text" placeholder="Enter a value"></div>
+      <small class="text-muted">For price changes, enter a positive number to increase or a negative number to decrease.</small></div>
+      <div id="bulk-product-preview" class="bulk-edit-preview">Choose a field and value, then preview the selected products.</div>`,
+      footer: `<button class="btn btn-secondary" onclick="Modal.close()">Cancel</button><button class="btn btn-secondary" id="bulk-product-preview-btn">Preview changes</button><button class="btn btn-primary" id="bulk-product-apply-btn" disabled>Apply changes</button>`,
+    });
+    const field = document.getElementById('bulk-product-field');
+    const valueWrap = document.getElementById('bulk-product-value-wrap');
+    const previewBtn = document.getElementById('bulk-product-preview-btn');
+    const applyBtn = document.getElementById('bulk-product-apply-btn');
+    const resetPreview = () => {
+      applyBtn.disabled = true;
+      document.getElementById('bulk-product-preview').textContent = 'Preview required before applying changes.';
+    };
+      document.getElementById('bulk-product-value').addEventListener('input', resetPreview);
+      document.getElementById('bulk-product-value').addEventListener('change', resetPreview);
+    field.addEventListener('change', () => {
+      const choices = {
+        status: ['In Stock','Reserved','Lost'],
+        condition: ['Excellent','Good','Fair','Damaged','For Parts'],
+      }[field.value];
+      if (choices) valueWrap.innerHTML = `<select class="form-control" id="bulk-product-value">${choices.map((v) => `<option>${v}</option>`).join('')}</select>`;
+      else valueWrap.innerHTML = `<input class="form-control" id="bulk-product-value" type="${field.value.startsWith('price_') ? 'number' : 'text'}" ${field.value.startsWith('price_') ? 'step="0.01"' : ''} placeholder="${field.value === 'category' ? 'Enter category name' : field.value === 'supplier' ? 'Enter supplier name' : field.value === 'location' ? 'Enter storage location' : 'Enter a positive or negative change'}">`;
+        document.getElementById('bulk-product-value').addEventListener('input', resetPreview);
+        document.getElementById('bulk-product-value').addEventListener('change', resetPreview);
+      resetPreview();
+    });
+    previewBtn.addEventListener('click', () => {
+      const raw = document.getElementById('bulk-product-value').value.trim();
+      const key = field.value;
+      if (!raw) return Toast.error('Enter a value first.');
+      if (key.startsWith('price_') && !Number.isFinite(Number(raw))) return Toast.error('Enter a valid price change.');
+      const nextValue = (product) => {
+        if (key === 'price_percent') return Math.round((product.selling_price * (1 + Number(raw) / 100) + Number.EPSILON) * 100) / 100;
+        if (key === 'price_amount') return Math.round((product.selling_price + Number(raw) + Number.EPSILON) * 100) / 100;
+        return raw;
+      };
+      const changes = rows.map((p) => ({ p, next: nextValue(p) }));
+      if (key.startsWith('price_') && changes.some((x) => x.next < 0)) return Toast.error('A price change cannot result in a negative sale price.');
+      const labels = { category:'category', supplier:'supplier', location:'storage_location', status:'status', condition:'condition', price_percent:'selling_price', price_amount:'selling_price' };
+      const fieldName = labels[key];
+      const sample = changes.slice(0, 6).map(({ p, next }) => `<tr><td>${this.escapeHtml(p.product_name)}</td><td>${this.escapeHtml(String(p[fieldName] ?? ''))}</td><td>${this.escapeHtml(String(next))}</td></tr>`).join('');
+      document.getElementById('bulk-product-preview').innerHTML = `<p>${rows.length} products will be updated. Review the preview:</p><div class="table-wrapper"><table><thead><tr><th>Product</th><th>Current</th><th>New</th></tr></thead><tbody>${sample}</tbody></table></div>${rows.length > 6 ? `<p>Plus ${rows.length - 6} more selected products.</p>` : ''}`;
+      applyBtn.disabled = false;
+      applyBtn.onclick = () => this.applyBulkEdit(key, raw, rows.length);
+    });
+  },
+
+  async applyBulkEdit(field, value, count) {
+    if (!(await SuperPrompt.requireForAction('Super-password to edit selected products'))) return;
+    const ids = [...this.selectedProducts.keys()].map(Number);
+    const result = await window.api.bulkUpdateProducts(ids, { field, value });
+    window.api.revokeSuper();
+    if (!result.success) return Toast.error(result.error || 'Could not update selected products.');
+    Modal.close();
+    this.clearSelection();
+    Toast.success(`${result.data.updated} of ${count} products updated.`);
+    await this.refresh();
   },
 
   onSearch() {

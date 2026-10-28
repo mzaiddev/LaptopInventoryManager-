@@ -9,6 +9,8 @@ class TableComponent {
     this.onSort = options.onSort || null;
     this.emptyMessage = options.emptyMessage || 'No data found.';
     this.actions = options.actions || null;
+    this.selection = options.selection || null;
+    this.rows = [];
   }
 
   setColumns(columns) {
@@ -17,6 +19,7 @@ class TableComponent {
 
   render(data) {
     if (!this.container) return;
+    this.rows = data || [];
 
     if (!data || data.length === 0) {
       this.container.innerHTML = `
@@ -32,6 +35,12 @@ class TableComponent {
     }
 
     let html = '<div class="table-wrapper"><table><thead><tr>';
+
+    if (this.selection) {
+      const selected = this.selection.getSelected();
+      const all = this.rows.length > 0 && this.rows.every((row) => selected.has(String(row.id)));
+      html += `<th style="width:38px;"><input type="checkbox" aria-label="Select all visible products" ${all ? 'checked' : ''} onchange="window.tableRef.toggleAllVisible(this.checked)"></th>`;
+    }
 
     // Header
     this.columns.forEach(col => {
@@ -51,6 +60,10 @@ class TableComponent {
     // Rows
     data.forEach((row, index) => {
       html += '<tr>';
+      if (this.selection) {
+        const checked = this.selection.getSelected().has(String(row.id));
+        html += `<td><input type="checkbox" aria-label="Select product ${Number(row.id)}" ${checked ? 'checked' : ''} onchange="window.tableRef.toggleSelection(${Number(row.id)},this.checked)"></td>`;
+      }
       this.columns.forEach(col => {
         const value = this.getCellValue(row, col);
         html += `<td>${value}</td>`;
@@ -65,6 +78,18 @@ class TableComponent {
 
     html += '</tbody></table></div>';
     this.container.innerHTML = html;
+  }
+
+  toggleSelection(id, checked) {
+    if (!this.selection) return;
+    this.selection.onChange(String(id), checked);
+    this.render(this.rows);
+  }
+
+  toggleAllVisible(checked) {
+    if (!this.selection) return;
+    this.rows.forEach((row) => this.selection.onChange(String(row.id), checked));
+    this.render(this.rows);
   }
 
   getCellValue(row, col) {

@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld("api", {
   addProduct: (data) => ipcRenderer.invoke("inventory:add", data),
   updateProduct: (id, data) => ipcRenderer.invoke("inventory:update", id, data),
   deleteProduct: (id) => ipcRenderer.invoke("inventory:delete", id),
+  bulkUpdateProducts: (ids, change) => ipcRenderer.invoke("inventory:bulkUpdate", ids, change),
   changeProductStatus: (id, status) =>
     ipcRenderer.invoke("inventory:changeStatus", id, status),
   changeProductCondition: (id, condition) =>
@@ -31,9 +32,18 @@ contextBridge.exposeInMainWorld("api", {
   // Backup
   createBackup: () => ipcRenderer.invoke("backup:create"),
   getBackupHistory: () => ipcRenderer.invoke("backup:getHistory"),
+  getAutomaticBackups: () => ipcRenderer.invoke("backup:getAutomatic"),
+  restoreAutomaticBackup: (name) => ipcRenderer.invoke("backup:restoreAutomatic", name),
   deleteBackup: (backupId) => ipcRenderer.invoke("backup:delete", backupId),
   selectBackupFile: () => ipcRenderer.invoke("backup:selectFile"),
   restoreBackup: (path) => ipcRenderer.invoke("backup:restore", path),
+  driveStatus: () => ipcRenderer.invoke("drive:status"),
+  connectDrive: () => ipcRenderer.invoke("drive:connect"),
+  disconnectDrive: () => ipcRenderer.invoke("drive:disconnect"),
+  listDriveBackups: () => ipcRenderer.invoke("drive:listBackups"),
+  downloadDriveBackup: (id) => ipcRenderer.invoke("drive:downloadBackup", id),
+  saveDriveSettings: (settings) => ipcRenderer.invoke("drive:saveSettings", settings),
+  retryDriveBackups: () => ipcRenderer.invoke("drive:retryFailed"),
 
   // ============ LEDGER MODULE ============
 
@@ -103,6 +113,19 @@ contextBridge.exposeInMainWorld("api", {
   waConnect: () => ipcRenderer.invoke("wa:connect"),
   waReconnect: () => ipcRenderer.invoke("wa:reconnect"),
   waUnlink: () => ipcRenderer.invoke("wa:unlink"),
+  // Background tasks
+  listTasks: () => ipcRenderer.invoke("tasks:list"),
+  getTask: (id) => ipcRenderer.invoke("tasks:get", id),
+  enqueueWhatsappTask: (title, items) => ipcRenderer.invoke("tasks:enqueueWhatsapp", title, items),
+  enqueueProductImport: (rows) => ipcRenderer.invoke("tasks:enqueueProductImport", rows),
+  stopTask: (id) => ipcRenderer.invoke("tasks:stop", id),
+  resumeTask: (id) => ipcRenderer.invoke("tasks:resume", id),
+  retryFailedTaskItems: (id) => ipcRenderer.invoke("tasks:retryFailed", id),
+  onTaskChanged: (cb) => {
+    const handler = (event, data) => cb(data);
+    ipcRenderer.on("tasks:changed", handler);
+    return () => ipcRenderer.removeListener("tasks:changed", handler);
+  },
   // Pushed by the main process whenever the WhatsApp link changes. Returns a function that stops listening.
   onWaChanged: (cb) => {
     const handler = (event, status) => cb(status);

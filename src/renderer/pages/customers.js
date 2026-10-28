@@ -45,6 +45,10 @@ const CustomersPage = {
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
               </select>
+              <select id="filter-customer-due" onchange="CustomersPage.onFilter()">
+                <option value="">All balances</option>
+                <option value="1">Has due</option>
+              </select>
             </div>
           </div>
           ${BulkShare.barHtml('customers', 'CustomersPage.sendSelected()', 'CustomersPage.sendAll()', 'WhatsApp All Customers')}
@@ -53,6 +57,12 @@ const CustomersPage = {
         </div>
       </div>
     `;
+    const statusFilter = document.getElementById('filter-customer-status');
+    const dueFilter = document.getElementById('filter-customer-due');
+    const searchInput = document.getElementById('customer-search');
+    if (statusFilter) statusFilter.value = this.currentFilters.status || '';
+    if (dueFilter) dueFilter.value = this.currentFilters.hasDue ? '1' : '';
+    if (searchInput) searchInput.value = this.currentFilters.search || '';
     await this.refresh();
   },
 
@@ -88,6 +98,7 @@ const CustomersPage = {
                 <th>Name</th>
                 <th>Phone</th>
                 <th>Address</th>
+                <th>Due / Credit</th>
                 <th>Status</th>
                 <th>Created</th>
                 <th>Actions</th>
@@ -100,6 +111,11 @@ const CustomersPage = {
                   <td><strong>${this.escapeHtml(c.customer_name)}</strong></td>
                   <td>${this.escapeHtml(c.phone) || '-'}</td>
                   <td>${this.escapeHtml(c.address) || '-'}</td>
+                  <td>${Number(c.total_due || 0) > 0
+                    ? `<strong style="color:var(--danger);">${Formatters.formatCurrency(c.total_due, App.currency)}</strong>`
+                    : Number(c.ledger_balance || 0) < 0
+                      ? `<span style="color:var(--success);">Credit ${Formatters.formatCurrency(Math.abs(c.ledger_balance), App.currency)}</span>`
+                      : Formatters.formatCurrency(0, App.currency)}</td>
                   <td><span class="badge ${c.status === 'Active' ? 'badge-in-stock' : 'badge-lost'}">${c.status}</span></td>
                   <td>${Formatters.formatDate(c.created_at)}</td>
                   <td>
@@ -168,6 +184,7 @@ const CustomersPage = {
 
   onFilter() {
     this.currentFilters.status = document.getElementById("filter-customer-status")?.value || "";
+    this.currentFilters.hasDue = document.getElementById("filter-customer-due")?.value === "1";
     this.currentFilters.page = 1;
     this.loadCustomers();
   },
@@ -756,7 +773,7 @@ const CustomersPage = {
 
   async openPrintDialog() {
     try {
-      const result = await window.api.getAllCustomers({ limit: 5000 });
+      const result = await window.api.getAllCustomers({ limit: 10000 });
       if (!result.success) {
         Toast.error('Failed to load customers data.');
         return;
@@ -767,31 +784,11 @@ const CustomersPage = {
         return;
       }
 
-      const customerPromises = customers.map(async c => {
-        const salesResult = await window.api.getCustomerFullProfile(c.id);
-        const sales = salesResult.success ? salesResult.data.sales || [] : [];
-        const balance = salesResult.success ? salesResult.data.balance || {} : {};
-        return {
-          ...c,
-          total_sales: balance.total_sales || 0,
-          total_paid: balance.total_paid || 0,
-          outstanding: balance.total_outstanding || 0,
-          old_balance: balance.old_balance_net || 0,
-          total_due: balance.total_due || 0,
-          sales_count: sales.length,
-        };
-      });
-
-      const customerData = await Promise.all(customerPromises);
+      // All required totals are returned by the customer list query, avoiding
+      // thousands of per-customer IPC calls for a large print job.
+      const customerData = customers;
 
       const currency = App.currency || 'PKR';
-      const totalCustomers = customerData.length;
-      const activeCount = customerData.filter(c => c.status === 'Active').length;
-      const totalSales = customerData.reduce((s, c) => s + (c.total_sales || 0), 0);
-      const totalPaid = customerData.reduce((s, c) => s + (c.total_paid || 0), 0);
-      const totalOutstanding = customerData.reduce((s, c) => s + (c.outstanding || 0), 0);
-      const totalOldBalance = customerData.reduce((s, c) => s + (c.old_balance || 0), 0);
-      const totalCombinedDue = totalOutstanding + totalOldBalance;
 
       PrintService.showPrintDialog({
         title: 'Customers Report',
@@ -807,22 +804,22 @@ const CustomersPage = {
           { field: 'old_balance', label: 'Old Balance', width: '70px', align: 'right', format: 'currency' },
           { field: 'sales_count', label: 'Transactions', width: '50px', align: 'center' },
           { field: 'total_due', label: 'Total Due', width: '70px', align: 'right', format: 'currency' },
+          { field: 'ledger_balance', label: 'Ledger Balance', width: '70px', align: 'right', format: 'currency' },
         ],
         filters: {
+          field: 'status',
           categories: ['Active', 'Inactive'],
-          categoryLabel: 'Status'
+          categoryLabel: 'Status',
+          defaultFilter: { field:'total_due', operator:'gt', value:0, includeLabel:'Include customers with no due' },
         },
         landscape: false,
         showPrintOptions: true,
         subtitle: 'With related sales and payment history',
-        summaryItems: [
-          { label: 'Total Customers', value: totalCustomers },
-          { label: 'Active Customers', value: activeCount },
-          { label: 'Total Sales', value: Formatters.formatCurrency(totalSales, currency) },
-          { label: 'Total Collected', value: Formatters.formatCurrency(totalPaid, currency) },
-          { label: 'Total Remaining', value: Formatters.formatCurrency(totalOutstanding, currency) },
-          { label: 'Total Old Balance', value: Formatters.formatCurrency(totalOldBalance, currency) },
-          { label: 'Total Balance Due', value: Formatters.formatCurrency(totalCombinedDue, currency) },
+        getSummaryItems: (rows) => [
+          { label: 'Selected Customers', value: rows.length },
+          { label: 'Total Sales', value: Formatters.formatCurrency(rows.reduce((s, c) => s + Number(c.total_sales || 0), 0), currency) },
+          { label: 'Total Collected', value: Formatters.formatCurrency(rows.reduce((s, c) => s + Number(c.total_paid || 0), 0), currency) },
+          { label: 'Total Due', value: Formatters.formatCurrency(rows.reduce((s, c) => s + Number(c.total_due || 0), 0), currency) },
         ],
         getCompanyHeader: () => LedgersPage.getCompanyHeader()
       });

@@ -41,6 +41,16 @@ const BackupPage = {
         </div>
       </div>
 
+      <div class="card" style="margin-bottom:24px;">
+        <div class="card-header"><h3>Daily automatic backups (local)</h3></div>
+        <div class="card-body" id="automatic-backup-container"><div class="loading"><div class="spinner"></div></div></div>
+      </div>
+
+      <div class="card" style="margin-bottom:24px;">
+        <div class="card-header"><h3>Owner's Google Drive</h3></div>
+        <div class="card-body" id="drive-backup-panel"><div class="loading"><div class="spinner"></div></div></div>
+      </div>
+
       <div class="card">
         <div class="card-header">
           <h3>Backup History</h3>
@@ -53,11 +63,118 @@ const BackupPage = {
       </div>
     `;
 
-    await this.loadHistory();
+    await Promise.all([this.loadHistory(), this.loadAutomatic(), this.loadDrive()]);
   },
 
   async refresh() {
-    await this.loadHistory();
+    await Promise.all([this.loadHistory(), this.loadAutomatic(), this.loadDrive()]);
+  },
+
+  async loadAutomatic() {
+    const container = document.getElementById('automatic-backup-container');
+    if (!container) return;
+    const result = await window.api.getAutomaticBackups();
+    if (!result.success) { container.innerHTML = `<p>${this.escapeHtml(result.error)}</p>`; return; }
+    if (!result.data.length) { container.innerHTML = '<p class="text-muted">No daily backup has been created yet. A verified local copy is refreshed automatically when the app starts.</p>'; return; }
+    container.innerHTML = `<div class="table-wrapper"><table><thead><tr><th>Backup file</th><th>Size</th><th>Last refreshed</th><th>Verification</th><th>Action</th></tr></thead><tbody>${result.data.map((b) => `<tr><td><strong>${this.escapeHtml(b.filename)}</strong></td><td>${Formatters.formatFileSize(b.file_size)}</td><td>${Formatters.formatDateTime(b.modified_at)}</td><td>${b.verified ? '<span class="badge badge-in-stock">Verified</span>' : `<span class="badge badge-lost">Invalid: ${this.escapeHtml(b.error)}</span>`}</td><td><button class="btn btn-sm btn-primary" onclick="BackupPage.restoreAutomatic('${this.escapeHtml(b.filename)}')" ${b.verified ? '' : 'disabled'}>Restore</button></td></tr>`).join('')}</tbody></table></div>`;
+  },
+
+  restoreAutomatic(filename) {
+    Modal.showConfirm('Restore automatic backup', `Restore "${filename}"? The current database will first be preserved as a safety copy and the app will restart.`, async () => {
+      const result = await window.api.restoreAutomaticBackup(filename);
+      if (!result.success) Toast.error(result.error || 'Restore failed.');
+    });
+  },
+
+  async loadDrive() {
+    const panel = document.getElementById('drive-backup-panel');
+    if (!panel) return;
+    try {
+      const [statusResult, settingsResult] = await Promise.all([window.api.driveStatus(), window.api.getSettings()]);
+      if (!statusResult.success) throw new Error(statusResult.error || 'Could not read Drive status.');
+      const status = statusResult.data;
+      const settings = settingsResult.success ? settingsResult.data : {};
+      let files = [];
+      if (status.connected) {
+        const result = await window.api.listDriveBackups();
+        if (result.success) files = result.data || [];
+      }
+      panel.innerHTML = `
+        <p style="color:var(--text-secondary);margin:0 0 16px;">Automatic database copies go to the Google account connected by the owner. Uploads run in the background after a local backup is verified.</p>
+        <div class="form-row" style="align-items:flex-end;">
+          <div class="form-group" style="flex:2;min-width:280px;">
+            <label>Google OAuth desktop client ID</label>
+            <input id="drive-client-id" class="form-control" type="text" value="${this.escapeHtml(settings.google_drive_client_id || '')}" placeholder="Configured by your app provider or Google Cloud project" ${status.connected ? 'disabled' : ''}>
+            <small>Required once for this app. The owner signs in to their own Google account; the app stores the refresh token in Windows secure storage.</small>
+          </div>
+          <div class="form-group" style="max-width:180px;">
+            <label>Keep Drive backups</label>
+            <input id="drive-retention" class="form-control" type="number" min="1" max="365" value="${this.escapeHtml(settings.drive_backup_retention || '30')}">
+          </div>
+          <div class="form-group" style="display:flex;gap:8px;">
+            <button class="btn btn-secondary" onclick="BackupPage.saveDriveSettings()">Save Drive settings</button>
+            ${status.connected ? '<button class="btn btn-danger" onclick="BackupPage.disconnectDrive()">Disconnect</button>' : '<button class="btn btn-primary" onclick="BackupPage.connectDrive()" ' + (!status.configured ? 'disabled' : '') + '>Connect owner Drive</button>'}
+          </div>
+        </div>
+        <div class="form-row" style="gap:16px;margin-top:8px;">
+          <span><strong>Connection:</strong> ${status.connected ? 'Connected' : status.configured ? 'Not connected' : 'Needs app setup'}</span>
+          <span><strong>Last upload:</strong> ${this.escapeHtml(status.lastUploadedAt ? Formatters.formatDateTime(status.lastUploadedAt) : 'None yet')}</span>
+          <span><strong>Last file:</strong> ${this.escapeHtml(status.lastUploadedFile || '—')}</span>
+          ${status.error ? '<span style="color:var(--danger);"><strong>Latest issue:</strong> ' + this.escapeHtml(status.error) + '</span>' : ''}
+        </div>
+        ${status.connected ? `<div style="display:flex;gap:8px;margin:12px 0;"><button class="btn btn-secondary" onclick="BackupPage.uploadLatestBackup()">Back up and upload now</button><button class="btn btn-secondary" onclick="BackupPage.retryDriveUploads()">Retry failed uploads</button></div><div class="table-wrapper"><table><thead><tr><th>Drive backup</th><th>Size</th><th>Created</th><th>Action</th></tr></thead><tbody>${files.length ? files.map((f) => `<tr><td>${this.escapeHtml(f.name)}</td><td>${Formatters.formatFileSize(Number(f.size || 0))}</td><td>${this.escapeHtml(f.createdTime ? Formatters.formatDateTime(f.createdTime) : '—')}</td><td><button class="btn btn-sm btn-primary" onclick="BackupPage.restoreDriveBackup('${this.escapeHtml(f.id)}','${this.escapeHtml(f.name)}')">Download &amp; restore</button></td></tr>`).join('') : '<tr><td colspan="4">No Drive backups found yet.</td></tr>'}</tbody></table></div>` : '<p style="margin-top:12px;color:var(--text-muted);">Local automatic backups continue while Drive is disconnected. Connect once to enable off-device copies.</p>'}
+      `;
+    } catch (err) {
+      panel.innerHTML = `<div class="empty-state"><h3>Google Drive status unavailable</h3><p>${this.escapeHtml(err.message)}</p></div>`;
+    }
+  },
+
+  async saveDriveSettings() {
+    const r = await window.api.saveDriveSettings({ clientId: document.getElementById('drive-client-id')?.value, retention: document.getElementById('drive-retention')?.value });
+    if (!r.success) { Toast.error(r.error || 'Could not save Drive settings.'); return; }
+    Toast.success('Drive settings saved.');
+    await this.loadDrive();
+  },
+
+  async connectDrive() {
+    const saved = await window.api.saveDriveSettings({ clientId: document.getElementById('drive-client-id')?.value, retention: document.getElementById('drive-retention')?.value });
+    if (!saved.success) { Toast.error(saved.error); return; }
+    Toast.info('Opening Google sign-in…');
+    const r = await window.api.connectDrive();
+    if (!r.success) Toast.error(r.error || 'Google Drive connection failed.');
+    else Toast.success('Owner Google Drive connected. A verified backup upload has been queued.');
+    await this.loadDrive();
+  },
+
+  async disconnectDrive() {
+    Modal.showConfirm('Disconnect Google Drive', 'Automatic cloud uploads will stop. Existing Drive backups remain in the owner account.', async () => {
+      const r = await window.api.disconnectDrive();
+      if (!r.success) Toast.error(r.error || 'Could not disconnect Drive.');
+      else Toast.success('Google Drive disconnected.');
+      await this.loadDrive();
+    });
+  },
+
+  async uploadLatestBackup() {
+    const r = await window.api.createBackup();
+    if (!r.success) Toast.error(r.error || 'Could not create backup.');
+    else Toast.success(r.data.cloud ? 'Verified backup created. Upload is running in Task Center.' : 'Verified local backup created.');
+    await Promise.all([this.loadHistory(), this.loadDrive()]);
+  },
+
+  async retryDriveUploads() {
+    const r = await window.api.retryDriveBackups();
+    if (!r.success) Toast.error(r.error || 'Could not retry uploads.');
+    else Toast.success(`Retried ${r.data.retried} upload task(s).`);
+  },
+
+  async restoreDriveBackup(fileId, name) {
+    Modal.showConfirm('Restore Drive backup', `Download and restore "${name}"? The current database will be preserved as a safety copy, then the app will restart.`, async () => {
+      const downloaded = await window.api.downloadDriveBackup(fileId);
+      if (!downloaded.success) { Toast.error(downloaded.error || 'Backup download failed.'); return; }
+      const restored = await window.api.restoreBackup(downloaded.data.path);
+      if (!restored.success) Toast.error(restored.error || 'Restore failed.');
+    });
   },
 
   async loadHistory() {
@@ -89,6 +206,7 @@ const BackupPage = {
         '<th>Filename</th>' +
         '<th>Size</th>' +
         '<th>Created</th>' +
+        '<th>Verification</th>' +
         '<th>Actions</th>' +
         '</tr></thead><tbody>';
 
@@ -98,9 +216,10 @@ const BackupPage = {
           <td><strong>${this.escapeHtml(backup.filename)}</strong></td>
           <td>${Formatters.formatFileSize(backup.file_size)}</td>
           <td>${Formatters.formatDateTime(backup.created_at)}</td>
+          <td>${backup.verified ? '<span class="badge badge-in-stock">Verified</span>' : `<span class="badge badge-lost">Invalid</span>`}</td>
           <td>
             <div class="action-buttons">
-              <button class="btn btn-sm btn-primary" onclick="BackupPage.restoreSpecificBackup(${backup.id}, '${this.escapeHtml(backup.filename)}')" title="Restore this backup">
+              <button class="btn btn-sm btn-primary" onclick="BackupPage.restoreSpecificBackup(${backup.id}, '${this.escapeHtml(backup.filename)}')" title="Restore this backup" ${backup.verified ? '' : 'disabled'}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;">
                   <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
                 </svg>
@@ -174,9 +293,6 @@ const BackupPage = {
 
   async restoreBackup() {
     try {
-      const result = await window.api.restoreBackup();
-      // If selectFile was cancelled, result.data will be null
-      // Handled via backup:selectFile IPC
       const fileResult = await window.api.selectBackupFile();
       if (!fileResult.success || !fileResult.data) {
         return; // User cancelled

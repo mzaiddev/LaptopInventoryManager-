@@ -201,7 +201,20 @@ class LedgerService {
 
   getAllCustomers(filters = {}) {
     const db = getDatabase();
-    let query = "SELECT * FROM customers WHERE 1=1";
+    const balanceExpr = `COALESCE(
+      (SELECT cl.running_balance FROM customer_ledger cl WHERE cl.customer_id=customers.id ORDER BY cl.entry_date DESC,cl.id DESC LIMIT 1),
+      COALESCE((SELECT SUM(si.total_amount-si.paid_amount) FROM sale_issues si WHERE si.customer_id=customers.id),0)
+        + COALESCE((SELECT SUM(CASE WHEN ob.balance_type='Debit' THEN ob.amount ELSE -ob.amount END) FROM old_balances ob WHERE ob.customer_id=customers.id),0)
+    )`;
+    let query = `SELECT customers.*, ${balanceExpr} AS ledger_balance, MAX(0,${balanceExpr}) AS total_due,
+      (SELECT MAX(si.issue_date) FROM sale_issues si WHERE si.customer_id=customers.id) AS last_sale_date,
+      (SELECT MAX(p.payment_date) FROM payments p JOIN sale_issues si ON si.id=p.sale_issue_id WHERE si.customer_id=customers.id) AS last_payment_date,
+      COALESCE((SELECT SUM(si.total_amount) FROM sale_issues si WHERE si.customer_id=customers.id),0) AS total_sales,
+      COALESCE((SELECT SUM(si.paid_amount) FROM sale_issues si WHERE si.customer_id=customers.id),0) AS total_paid,
+      COALESCE((SELECT SUM(si.remaining_amount) FROM sale_issues si WHERE si.customer_id=customers.id),0) AS outstanding,
+      COALESCE((SELECT SUM(CASE WHEN ob.balance_type='Debit' THEN ob.amount ELSE -ob.amount END) FROM old_balances ob WHERE ob.customer_id=customers.id),0) AS old_balance,
+      (SELECT COUNT(*) FROM sale_issues si WHERE si.customer_id=customers.id) AS sales_count
+      FROM customers WHERE 1=1`;
     const params = [];
 
     if (filters.search) {
@@ -215,11 +228,15 @@ class LedgerService {
       params.push(filters.status);
     }
 
-    query += " ORDER BY customer_name ASC";
+    if (filters.hasDue === true || filters.hasDue === '1') query += ` AND (${balanceExpr}) > 0`;
+
+    const sortByDue = filters.sortBy === 'due';
+    query += sortByDue ? ` ORDER BY ledger_balance ${filters.sortOrder === 'asc' ? 'ASC' : 'DESC'}, customer_name ASC` : " ORDER BY customer_name ASC";
 
     if (filters.limit) {
       const offset = filters.page ? (filters.page - 1) * filters.limit : 0;
-      const countQuery = query.replace("SELECT *", "SELECT COUNT(*) as total");
+      const fromIndex = query.indexOf('FROM customers');
+      const countQuery = "SELECT COUNT(*) as total " + query.slice(fromIndex, query.lastIndexOf(' ORDER BY '));
       const totalResult = db.prepare(countQuery).get(...params);
       query += " LIMIT ? OFFSET ?";
       params.push(filters.limit, offset);

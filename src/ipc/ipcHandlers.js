@@ -68,7 +68,7 @@ function registerIpcHandlers() {
   const expenseService = require("../services/expenseService");
   const wrap = (fn) => async (event, ...args) => {
     try {
-      return { success: true, data: fn(...args) };
+      return { success: true, data: await fn(...args) };
     } catch (err) {
       return { success: false, error: err.message };
     }
@@ -96,9 +96,11 @@ function registerIpcHandlers() {
 
   // Linked WhatsApp: status is pushed to every window, so nothing has to poll.
   const waLink = require("../services/whatsappLink").getLink();
+  let tasks = null;
   waLink.onChange((status) => {
     const windows = BrowserWindow && BrowserWindow.getAllWindows ? BrowserWindow.getAllWindows() : [];
     windows.forEach((w) => { if (!w.isDestroyed()) w.webContents.send("wa:changed", status); });
+    if (status.state === 'linked' && tasks) tasks.resumeAfterWhatsAppReconnect();
   });
   ipcMain.handle("wa:status", wrap(() => waLink.getStatus()));
   ipcMain.handle("wa:connect", async () => {
@@ -123,6 +125,86 @@ function registerIpcHandlers() {
       return { success: false, error: err.message };
     }
   });
+
+  // Persistent Task Center. Renderer submits prepared work; the main process
+  // owns execution so navigation or closing a modal does not cancel it.
+  tasks = require('../services/taskService').getTaskService();
+  tasks.onChange((snapshot, jobId) => {
+    const windows = BrowserWindow && BrowserWindow.getAllWindows ? BrowserWindow.getAllWindows() : [];
+    windows.forEach((w) => { if (!w.isDestroyed()) w.webContents.send('tasks:changed', { jobId, task: jobId ? snapshot : null }); });
+  });
+  ipcMain.handle('tasks:list', wrap(() => tasks.list()));
+  ipcMain.handle('tasks:get', wrap((id) => tasks.getJob(id)));
+  ipcMain.handle('tasks:enqueueWhatsapp', wrap((title, items) => {
+    if (!Array.isArray(items) || items.length === 0) throw new Error('There are no prepared messages to queue.');
+    const prepared = items.map((item, i) => {
+      const p = item && item.payload;
+      if (!p || typeof p.html !== 'string' || p.html.length > 5_000_000) throw new Error(`Message ${i + 1} has invalid or oversized statement content.`);
+      return {
+        key: String(item.key ?? i),
+        label: String(item.label || p.customerName || `Message ${i + 1}`),
+        payload: {
+          html: p.html,
+          customerName: String(p.customerName || '').slice(0, 200),
+          phone: String(p.phone || '').slice(0, 80),
+          message: String(p.message || '').slice(0, 5000),
+        },
+      };
+    });
+    return tasks.enqueue({ kind: 'whatsapp.statement', lane: 'whatsapp', title: title || 'WhatsApp statements', items: prepared });
+  }));
+  ipcMain.handle('tasks:enqueueProductImport', async (event, rows) => {
+    let consumed = false;
+    try {
+      if (!Array.isArray(rows) || !rows.length || rows.length > 10000) throw new Error('Choose between 1 and 10,000 valid product rows.');
+      const prepared = rows.map((r, i) => {
+        const product = {
+          product_name: String(r.product_name || '').trim().slice(0, 200), category: String(r.category || 'Other').trim().slice(0, 100),
+          model: String(r.model || '').trim().slice(0, 150), serial_number: String(r.serial_number || '').trim().slice(0, 150),
+          supplier: String(r.supplier || '').trim().slice(0, 150), purchase_price: Number(r.purchase_price || 0), selling_price: Number(r.selling_price),
+          quantity: Number(r.quantity || 1), purchase_date: String(r.purchase_date || '').slice(0, 20), warranty: String(r.warranty || '').slice(0, 100),
+          storage_location: String(r.storage_location || '').slice(0, 150), notes: String(r.notes || '').slice(0, 1000), condition: String(r.condition || 'Excellent'), status: 'In Stock',
+        };
+        const errors = validateProduct(product);
+        if (!Number.isFinite(product.purchase_price) || product.purchase_price < 0) errors.push('Purchase price must be zero or greater.');
+        if (!Number.isFinite(product.selling_price) || product.selling_price < 0) errors.push('Sale price must be zero or greater.');
+        if (!Number.isInteger(product.quantity) || product.quantity < 1) errors.push('Quantity must be a positive whole number.');
+        if (product.purchase_date && !/^\d{4}-\d{2}-\d{2}$/.test(product.purchase_date)) errors.push('Purchase date must use YYYY-MM-DD.');
+        if (errors.length) throw new Error(`Row ${i + 2}: ${errors.join('; ')}`);
+        return { key: String(i + 2), label: `Row ${i + 2}: ${product.product_name}`, payload: product };
+      });
+      if (prepared.some((item) => item.payload.purchase_price > 0)) {
+        if (!authService.consumeSuper()) return { success: false, error: 'SUPER_REQUIRED' };
+        consumed = true;
+      }
+      const job = tasks.enqueue({ kind: 'product.import', lane: 'data', title: `Import ${prepared.length} products`, items: prepared });
+      return { success: true, data: job };
+    } catch (err) { if (consumed) authService.restoreSuper(); return { success: false, error: err.message }; }
+  });
+  ipcMain.handle('tasks:stop', wrap((id) => tasks.stop(id)));
+  ipcMain.handle('tasks:resume', wrap((id) => tasks.resume(id)));
+  ipcMain.handle('tasks:retryFailed', wrap((id) => tasks.retryFailed(id)));
+  tasks.initialize();
+
+  // Google Drive belongs to the logged-in owner. Credentials never cross IPC.
+  const driveService = require('../services/googleDriveService').getGoogleDriveService();
+  ipcMain.handle('drive:status', wrap(() => driveService.status()));
+  ipcMain.handle('drive:connect', wrap(() => backupService.connectDrive()));
+  ipcMain.handle('drive:disconnect', wrap(() => driveService.disconnect()));
+  ipcMain.handle('drive:listBackups', wrap(() => driveService.listBackups()));
+  ipcMain.handle('drive:downloadBackup', wrap((fileId) => driveService.downloadBackup(String(fileId || ''))));
+  ipcMain.handle('drive:saveSettings', wrap((data) => {
+    const clientId = String(data?.clientId || '').trim().slice(0, 300);
+    const retention = Math.max(1, Math.min(365, Number(data?.retention) || 30));
+    if (clientId && !/^[\w.-]+\.apps\.googleusercontent\.com$/.test(clientId)) throw new Error('Enter a valid Google OAuth desktop client ID.');
+    if (driveService.status().connected && clientId !== driveService.clientId) throw new Error('Disconnect Google Drive before changing the OAuth client ID.');
+    settingsService.updateSettings({ google_drive_client_id: clientId, drive_backup_retention: String(retention) });
+    return driveService.status();
+  }));
+  ipcMain.handle('drive:retryFailed', wrap(() => {
+    return { retried: tasks.retryFailedCloudUploads({ force: true }) };
+  }));
+
   ipcMain.handle("statement:autoSend", async (event, payload) => {
     try {
       return { success: true, data: await require("../services/statementShare").autoSend(payload) };
@@ -250,6 +332,16 @@ function registerIpcHandlers() {
     }
   }));
 
+  ipcMain.handle('inventory:bulkUpdate', requireSuper(authService, async (event, ids, change) => {
+    try {
+      const result = inventoryService.bulkUpdateProducts(ids, change);
+      auditService.log('product.bulk_edit', 'product_batch', null, { count: result.updated, field: result.field });
+      return { success: true, data: result };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }));
+
   // Inventory - Change Status
   ipcMain.handle("inventory:changeStatus", async (event, id, status) => {
     try {
@@ -370,6 +462,15 @@ function registerIpcHandlers() {
     } catch (err) {
       return { success: false, error: err.message };
     }
+  });
+
+  ipcMain.handle('backup:getAutomatic', wrap(() => backupService.getAutomaticBackups()));
+  ipcMain.handle('backup:restoreAutomatic', async (event, filename) => {
+    try {
+      const result = backupService.restoreAutomaticBackup(filename);
+      app.relaunch(); app.exit(0);
+      return { success: true, data: result };
+    } catch (err) { return { success: false, error: err.message }; }
   });
 
   ipcMain.handle("backup:delete", async (event, backupId) => {

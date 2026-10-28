@@ -30,6 +30,7 @@ class WhatsAppLink {
     this.countryCode = deps.countryCode || (() => "92");
 
     this.sock = null;
+    this.opening = null;
     this.state = "unlinked"; // unlinked | connecting | qr | linked
     this.qr = null;
     this.phone = null;
@@ -95,9 +96,27 @@ class WhatsAppLink {
   async connect() {
     this.wantConnected = true;
     this.error = null;
-    if (this.sock) return this.getStatus();
-    await this._open();
+    if (this.state === "linked" && this.sock) return this.getStatus();
+    if (this.sock || this.opening) {
+      if (this.opening) await this.opening;
+      return this.getStatus();
+    }
+    await this._openOnce();
     return this.getStatus();
+  }
+
+  // Prevent rapid clicks/startup reconnects from opening multiple sockets while
+  // Baileys is still loading or restoring credentials.
+  async _openOnce() {
+    if (this.sock) return this.sock;
+    if (this.opening) return this.opening;
+    const opening = this._open();
+    this.opening = opening;
+    try {
+      return await opening;
+    } finally {
+      if (this.opening === opening) this.opening = null;
+    }
   }
 
   async _open() {
@@ -154,7 +173,7 @@ class WhatsAppLink {
       return;
     }
     if (code === R.restartRequired) { // normal right after the QR code is scanned
-      await this._open();
+      await this._openOnce();
       return;
     }
     if (!this._registered()) { // the QR code was never scanned: do not keep retrying
@@ -170,12 +189,17 @@ class WhatsAppLink {
 
   // Drop a stuck connection and open a fresh one. The saved link is kept.
   async reconnect() {
+    if (this.state === "linked" && this.sock) return this.getStatus();
+    if (this.opening) {
+      await this.opening;
+      return this.getStatus();
+    }
     const sock = this.sock;
     this.sock = null;
     try { if (sock) sock.end(); } catch { /* already closed */ }
     this.wantConnected = true;
     this.retries = 0;
-    await this._open();
+    await this._openOnce();
     return this.getStatus();
   }
 

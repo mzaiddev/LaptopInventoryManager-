@@ -168,6 +168,16 @@ const BulkShare = {
       return;
     }
 
+    if (r.stage === "preparing") {
+      const pct = Math.round((r.preparedCount / total) * 100);
+      box.innerHTML =
+        '<div style="height:8px;background:var(--border-color);border-radius:4px;margin-bottom:14px;"><div style="height:8px;width:' + pct + '%;background:var(--primary);border-radius:4px;"></div></div>' +
+        '<p style="font-size:16px;font-weight:700;">Preparing task ' + r.preparedCount + ' of ' + total + '</p>' +
+        '<p style="font-size:13px;color:var(--text-muted);">The owner can review the recipients and then let the Task Center continue sending in the background.</p>' +
+        '<div style="display:flex;justify-content:flex-end;"><button class="btn btn-secondary" onclick="BulkShare.stop()">Cancel</button></div>';
+      return;
+    }
+
     if (r.stage === "done") {
       const skippedHtml = r.skipped.length
         ? '<p style="font-size:13px;margin-top:10px;"><strong>Not sent (' + r.skipped.length + "):</strong></p>" +
@@ -218,53 +228,50 @@ const BulkShare = {
     const r = this.run;
     if (!r || r.stage === "sending") return;
     r.mode = "auto";
-    r.stage = "sending";
-    let hardFails = 0;
+    r.stage = "preparing";
+    r.preparedCount = 0;
+    const prepared = [];
+    const preparationErrors = [];
     this._render();
-
-    for (r.idx = 0; r.idx < r.items.length; r.idx++) {
-      if (r.stopRequested) break;
-      const item = r.items[r.idx];
-      this._render();
+    for (let i = 0; i < r.items.length; i++) {
+      if (r.stopRequested || this.run !== r) break;
+      const item = r.items[i];
       try {
         const payload = await r.prepare(item);
-        if (!payload || !String(payload.phone || "").trim()) {
-          r.skipped.push({ label: item.label, reason: "No phone number" });
-          continue;
-        }
-        const res = await window.api.autoSendStatement(payload);
-        if (res.success) {
-          r.sent.push(item);
-          hardFails = 0;
-        } else if (res.code === "NOT_ON_WHATSAPP") {
-          r.skipped.push({ label: item.label, reason: "Not on WhatsApp" });
-        } else if (res.code === "INVALID_NUMBER") {
-          r.skipped.push({ label: item.label, reason: "Invalid phone number" });
-        } else if (res.code === "NOT_LINKED") {
-          r.skipped.push({ label: item.label, reason: "WhatsApp got disconnected" });
-          r.stopped = true;
-          r.idx += 1;
-          break; // nothing else can be sent until WhatsApp is linked again
-        } else {
-          r.skipped.push({ label: item.label, reason: res.error || "Could not send" });
-          hardFails += 1;
-          if (hardFails >= 3) { // three in a row: something is wrong, so stop instead of failing the rest
-            r.stopped = true;
-            r.idx += 1;
-            break;
-          }
-        }
+        if (!payload || typeof payload.html !== 'string') throw new Error('Could not prepare the statement.');
+        prepared.push({ key: String(item.id), label: item.label, payload });
       } catch (err) {
-        r.skipped.push({ label: item.label, reason: err.message });
-        hardFails += 1;
-        if (hardFails >= 3) { r.stopped = true; r.idx += 1; break; }
+        preparationErrors.push({ label: item.label, reason: err.message });
       }
+      r.preparedCount = i + 1;
+      this._render();
     }
-    if (r.stopRequested) r.stopped = true;
-    // Entries never reached are listed, so the owner knows who still needs a statement.
-    for (let i = r.idx; i < r.items.length; i++) r.skipped.push({ label: r.items[i].label, reason: "Not sent (stopped)" });
-    r.stage = "done";
-    this._render();
+    if (this.run !== r) return;
+    if (r.stopRequested) {
+      this.run = null;
+      Modal.close();
+      Toast.warning('Task preparation was cancelled. Nothing was sent.');
+      return;
+    }
+    if (!prepared.length) {
+      r.skipped = preparationErrors;
+      r.stage = 'done';
+      this._render();
+      return;
+    }
+    const result = await window.api.enqueueWhatsappTask(r.title, prepared);
+    if (!result.success) {
+      r.stage = 'done';
+      r.skipped = preparationErrors;
+      this._render();
+      Toast.error(result.error || 'Could not start the background task.');
+      return;
+    }
+    this.run = null;
+    Modal.close();
+    Toast.success(`Task queued: ${prepared.length} messages. You can continue working in the app.`);
+    if (preparationErrors.length) Toast.warning(`${preparationErrors.length} statement(s) could not be prepared.`);
+    if (window.TaskCenter) TaskCenter.refresh();
   },
 
   requestStop() {

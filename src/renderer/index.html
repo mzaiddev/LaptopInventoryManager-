@@ -115,7 +115,19 @@
         <div class="topbar-left">
           <div id="shop-name">Laptop Inventory Manager</div>
         </div>
+        <div id="global-search-root" class="global-search-root">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="global-search-input" type="search" placeholder="Search products, serials, customers, invoices…" autocomplete="off" oninput="GlobalSearch.onInput()" onkeydown="GlobalSearch.onKeydown(event)">
+          <div id="global-search-results" class="global-search-results" style="display:none;"></div>
+        </div>
         <div class="topbar-right">
+          <div class="owner-context" title="Single owner account"><span class="owner-avatar">O</span><span>Owner</span></div>
+          <div id="task-center-root" class="task-center-root">
+            <button id="task-center-toggle" class="task-center-toggle" onclick="TaskCenter.toggle()" aria-expanded="false" aria-controls="task-center-panel">
+              <span>Tasks</span><span id="task-center-count" class="task-center-count" style="display:none;">0</span>
+            </button>
+            <section id="task-center-panel" class="task-center-panel" style="display:none;" aria-label="Background tasks"></section>
+          </div>
           <button id="lang-toggle" data-no-i18n class="btn btn-secondary btn-sm" style="margin-right:8px;margin-left:8px;" onclick="I18n.toggle()" title="Language / زبان">اردو</button>
           <button id="cost-toggle" class="btn btn-secondary btn-sm" style="margin-right:12px;" onclick="App.toggleCost()">Show Purchase Prices</button>
           <div class="theme-toggle">
@@ -170,6 +182,8 @@
   <script src="components/Busy.js"></script>
   <script src="components/WhatsAppLink.js"></script>
   <script src="components/BulkShare.js"></script>
+  <script src="components/GlobalSearch.js"></script>
+  <script src="components/TaskCenter.js"></script>
   
   <!-- 3. Pages (depend on components + utilities) -->
   <script src="pages/login.js"></script>

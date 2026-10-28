@@ -174,6 +174,15 @@ class InventoryService {
     })();
   }
 
+  importProduct(productData) {
+    const serial = String(productData.serial_number || '').trim();
+    if (serial) {
+      const existing = getDatabase().prepare('SELECT id FROM products WHERE lower(trim(serial_number))=lower(?) LIMIT 1').get(serial);
+      if (existing) throw new Error(`Serial number already exists on product #${existing.id}.`);
+    }
+    return this.addProduct(productData);
+  }
+
   updateProduct(id, productData) {
     const db = getDatabase();
     const {
@@ -226,6 +235,44 @@ class InventoryService {
     suppliers.adjustProductBill(db, id, { supplier, name: product_name, price: purchase_price, qty: quantity || 1, oldQty: before ? before.quantity : 0 });
     return { success: true };
     })();
+  }
+
+  bulkUpdateProducts(ids, change = {}) {
+    const db = getDatabase();
+    if (!Array.isArray(ids) || ids.length < 1 || ids.length > 2000) throw new Error('Select between 1 and 2,000 products.');
+    const unique = [...new Set(ids.map(Number))];
+    if (unique.some((id) => !Number.isSafeInteger(id) || id < 1)) throw new Error('Invalid product selection.');
+    const allowed = ['category','supplier','location','status','condition','price_percent','price_amount'];
+    const field = String(change.field || '');
+    if (!allowed.includes(field)) throw new Error('This field cannot be bulk edited.');
+    const raw = String(change.value ?? '').trim();
+    if (!raw) throw new Error('Enter a value for the selected field.');
+    if (['category','supplier','location'].includes(field) && raw.length > 200) throw new Error('Text values must be 200 characters or fewer.');
+    if (field === 'status' && !['In Stock','Reserved','Lost'].includes(raw)) throw new Error('Use an individual sale, return, or damage workflow for sold, returned, or damaged status.');
+    if (field === 'condition' && !['Excellent','Good','Fair','Damaged','For Parts'].includes(raw)) throw new Error('Invalid product condition.');
+    const amount = Number(raw);
+    if (field.startsWith('price_') && (!Number.isFinite(amount) || Math.abs(amount) > 1000000000)) throw new Error('Enter a valid price change.');
+    const marks = unique.map(() => '?').join(',');
+    const products = db.prepare(`SELECT id,product_name,category,supplier,storage_location,status,condition,selling_price,purchase_price,quantity FROM products WHERE id IN (${marks})`).all(...unique);
+    if (products.length !== unique.length) throw new Error('Some selected products no longer exist. Refresh the list and try again.');
+    const col = ({ category:'category', supplier:'supplier', location:'storage_location', status:'status', condition:'condition' })[field];
+    const result = db.transaction(() => {
+      const update = db.prepare(`UPDATE products SET ${col || 'selling_price'}=?,updated_at=datetime('now','localtime') WHERE id=?`);
+      const supplierService = require('./supplierService');
+      for (const p of products) {
+        let next = raw;
+        if (field === 'price_percent') next = Math.round((p.selling_price * (1 + amount / 100) + Number.EPSILON) * 100) / 100;
+        if (field === 'price_amount') next = Math.round((p.selling_price + amount + Number.EPSILON) * 100) / 100;
+        if (field.startsWith('price_') && (!Number.isFinite(next) || next < 0)) throw new Error(`${p.product_name}: price change would result in a negative sale price.`);
+        if (field === 'status' && ['In Stock','Reserved'].includes(next) && p.quantity <= 0) throw new Error(`${p.product_name}: a product with no stock cannot be set to ${next}.`);
+        update.run(next, p.id);
+        if (field === 'supplier') supplierService.adjustProductBill(db, p.id, {
+          supplier: next, name: p.product_name, price: p.purchase_price, qty: p.quantity, oldQty: p.quantity,
+        });
+      }
+      return { updated: products.length, field, ids: unique };
+    });
+    return result();
   }
 
   deleteProduct(id) {
