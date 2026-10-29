@@ -28,6 +28,7 @@ const AUDITED = {
   "tradein:add": ["trade_in.add", "trade_in"],
   "instalment:create": ["instalment.create", "instalment_plan"],
   "instalment:cancel": ["instalment.cancel", "instalment_plan"],
+  "instalment:pay": ["instalment.payment", "instalment_plan"],
   "import:customers": ["customer.import", "import"],
   "import:suppliers": ["supplier.import", "import"],
   "recycle:restore": ["recycle.restore", "recycle_bin"],

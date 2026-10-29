@@ -104,9 +104,9 @@ class AttentionService {
     // Google Drive: not connected, or connected and the last upload failed
     if (drive) {
       if (drive.connected && drive.error) {
-        items.push({ id: "drive-failing", level: "warn", page: "backup", title: "Google Drive upload is failing", detail: drive.error });
+        items.push({ id: "drive-failing", level: "warn", page: "backup", title: `${drive.label || "Online backup"} upload is failing`, detail: drive.error });
       } else if (!drive.connected) {
-        items.push({ id: "drive-off", level: "info", page: "backup", title: "Google Drive backup is not connected", detail: "Backups stay only on this PC. Connect Drive to keep a copy online." });
+        items.push({ id: "drive-off", level: "info", page: "backup", title: `${drive.label || "Online"} backup is not connected`, detail: "Backups stay only on this PC. Connect it on the Backup page to keep a copy online." });
       }
     }
 
