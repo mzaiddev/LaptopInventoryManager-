@@ -48,7 +48,7 @@ class InstalmentService {
     const db = getDatabase();
     const plan = db.prepare("SELECT * FROM instalment_plans WHERE sale_issue_id = ?").get(sale_issue_id);
     if (!plan) return null;
-    const sale = db.prepare("SELECT s.*, c.customer_name FROM sale_issues s JOIN customers c ON c.id = s.customer_id WHERE s.id = ?").get(sale_issue_id);
+    const sale = db.prepare("SELECT s.*, c.customer_name, c.phone FROM sale_issues s JOIN customers c ON c.id = s.customer_id WHERE s.id = ?").get(sale_issue_id);
     const when = asOf || today();
     let available = Math.max(0, roundMoney(sale.paid_amount - plan.base_paid));
     const items = db.prepare("SELECT * FROM instalments WHERE plan_id = ? ORDER BY seq").all(plan.id).map((i) => {
@@ -58,7 +58,28 @@ class InstalmentService {
       const status = balance <= 0.004 ? "Paid" : i.due_date < when ? "Overdue" : allotted > 0 ? "Partial" : "Pending";
       return { id: i.id, seq: i.seq, due_date: i.due_date, amount: i.amount, paid: roundMoney(allotted), balance, status };
     });
-    return { sale_issue_id, reference_no: sale.reference_no, customer_id: sale.customer_id, customer_name: sale.customer_name, items };
+    const payments = db.prepare("SELECT id, payment_date, amount, payment_method, note FROM payments WHERE sale_issue_id = ? ORDER BY payment_date ASC, id ASC").all(sale_issue_id);
+    return {
+      sale_issue_id, reference_no: sale.reference_no, customer_id: sale.customer_id, customer_name: sale.customer_name, phone: sale.phone || "", items,
+      sale_total: sale.total_amount, sale_paid: sale.paid_amount, sale_remaining: sale.remaining_amount, payments,
+    };
+  }
+
+  // Money received on an instalment plan. It is an ordinary payment on the sale (so the customer's ledger, the
+  // sale and the Cash Book all update), and the plan's parts fill in order, so nothing is stored twice.
+  receivePayment({ sale_issue_id, amount, payment_method, payment_date, note } = {}) {
+    const plan = this.getPlan(sale_issue_id);
+    if (!plan) throw new Error("This sale has no instalment plan");
+    const value = roundMoney(Number(amount));
+    if (!(value > 0)) throw new Error("Enter the amount received");
+    const date = payment_date || today();
+    if (!isDate(date)) throw new Error("Payment date must be a valid date");
+    const next = plan.items.find((i) => i.balance > 0.004);
+    require("./ledgerService").addPayment({
+      sale_issue_id, amount: value, payment_method, payment_date: date,
+      note: String(note || "").trim() || (next ? `Instalment ${next.seq} of ${plan.items.length}` : "Instalment plan"),
+    });
+    return this.getPlan(sale_issue_id);
   }
 
   // Unpaid instalments that are late, or due within the next withinDays, across every plan.
@@ -72,7 +93,7 @@ class InstalmentService {
       for (const i of plan.items) {
         if (i.status === "Paid") continue;
         if (i.status === "Overdue" || i.due_date <= limit) {
-          out.push({ ...i, sale_issue_id: plan.sale_issue_id, reference_no: plan.reference_no, customer_id: plan.customer_id, customer_name: plan.customer_name, status: i.status === "Overdue" ? "Overdue" : "Due soon" });
+          out.push({ ...i, sale_issue_id: plan.sale_issue_id, reference_no: plan.reference_no, customer_id: plan.customer_id, customer_name: plan.customer_name, phone: plan.phone, parts: plan.items.length, status: i.status === "Overdue" ? "Overdue" : "Due soon" });
         }
       }
     }
@@ -94,7 +115,7 @@ class InstalmentService {
       const plan = this.getPlan(p.sale_issue_id, { asOf });
       const open = plan.items.filter((i) => i.status !== "Paid");
       return {
-        sale_issue_id: plan.sale_issue_id, reference_no: plan.reference_no, customer_name: plan.customer_name,
+        sale_issue_id: plan.sale_issue_id, reference_no: plan.reference_no, customer_name: plan.customer_name, phone: plan.phone,
         count: plan.items.length, balance: roundMoney(open.reduce((s, i) => s + i.balance, 0)),
         next_due: open.length ? open[0].due_date : null, status: open.length === 0 ? "Complete" : open.some((i) => i.status === "Overdue") ? "Overdue" : "On track",
       };

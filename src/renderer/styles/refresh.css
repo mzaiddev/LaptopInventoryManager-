@@ -285,3 +285,22 @@ html[dir="rtl"] .attention-entry, html[dir="rtl"] .attention-more { padding: 7px
 .attention-group.is-read .attention-dot { background: var(--text-muted); }
 html[dir="rtl"] .attention-mark { margin: 10px 0 0 12px; }
 html[dir="rtl"] .attention-head .attention-mark { margin: 0; }
+
+/* Backup page: online backup card */
+.backup-choices { display: flex; gap: 10px; flex-wrap: wrap; }
+.backup-choice { flex: 1 1 150px; display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; text-align: start; border: 1px solid var(--border-color); border-radius: 12px; background: var(--card-bg); color: var(--text-primary); font: inherit; cursor: pointer; }
+.backup-choice small { color: var(--text-secondary); font-size: 12px; }
+.backup-choice:hover { border-color: var(--primary); }
+.backup-choice.active { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent); }
+.backup-setup { margin-top: 16px; }
+.backup-step-title { display: flex; align-items: center; gap: 10px; margin: 14px 0 8px; font-weight: 650; }
+.backup-step-title span { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--primary); color: #fff; font-size: 12px; }
+.backup-help { margin-top: 16px; padding: 10px 14px; border: 1px dashed var(--border-color); border-radius: 10px; }
+.backup-help summary { cursor: pointer; font-weight: 600; color: var(--primary); }
+.backup-steps { margin: 10px 0 0 18px; line-height: 1.8; font-size: 14px; }
+.backup-connected { display: flex; align-items: center; gap: 10px; margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: var(--bg-secondary); }
+.backup-auto { margin-top: 14px; }
+.backup-switch { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.backup-switch input { margin-top: 4px; width: 18px; height: 18px; }
+.backup-switch small { display: block; color: var(--text-secondary); font-size: 12px; }
+.backup-issue { margin-top: 12px; padding: 10px 14px; border-radius: 10px; color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); font-size: 13px; }

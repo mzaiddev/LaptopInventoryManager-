@@ -130,13 +130,27 @@ app.whenReady().then(() => {
   registerIpcHandlers();
 
   // Task Center is ready first so the verified daily backup can safely enter its queue.
-  if (startupBackupPath) require('../services/backupService').queueDriveBackup(startupBackupPath);
+  if (startupBackupPath) require('../services/backupService').queueCloudBackup(startupBackupPath);
   const { net } = require('electron');
   const taskService = require('../services/taskService').getTaskService();
   const cloudRetry = setInterval(() => {
     try { if (net.isOnline()) taskService.retryFailedCloudUploads(); } catch (err) { console.error('Cloud backup retry check failed:', err.message); }
   }, 30000);
   if (cloudRetry.unref) cloudRetry.unref();
+
+  // While the app stays open, refresh today's backup and upload it every few hours (Backup page > Automatic).
+  let lastPeriodic = Date.now();
+  const periodic = setInterval(() => {
+    try {
+      const cloud = require('../services/cloudBackupService');
+      const hours = cloud.autoHours();
+      if (!hours || !cloud.autoUpload() || !cloud.ready() || !net.isOnline()) return;
+      if (Date.now() - lastPeriodic < hours * 3600 * 1000) return;
+      lastPeriodic = Date.now();
+      require('../services/backupService').runAutoBackup({ upload: true });
+    } catch (err) { console.error('Scheduled backup failed:', err.message); }
+  }, 10 * 60 * 1000);
+  if (periodic.unref) periodic.unref();
 
   // Create menu and window
   createMenu();

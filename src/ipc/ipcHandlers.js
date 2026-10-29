@@ -99,6 +99,7 @@ function registerIpcHandlers() {
   ipcMain.handle("instalment:candidates", wrap(() => instalmentService.candidates()));
   ipcMain.handle("instalment:create", wrap((d) => instalmentService.createPlan(d || {})));
   ipcMain.handle("instalment:cancel", wrap((saleId) => instalmentService.cancelPlan(saleId)));
+  ipcMain.handle("instalment:pay", wrap((d) => instalmentService.receivePayment(d || {})));
 
   // Recycle Bin and day lock
   const recycleService = require("../services/recycleService");
@@ -115,7 +116,7 @@ function registerIpcHandlers() {
   ipcMain.handle("attention:get", wrap(() => require("../services/attentionService").get({
     lastBackupAt: lastBackupAt(), costVisible: authService.isCostVisible(),
     whatsapp: require("../services/whatsappLink").getLink().getStatus(),
-    drive: require("../services/googleDriveService").getGoogleDriveService().status(),
+    drive: (() => { const c = require("../services/cloudBackupService").status(); return c.provider === "none" ? null : c; })(),
   })));
   ipcMain.handle("health:get", wrap(() => require("../services/healthService").report({ version: app.getVersion(), dbPath: require("../config/appConfig").getDbPath(), lastBackupAt: lastBackupAt() })));
 
@@ -245,26 +246,15 @@ function registerIpcHandlers() {
   ipcMain.handle('tasks:retryFailed', wrap((id) => tasks.retryFailed(id)));
   tasks.initialize();
 
-  // Google Drive belongs to the logged-in owner. Credentials never cross IPC.
-  const driveService = require('../services/googleDriveService').getGoogleDriveService();
-  ipcMain.handle('drive:status', wrap(() => driveService.status()));
-  ipcMain.handle('drive:connect', wrap(() => backupService.connectDrive()));
-  ipcMain.handle('drive:disconnect', wrap(() => driveService.disconnect()));
-  ipcMain.handle('drive:listBackups', wrap(() => driveService.listBackups()));
-  ipcMain.handle('drive:downloadBackup', wrap((fileId) => driveService.downloadBackup(String(fileId || ''))));
-  ipcMain.handle('drive:saveSettings', wrap((data) => {
-    const clientId = String(data?.clientId || '').trim().slice(0, 300);
-    const retention = Math.max(1, Math.min(365, Number(data?.retention) || 30));
-    if (clientId && !/^[\w.-]+\.apps\.googleusercontent\.com$/.test(clientId)) throw new Error('Enter a valid Google OAuth desktop client ID.');
-    if (driveService.status().connected && clientId !== driveService.clientId) throw new Error('Disconnect Google Drive before changing the OAuth client ID.');
-    // An empty secret box means "keep the saved one"; the secret is never sent back to the screen.
-    driveService.saveClientSecret(data?.clientSecret);
-    settingsService.updateSettings({ google_drive_client_id: clientId, drive_backup_retention: String(retention) });
-    return driveService.status();
-  }));
-  ipcMain.handle('drive:retryFailed', wrap(() => {
-    return { retried: tasks.retryFailedCloudUploads({ force: true }) };
-  }));
+  // The owner's online backup (OneDrive or Google Drive). Keys and tokens never cross IPC.
+  const cloud = require('../services/cloudBackupService');
+  ipcMain.handle('cloud:status', wrap(() => cloud.status()));
+  ipcMain.handle('cloud:saveSettings', wrap((data) => cloud.saveSettings(data || {})));
+  ipcMain.handle('cloud:connect', wrap(() => backupService.connectCloud()));
+  ipcMain.handle('cloud:disconnect', wrap(() => cloud.disconnect()));
+  ipcMain.handle('cloud:list', wrap(() => cloud.list()));
+  ipcMain.handle('cloud:download', wrap((fileId) => cloud.download(fileId)));
+  ipcMain.handle('cloud:retryFailed', wrap(() => ({ retried: tasks.retryFailedCloudUploads({ force: true }) })));
 
   ipcMain.handle("statement:autoSend", async (event, payload) => {
     try {

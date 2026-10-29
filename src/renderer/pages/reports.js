@@ -503,7 +503,7 @@ const ReportsPage = {
       }
 
       const body = T.header({ shop: company, title, meta: [['Date', Formatters.formatDate(new Date().toISOString())]] }) + kpis + content + T.footer({ shop: company });
-      const html = T.wrap({ title, body, landscape: type === 'sales' });
+      const html = T.wrap({ title, body, landscape: false });
 
       printWindow.document.write(I18n.translateHtml(html));
       printWindow.document.close();

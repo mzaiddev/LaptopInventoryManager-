@@ -231,7 +231,7 @@ function getTaskService() {
         'whatsapp.statement': (payload) => require('./statementShare').autoSend(payload),
         'product.import': (payload) => require('./inventoryService').importProduct(payload),
         'drive.upload': async (payload) => {
-          try { return await require('./googleDriveService').getGoogleDriveService().uploadBackup(payload.filePath); }
+          try { return await require('./cloudBackupService').upload(payload.filePath); }
           catch (err) {
             try { require('./settingsService').updateSettings({ drive_last_error: String(err.message || err).slice(0, 500) }); } catch {}
             throw err;

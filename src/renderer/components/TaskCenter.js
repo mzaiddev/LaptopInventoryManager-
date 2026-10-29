@@ -15,6 +15,9 @@ const TaskCenter = {
         else this.tasks.unshift(change.task);
         this._updateCount();
       }
+      // An upload that just finished changes the online list on the Backup page, so redraw it.
+      const t = change && change.task;
+      if (t && t.kind === 'drive.upload' && ['done', 'partial', 'failed'].includes(t.status) && typeof App !== 'undefined' && App.currentPage === 'backup' && typeof BackupPage !== 'undefined') BackupPage.loadCloud();
       clearTimeout(this.refreshTimer);
       this.refreshTimer = setTimeout(() => this.refresh(), 120);
     });

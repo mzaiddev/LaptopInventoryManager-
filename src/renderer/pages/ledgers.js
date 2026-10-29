@@ -758,70 +758,56 @@ const LedgersPage = {
 
   // ==================== PRINT FUNCTIONS ====================
 
+  // Ledger report: one line per ledger entry (date, customer, credit, debit, balance), oldest first.
+  // It follows what the screen is showing: the selected customer, type, date range and search.
   async printCustomerLedgerReport() {
     try {
-      const result = await window.api.getCustomerLedgerReport();
-      if (!result.success) {
-        Toast.error("Failed to load ledger data.");
+      const { from, to } = this.dateRange();
+      const base = {
+        customer_id: this.currentCustomerId || undefined, reference_type: this.filters.type || undefined,
+        date_from: from || undefined, date_to: to || undefined, search: this.filters.search || undefined, pageSize: 500,
+      };
+      let rows = [];
+      for (let page = 1; page <= 60; page += 1) {
+        const r = await window.api.getLedgerEntries({ ...base, page });
+        if (!r.success) { Toast.error("Failed to load ledger data."); return; }
+        rows = rows.concat(r.data.rows);
+        if (rows.length >= r.data.total || !r.data.rows.length) break;
+      }
+      if (rows.length === 0) {
+        Toast.warning("No ledger entries to print.");
         return;
       }
-      const data = result.data || [];
-      if (data.length === 0) {
-        Toast.warning("No customer ledger data to print.");
-        return;
-      }
+      rows.sort((x, y) => String(x.entry_date).localeCompare(String(y.entry_date)) || x.id - y.id);
 
       const currency = App.currency || "PKR";
-      const totalBalance = data.reduce(
-        (s, c) => s + (c.ledger_balance || 0),
-        0,
-      );
-      const totalOutstanding = data.reduce(
-        (s, c) => s + (c.sale_outstanding || 0),
-        0,
-      );
+      const money = (v) => (Number(v) > 0 ? Formatters.formatCurrency(Number(v), currency, true) : "-");
+      const totalCredit = rows.reduce((t, e) => t + (Number(e.credit) || 0), 0);
+      const totalDebit = rows.reduce((t, e) => t + (Number(e.debit) || 0), 0);
+      const one = this.currentCustomerId ? rows[0].customer_name : "";
+      const bits = [one ? "Customer: " + one : "All customers", from || to ? "Dates: " + (from || "start") + " to " + (to || "today") : "", this.filters.type ? "Type: " + this.filters.type : "", this.filters.search ? 'Search: "' + this.filters.search + '"' : ""].filter(Boolean);
 
       PrintService.showPrintDialog({
         title: "Customer Ledger Report",
-        data: data,
+        data: rows.map((e) => ({
+          entry_date: e.entry_date, customer_name: e.customer_name || "-",
+          credit: money(e.credit), debit: money(e.debit), balance: Formatters.formatCurrency(Number(e.running_balance) || 0, currency, true),
+        })),
         columns: [
-          { field: "customer_name", label: "Customer", width: "150px" },
-          { field: "phone", label: "Phone", width: "100px" },
-          {
-            field: "ledger_balance",
-            label: "Ledger Balance",
-            width: "80px",
-            align: "right",
-            format: "currency",
-          },
-          {
-            field: "sale_outstanding",
-            label: "Sale Outstanding",
-            width: "80px",
-            align: "right",
-            format: "currency",
-          },
+          { field: "entry_date", label: "Date", width: "14%", format: "date" },
+          { field: "customer_name", label: "Customer", width: "30%" },
+          { field: "credit", label: "Credit", width: "18%", align: "right" },
+          { field: "debit", label: "Debit", width: "18%", align: "right" },
+          { field: "balance", label: "Balance", width: "20%", align: "right" },
         ],
-        landscape: true,
+        landscape: false,
         showPrintOptions: true,
-        subtitle: "Complete ledger summary for all customers",
+        subtitle: bits.join("  |  "),
         summaryItems: [
-          { label: "Total Customers", value: data.length },
-          {
-            label: "Total Ledger Balance",
-            value: Formatters.formatCurrency(totalBalance, currency),
-          },
-          {
-            label: "Total Outstanding",
-            value: Formatters.formatCurrency(totalOutstanding, currency),
-          },
-          {
-            label: "Grand Total Due",
-            value: Formatters.formatCurrency(
-              totalBalance + totalOutstanding,
-              currency,
-            ),
-          },
+          { label: "Entries", value: rows.length },
+          { label: "Total Credit (received)", value: Formatters.formatCurrency(totalCredit, currency) },
+          { label: "Total Debit (charged)", value: Formatters.formatCurrency(totalDebit, currency) },
+          ...(one ? [{ label: "Balance", value: Formatters.formatCurrency(Number(rows[rows.length - 1].running_balance) || 0, currency) }] : []),
         ],
         getCompanyHeader: () => this.getCompanyHeader(),
       });
