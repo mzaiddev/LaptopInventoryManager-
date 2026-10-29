@@ -23,6 +23,7 @@ class GoogleDriveService {
     this._fetchImpl = deps.fetch || global.fetch;
   }
 
+  get label() { return 'Google Drive'; }
   get clientId() { return String(this.settings.getSetting('google_drive_client_id') || process.env.LIM_GOOGLE_CLIENT_ID || require('../config/googleClient').clientId || '').trim(); }
   // Google's desktop-app clients come with a secret that is not confidential; it is never saved in the database.
   // The secret typed on the Backup page is kept encrypted with Windows secure storage (never in the database).
@@ -59,6 +60,9 @@ class GoogleDriveService {
   status() {
     const auth = this._readAuth();
     return {
+      provider: 'google',
+      label: this.label,
+      account: null,
       configured: !!this.clientId,
       secretSaved: !!this.clientSecret,
       connected: !!(auth && auth.refresh_token),

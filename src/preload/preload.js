@@ -54,6 +54,7 @@ contextBridge.exposeInMainWorld("api", {
   instalmentCandidates: () => ipcRenderer.invoke("instalment:candidates"),
   createInstalmentPlan: (d) => ipcRenderer.invoke("instalment:create", d),
   cancelInstalmentPlan: (saleId) => ipcRenderer.invoke("instalment:cancel", saleId),
+  payInstalment: (d) => ipcRenderer.invoke("instalment:pay", d),
 
   // Attention bell and system health
   getAttention: () => ipcRenderer.invoke("attention:get"),
@@ -81,13 +82,13 @@ contextBridge.exposeInMainWorld("api", {
   deleteBackup: (backupId) => ipcRenderer.invoke("backup:delete", backupId),
   selectBackupFile: () => ipcRenderer.invoke("backup:selectFile"),
   restoreBackup: (path) => ipcRenderer.invoke("backup:restore", path),
-  driveStatus: () => ipcRenderer.invoke("drive:status"),
-  connectDrive: () => ipcRenderer.invoke("drive:connect"),
-  disconnectDrive: () => ipcRenderer.invoke("drive:disconnect"),
-  listDriveBackups: () => ipcRenderer.invoke("drive:listBackups"),
-  downloadDriveBackup: (id) => ipcRenderer.invoke("drive:downloadBackup", id),
-  saveDriveSettings: (settings) => ipcRenderer.invoke("drive:saveSettings", settings),
-  retryDriveBackups: () => ipcRenderer.invoke("drive:retryFailed"),
+  cloudStatus: () => ipcRenderer.invoke("cloud:status"),
+  saveCloudSettings: (settings) => ipcRenderer.invoke("cloud:saveSettings", settings),
+  connectCloud: () => ipcRenderer.invoke("cloud:connect"),
+  disconnectCloud: () => ipcRenderer.invoke("cloud:disconnect"),
+  listCloudBackups: () => ipcRenderer.invoke("cloud:list"),
+  downloadCloudBackup: (id) => ipcRenderer.invoke("cloud:download", id),
+  retryCloudUploads: () => ipcRenderer.invoke("cloud:retryFailed"),
 
   // ============ LEDGER MODULE ============
 

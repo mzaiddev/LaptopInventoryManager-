@@ -6,20 +6,22 @@ const backupFiles = require('./backupFiles');
 const settingsService = require('./settingsService');
 
 class BackupService {
-  queueDriveBackup(backupPath) {
-    const drive = require('./googleDriveService').getGoogleDriveService();
-    if (!drive.status().connected) return null;
+  // Puts the online copy in the Task Center queue. `force` (a click on Back up now) ignores the automatic-upload switch.
+  queueCloudBackup(backupPath, { force = false } = {}) {
+    const cloud = require('./cloudBackupService');
+    if (!cloud.ready()) return null;
+    if (!force && !cloud.autoUpload()) return null;
     const task = require('./taskService').getTaskService().enqueue({
-      kind: 'drive.upload', lane: 'cloud', title: `Upload backup: ${path.basename(backupPath)}`,
+      kind: 'drive.upload', lane: 'cloud', title: `Upload backup to ${cloud.service().label}: ${path.basename(backupPath)}`,
       items: [{ key: path.basename(backupPath), label: path.basename(backupPath), payload: { filePath: backupPath } }],
     });
     return { taskId: task.id, status: task.status };
   }
 
-  async connectDrive() {
-    const result = await require('./googleDriveService').getGoogleDriveService().connect();
+  async connectCloud() {
+    const result = await require('./cloudBackupService').connect();
     const filePath = this.runAutoBackup({ upload: false });
-    const task = filePath ? this.queueDriveBackup(filePath) : null;
+    const task = filePath ? this.queueCloudBackup(filePath, { force: true }) : null;
     return { ...result, task };
   }
   // Settings > Backup Folder wins when set and usable; otherwise the default folder.
@@ -61,7 +63,7 @@ class BackupService {
       );
       stmt.run(filename, backupPath, stats.size);
 
-      const cloud = this.queueDriveBackup(backupPath);
+      const cloud = this.queueCloudBackup(backupPath, { force: true });
       return { success: true, filename, filepath: backupPath, fileSize: stats.size, cloud };
     } catch (err) {
       throw new Error(`Backup failed: ${err.message}`);
@@ -72,7 +74,7 @@ class BackupService {
   runAutoBackup({ upload = true } = {}) {
     try {
       const filePath = backupFiles.autoBackup(getDatabase(), path.join(this.resolveBackupDir(), 'auto'));
-      if (upload) this.queueDriveBackup(filePath);
+      if (upload) this.queueCloudBackup(filePath);
       return filePath;
     } catch (err) {
       console.error('Automatic backup failed:', err.message);

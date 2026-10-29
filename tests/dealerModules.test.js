@@ -161,3 +161,73 @@ test("due lists overdue instalments and those coming up, skipping paid ones", ()
   assert.strictEqual(d[0].customer_name, "Ali");
   assert.strictEqual(instalments.overdueCount({ asOf: "2026-10-12" }), 2);
 });
+
+// ---------------- instalment payments ----------------
+
+function planSale(total = 900, paid = 0) {
+  const c = addCustomer("Ali Computers");
+  db().prepare("INSERT INTO customer_ledger (customer_id, reference_type, debit, credit, running_balance, entry_date) VALUES (?, 'Sale', ?, 0, ?, '2026-10-01')").run(c, total, total);
+  const sale = Number(db().prepare("INSERT INTO sale_issues (reference_no, customer_id, issue_date, total_amount, paid_amount, remaining_amount, payment_status) VALUES ('SALE-1', ?, '2026-10-01', ?, ?, ?, 'Partial')").run(c, total, paid, total - paid).lastInsertRowid);
+  instalments.createPlan({ sale_issue_id: sale, count: 3, first_due_date: "2026-11-01", interval_days: 30 });
+  return { c, sale };
+}
+
+test("receiving an instalment records a normal payment: sale, ledger and cash book all move once", () => {
+  freshDb();
+  const { c, sale } = planSale();
+  const plan = instalments.receivePayment({ sale_issue_id: sale, amount: 300, payment_method: "Cash", payment_date: "2026-10-20" });
+  assert.deepStrictEqual(plan.items.map((i) => i.status), ["Paid", "Pending", "Pending"]);
+  assert.strictEqual(plan.sale_paid, 300);
+  assert.strictEqual(plan.sale_remaining, 600);
+  assert.strictEqual(plan.payments.length, 1);
+  assert.strictEqual(plan.payments[0].note, "Instalment 1 of 3");
+  assert.strictEqual(balance(c), 600);
+  const book = cashBook.get({ from: "2026-10-20", to: "2026-10-20" });
+  assert.strictEqual(book.totals.cashIn, 300);
+});
+
+test("a bigger payment carries on to the next parts, and a bank payment goes to the bank", () => {
+  freshDb();
+  const { sale } = planSale();
+  const plan = instalments.receivePayment({ sale_issue_id: sale, amount: 450, payment_method: "Bank Transfer", payment_date: "2026-10-20", note: "Cheque 55" });
+  assert.deepStrictEqual(plan.items.map((i) => i.status), ["Paid", "Partial", "Pending"]);
+  assert.strictEqual(plan.payments[0].note, "Cheque 55");
+  const book = cashBook.get({ from: "2026-10-20", to: "2026-10-20" });
+  assert.strictEqual(book.totals.bankIn, 450);
+  assert.strictEqual(book.totals.cashIn, 0);
+});
+
+test("paying every part completes the plan; more than what is owed is refused", () => {
+  freshDb();
+  const { sale } = planSale();
+  assert.throws(() => instalments.receivePayment({ sale_issue_id: sale, amount: 901 }), /exceeds the remaining balance/);
+  const plan = instalments.receivePayment({ sale_issue_id: sale, amount: 900, payment_date: "2026-10-20" });
+  assert.ok(plan.items.every((i) => i.status === "Paid"));
+  assert.strictEqual(instalments.plans()[0].status, "Complete");
+});
+
+test("bad input is refused with a plain message", () => {
+  freshDb();
+  const { sale } = planSale();
+  assert.throws(() => instalments.receivePayment({ sale_issue_id: sale, amount: 0 }), /Enter the amount received/);
+  assert.throws(() => instalments.receivePayment({ sale_issue_id: sale, amount: 10, payment_date: "yesterday" }), /valid date/);
+  assert.throws(() => instalments.receivePayment({ sale_issue_id: 9999, amount: 10 }), /no instalment plan/);
+  assert.throws(() => instalments.receivePayment({ sale_issue_id: sale, amount: 10, payment_method: "Cheque" }), /Invalid payment method/);
+});
+
+test("a payment on a locked day is refused and leaves the plan unchanged", () => {
+  freshDb();
+  const { sale } = planSale();
+  db().prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('lock_before', '2026-10-25')").run();
+  assert.throws(() => instalments.receivePayment({ sale_issue_id: sale, amount: 100, payment_date: "2026-10-20" }), /locked/i);
+  assert.strictEqual(instalments.getPlan(sale).items[0].paid, 0);
+});
+
+test("plan lists carry the customer's phone so they can be searched", () => {
+  freshDb();
+  const { c, sale } = planSale();
+  db().prepare("UPDATE customers SET phone = '0300-9998887' WHERE id = ?").run(c);
+  assert.strictEqual(instalments.plans()[0].phone, "0300-9998887");
+  assert.strictEqual(instalments.due({ asOf: "2026-10-31", withinDays: 7 })[0].phone, "0300-9998887");
+  assert.strictEqual(instalments.getPlan(sale).sale_total, 900);
+});
